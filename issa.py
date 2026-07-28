@@ -1,19 +1,42 @@
-from datetime import datetime
 import base64
-from fpdf import FPDF
-import pandas as pd
-import streamlit as st
+from datetime import datetime
 import io
 import os
 import urllib.request
+from fpdf import FPDF
+import pandas as pd
+import streamlit as st
+
+# ==========================================
+# 0. GESTION DES POLICES UNICODE (ROBUSTE & SÉCURISÉE)
+# ==========================================
+FONT_PATH = "DejaVuSans.ttf"
+
+def telecharger_polices():
+    """Télécharge les polices Unicode depuis GitHub avec gestion des erreurs réseau."""
+    fonts = {
+        "DejaVuSans.ttf": "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf",
+        "DejaVuSans-Bold.ttf": "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans-Bold.ttf",
+        "DejaVuSans-Oblique.ttf": "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans-Oblique.ttf"
+    }
+    
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+
+    for font_name, font_url in fonts.items():
+        if not os.path.exists(font_name):
+            try:
+                req = urllib.request.Request(font_url, headers=headers)
+                with urllib.request.urlopen(req) as response, open(font_name, 'wb') as out_file:
+                    out_file.write(response.read())
+            except Exception as e:
+                pass # Si le téléchargement échoue, la fonction PDF basculera sur Helvetica
+
+# Téléchargement au premier lancement
+telecharger_polices()
+
 # ==========================================
 # 1. CONFIGURATION DE LA PAGE & DESIGN XXL RESPONSIVE
 # ==========================================
-# S'assurer que la police Unicode existe
-FONT_PATH = "DejaVuSans.ttf"
-if not os.path.exists(FONT_PATH):
-    url = "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf"
-    urllib.request.urlretrieve(url, FONT_PATH)
 st.set_page_config(
     page_title="Portail Pédagogique - Cours Privé Nelson Mandela | Sénégal",
     page_icon="🇸🇳",
@@ -167,7 +190,6 @@ if "eleves_db" not in st.session_state:
         ]
     )
 
-# BASE GLOBALE DE SUIVI ANNUEL / TRIMESTRIEL / MENSUEL (ÉLÈVES & PROFS)
 if "base_globale_db" not in st.session_state:
     st.session_state.base_globale_db = pd.DataFrame(
         columns=["Date", "Année", "Trimestre", "Mois", "Type Acteur", "Nom Acteur", "Classe", "Type Entrée", "Détail / Contenu", "Appréciation"],
@@ -406,27 +428,31 @@ def generer_rapport_general_pdf():
     pdf = PDFReport()
     pdf.add_page()
     
-    # --- CHARGEMENT DES VARIANTES DE LA POLICE DEJAVU ---
-    # S'assurer que les fichiers DejaVuSans.ttf, DejaVuSans-Bold.ttf et DejaVuSans-Oblique.ttf
-    # sont accessibles via FONT_PATH ou dans le même dossier.
-    pdf.add_font("DejaVu", "", FONT_PATH, uni=True)
-    pdf.add_font("DejaVu", "B", "DejaVuSans-Bold.ttf", uni=True)
-    pdf.add_font("DejaVu", "I", "DejaVuSans-Oblique.ttf", uni=True)
+    # Vérification de la présence des polices
+    use_dejavu = os.path.exists("DejaVuSans.ttf")
+    
+    if use_dejavu:
+        pdf.add_font("DejaVu", "", "DejaVuSans.ttf", uni=True)
+        font_main = "DejaVu"
+        bullet = "• "
+    else:
+        font_main = "Arial"
+        bullet = "- "
     
     # EN-TÊTE DU RAPPORT
-    pdf.set_font("DejaVu", "B", 14)
+    pdf.set_font(font_main, "B", 14)
     pdf.cell(0, 8, "RAPPORT GÉNÉRAL & CONSOLIDATION ANNUELLE", 0, 1, "C")
-    pdf.set_font("DejaVu", "I", 10)
+    pdf.set_font(font_main, "I", 10)
     pdf.cell(0, 5, "Synthèse Globale des Évaluations, Renseignements, Absences et Activités", 0, 1, "C")
     pdf.ln(6)
 
     # 1. STATISTIQUES GÉNÉRALES
-    pdf.set_font("DejaVu", "B", 11)
+    pdf.set_font(font_main, "B", 11)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(190, 7, "1. STATISTIQUES GÉNÉRALES DE L'ÉTABLISSEMENT", 1, 1, "L", True)
     
-    pdf.set_font("DejaVu", "", 10)
+    pdf.set_font(font_main, "", 10)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(95, 6, f"Total Élèves Inscrits : {len(st.session_state.eleves_db)}", 1, 0, "L")
     pdf.cell(95, 6, f"Total Classes Actives : {len(st.session_state.classes_db)}", 1, 1, "L")
@@ -435,27 +461,30 @@ def generer_rapport_general_pdf():
     pdf.ln(5)
 
     # 2. SUIVI DES ENSEIGNANTS
-    pdf.set_font("DejaVu", "B", 11)
+    pdf.set_font(font_main, "B", 11)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(190, 7, "2. SUIVI DES ENSEIGNANTS ET RAPPORTS DE SÉANCE", 1, 1, "L", True)
     
-    pdf.set_font("DejaVu", "", 9)
+    pdf.set_font(font_main, "", 9)
     pdf.set_text_color(0, 0, 0)
     if not st.session_state.rapports_journaliers_prof.empty:
         for _, r in st.session_state.rapports_journaliers_prof.iterrows():
-            pdf.cell(190, 6, f"• [{r['Date']}] {r['Professeur']} ({r['Classe']} - {r['Matière']}) : {r['Bilan du Cours'][:60]}", 1, 1, "L")
+            txt = f"{bullet}[{r['Date']}] {r['Professeur']} ({r['Classe']} - {r['Matière']}) : {r['Bilan du Cours'][:60]}"
+            if not use_dejavu:
+                txt = txt.encode('latin-1', 'replace').decode('latin-1')
+            pdf.cell(190, 6, txt, 1, 1, "L")
     else:
         pdf.cell(190, 6, "Aucun rapport déposé.", 1, 1, "L")
     pdf.ln(5)
 
     # 3. EXTRAIT RENSEIGNEMENTS BASE GLOBALE
-    pdf.set_font("DejaVu", "B", 11)
+    pdf.set_font(font_main, "B", 11)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(190, 7, "3. EXTRAIT RENSEIGNEMENTS BASE GLOBALE", 1, 1, "L", True)
 
-    pdf.set_font("DejaVu", "B", 8)
+    pdf.set_font(font_main, "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(25, 6, "Date", 1, 0, "C", True)
@@ -464,16 +493,30 @@ def generer_rapport_general_pdf():
     pdf.cell(30, 6, "Type", 1, 0, "C", True)
     pdf.cell(60, 6, "Détail", 1, 1, "C", True)
 
-    pdf.set_font("DejaVu", "", 8)
+    pdf.set_font(font_main, "", 8)
     if not st.session_state.base_globale_db.empty:
         for _, row in st.session_state.base_globale_db.head(15).iterrows():
-            pdf.cell(25, 6, str(row["Date"]), 1, 0, "C")
-            pdf.cell(30, 6, f"{row['Mois']}/{row['Trimestre'][:3]}", 1, 0, "C")
-            pdf.cell(45, 6, f"{str(row['Nom Acteur'])[:18]} ({row['Classe']})", 1, 0, "L")
-            pdf.cell(30, 6, str(row["Type Entrée"])[:15], 1, 0, "C")
-            pdf.cell(60, 6, str(row["Détail / Contenu"])[:35], 1, 1, "L")
+            d_str = str(row["Date"])
+            per_str = f"{row['Mois']}/{str(row['Trimestre'])[:3]}"
+            act_str = f"{str(row['Nom Acteur'])[:18]} ({row['Classe']})"
+            typ_str = str(row["Type Entrée"])[:15]
+            det_str = str(row["Détail / Contenu"])[:35]
+            
+            if not use_dejavu:
+                d_str = d_str.encode('latin-1', 'replace').decode('latin-1')
+                per_str = per_str.encode('latin-1', 'replace').decode('latin-1')
+                act_str = act_str.encode('latin-1', 'replace').decode('latin-1')
+                typ_str = typ_str.encode('latin-1', 'replace').decode('latin-1')
+                det_str = det_str.encode('latin-1', 'replace').decode('latin-1')
+
+            pdf.cell(25, 6, d_str, 1, 0, "C")
+            pdf.cell(30, 6, per_str, 1, 0, "C")
+            pdf.cell(45, 6, act_str, 1, 0, "L")
+            pdf.cell(30, 6, typ_str, 1, 0, "C")
+            pdf.cell(60, 6, det_str, 1, 1, "L")
 
     return bytes(pdf.output())
+
 def assistant_ia_repondre(question):
     q = question.lower()
     if "élève" in q or "effectif" in q or "nombre" in q:
@@ -821,7 +864,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "📊 Rapport Journalier":
             st.markdown("### Rédiger un Rapport Journalier")
-            st.caption("Ce rapport sera directement transmis à la direction et enregistré dans la base globale.")
+            st.caption("Ce rapport sera directement transmitted à la direction et enregistré dans la base globale.")
             with st.form("form_rap_prof"):
                 cls_r = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["--"])
                 mat_r = st.text_input("Matière")
@@ -987,12 +1030,10 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             "📑 Rapports Journaliers Réceptionnés"
         ])
 
-        # BASE GLOBALE CENTRALISÉE DE SUIVI AVEC SEGMENTATION
         if adm_tab == "🗄️ Base Globale & Suivi Annuel/Trimestriel/Mensuel":
             st.subheader("🗄️ Base Globale de Suivi des Élèves et Professeurs")
             st.caption("Consultation, segmentation par type d'entrée (Notes, Présences/Absences, Rapports) et impression globale.")
 
-            # Filtres temporels, catégories et types d'entrées
             f1, f2, f3, f4, f5 = st.columns(5)
             with f1:
                 filtre_acteur = st.selectbox("Type d'Acteur", ["Tous", "Élève", "Professeur"])
@@ -1064,7 +1105,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             st.success("Entrée ajoutée à la Base Globale !")
                             st.rerun()
 
-        # MODULE ASSISTANT IA
         elif adm_tab == "🤖 Assistant IA Administration":
             st.subheader("🤖 Assistant virtuel IA - Administration Nelson Mandela")
             st.caption("Posez une question ou demandez une analyse de situation de l'établissement.")
@@ -1076,7 +1116,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 else:
                     st.warning("Veuillez saisir une question.")
 
-        # MODULE EMPLOI DU TEMPS GRILLE
         elif adm_tab == "📅 Emploi du Temps (Grille Jours x Heures)":
             st.subheader("Édition de l'Emploi du Temps (Jours à gauche | Heures en haut)")
             cls_selected = st.selectbox("Sélectionner la classe à configurer", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
@@ -1095,7 +1134,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.session_state.edt_grid_db[cls_selected] = edited_grid
                 st.success(f"Emploi du temps de la classe {cls_selected} mis à jour !")
 
-        # MODULE ELEVES (CRUD + PDF)
         elif adm_tab == "👨‍🎓 Élèves (Export PDF, Modif, Suppr)":
             st.subheader("Gestion des Élèves & Impression PDF")
             
@@ -1126,7 +1164,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.session_state.eleves_db = edited_eleves
                 st.success("Base des élèves mise à jour !")
 
-        # MODULE PROFESSEURS (CRUD + PDF)
         elif adm_tab == "👨‍🏫 Professeurs (Export PDF, Modif, Suppr)":
             st.subheader("Gestion des Professeurs & Impression PDF")
             
@@ -1158,7 +1195,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.session_state.prof_credentials = edited_profs
                 st.success("Base professeurs mise à jour !")
 
-        # MODULE CLASSES (CRUD)
         elif adm_tab == "🏫 Classes (Ajouter, Modifier, Supprimer)":
             st.subheader("Gestion des Classes")
             
