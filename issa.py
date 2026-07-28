@@ -8,12 +8,13 @@ import pandas as pd
 import streamlit as st
 
 # ==========================================
-# 0. GESTION DES POLICES UNICODE (ROBUSTE & SÉCURISÉE)
+# 0. GESTION DES POLICES UNICODE (OPTIMISÉE POUR MOBILE)
 # ==========================================
 FONT_PATH = "DejaVuSans.ttf"
 
+@st.cache_resource
 def telecharger_polices():
-    """Télécharge les polices Unicode depuis GitHub avec gestion des erreurs réseau."""
+    """Télécharge les polices Unicode depuis GitHub avec mise en cache Streamlit."""
     fonts = {
         "DejaVuSans.ttf": "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf",
         "DejaVuSans-Bold.ttf": "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans-Bold.ttf",
@@ -28,14 +29,14 @@ def telecharger_polices():
                 req = urllib.request.Request(font_url, headers=headers)
                 with urllib.request.urlopen(req) as response, open(font_name, 'wb') as out_file:
                     out_file.write(response.read())
-            except Exception as e:
-                pass # Si le téléchargement échoue, la fonction PDF basculera sur Helvetica
+            except Exception:
+                pass
 
-# Téléchargement au premier lancement
+# Téléchargement au premier lancement (mis en cache)
 telecharger_polices()
 
 # ==========================================
-# 1. CONFIGURATION DE LA PAGE & DESIGN XXL RESPONSIVE
+# 1. CONFIGURATION DE LA PAGE & DESIGN XXL RESPONSIVE FAST-LOAD
 # ==========================================
 st.set_page_config(
     page_title="Portail Pédagogique - Cours Privé Nelson Mandela | Sénégal",
@@ -47,7 +48,7 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Global Styles & Mobile Reset */
+    /* Global Styles & Mobile Reset Optimisé */
     .main { background-color: #F8FAFC; }
     
     .header-ecole { 
@@ -70,26 +71,14 @@ st.markdown(
         padding: 0 10px;
     }
 
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(15px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    @keyframes pulseCard {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.02); }
-        100% { transform: scale(1); }
-    }
-
-    /* Cartes adaptatives */
+    /* Cartes adaptatives légères */
     .animated-card {
-        animation: fadeIn 0.6s ease-in-out;
         border: 2px solid #E2E8F0;
         padding: clamp(15px, 3vw, 25px);
         border-radius: 16px;
         background: linear-gradient(135deg, #FFFFFF 0%, #F1F5F9 100%);
         box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-        transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
         text-align: center;
         cursor: pointer;
         margin-bottom: 15px;
@@ -97,14 +86,13 @@ st.markdown(
     }
     
     .animated-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 20px 35px rgba(30, 58, 138, 0.15);
+        transform: translateY(-3px);
+        box-shadow: 0 15px 30px rgba(30, 58, 138, 0.12);
         border-color: #2563EB;
     }
 
-    /* Animation pour les indicateurs (KPIs) */
+    /* Key Performance Indicators */
     .kpi-card-animated {
-        animation: fadeIn 0.8s ease-in-out, pulseCard 3s infinite ease-in-out;
         border-left: 5px solid #2563EB;
         background: #FFFFFF;
         padding: 15px;
@@ -113,7 +101,7 @@ st.markdown(
         text-align: center;
     }
 
-    /* Boutons tactiles optimisés */
+    /* Boutons tactiles optimisés mobile */
     .stButton>button { 
         background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%); 
         color: white; 
@@ -121,15 +109,14 @@ st.markdown(
         font-weight: bold; 
         border: none;
         padding: 0.75rem 1rem;
-        transition: all 0.3s ease;
+        transition: transform 0.1s ease;
         width: 100%;
         min-height: 44px;
         font-size: 1rem;
     }
     
-    .stButton>button:hover {
-        background: linear-gradient(135deg, #152E69 0%, #1D4ED8 100%);
-        box-shadow: 0 5px 15px rgba(37, 99, 235, 0.3);
+    .stButton>button:active {
+        transform: scale(0.98);
     }
 
     @media screen and (max-width: 768px) {
@@ -174,6 +161,7 @@ if "classes_db" not in st.session_state:
         columns=["Classe", "Cycle", "Professeur Responsable"],
         data=[
             ["6ème A", "Collège", "Ibrahima Diallo"],
+            ["5ème A", "Collège", "Cheikh Ndiaye"],
             ["CP", "Élémentaire", "Aissatou Sow"],
             ["Grande Section", "Préscolaire", "Marie Faye"],
             ["CE1", "Élémentaire", "Ousmane Diop"]
@@ -186,7 +174,8 @@ if "eleves_db" not in st.session_state:
         data=[
             ["Mamadou Diallo", "2012-05-14", "6ème A", None],
             ["Fatou Sow", "2015-08-20", "CP", None],
-            ["Aminata Ba", "2013-02-10", "6ème A", None]
+            ["Aminata Ba", "2013-02-10", "6ème A", None],
+            ["Oumar Sy", "2011-11-03", "5ème A", None]
         ]
     )
 
@@ -428,7 +417,6 @@ def generer_rapport_general_pdf():
     pdf = PDFReport()
     pdf.add_page()
     
-    # Vérification de la présence des polices
     use_dejavu = os.path.exists("DejaVuSans.ttf")
     
     if use_dejavu:
@@ -439,7 +427,6 @@ def generer_rapport_general_pdf():
         font_main = "Arial"
         bullet = "- "
     
-    # EN-TÊTE DU RAPPORT
     pdf.set_font(font_main, "B", 14)
     pdf.cell(0, 8, "RAPPORT GÉNÉRAL & CONSOLIDATION ANNUELLE", 0, 1, "C")
     pdf.set_font(font_main, "I", 10)
@@ -603,7 +590,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
             <div class="animated-card">
                 <h1 style="font-size: 3rem; margin: 0;">🔒</h1>
                 <h3 style="color: #1E3A8A; margin: 10px 0;">Administration</h3>
-                <p style="font-size: 0.85rem; color: #64748B;">Gestion Base Globale (Année/Trimestre/Mois), EDT, IA & PDF.</p>
+                <p style="font-size: 0.85rem; color: #64748B;">Gestion Base Globale, Éleves par niveau, EDT & PDF.</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -733,97 +720,117 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
         elif menu_prof == "📝 Saisie des Notes par Fiche Matière":
             st.markdown("### Fiche de Matière — Saisie des Notes et Appréciations")
             
-            c_cls, c_mat, c_tri = st.columns(3)
+            c_cls, c_tri = st.columns(2)
             with c_cls:
                 cls_n = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["--"])
-            
+            with c_tri:
+                trimestre_sel = st.selectbox("Trimestre", ["1er Trimestre", "2ème Trimestre", "3ème Trimestre"])
+
             row_c = st.session_state.classes_db[st.session_state.classes_db["Classe"] == cls_n]
             cycle_sel = row_c["Cycle"].values[0] if not row_c.empty else "Collège"
             bareme_sel = 10 if cycle_sel in ["Préscolaire", "Élémentaire"] else 20
             
-            with c_mat:
-                mats_filt = st.session_state.matieres_def[st.session_state.matieres_def["Cycle"] == cycle_sel]["Matière"].tolist()
-                if not mats_filt:
-                    mats_filt = ["Mathématiques", "Français", "Histoire-Géo"]
-                matiere_sel = st.selectbox("Matière", mats_filt)
+            # --- MODIFICATION SOLICITÉE : Saisie directe de la matière et du coefficient ---
+            mode_mat = st.radio("Saisie Matière :", ["Saisir directement la matière & coef", "Choisir parmi les matières prédéfinies"], horizontal=True)
+            
+            c_mat, c_coef = st.columns([3, 1])
+            if mode_mat == "Saisir directement la matière & coef":
+                with c_mat:
+                    matiere_sel = st.text_input("Saisir le nom de la Matière", value="", placeholder="ex: Mathématiques, Arabe, Physique...")
+                with c_coef:
+                    coef_val = st.number_input("Coefficient", min_value=1, max_value=10, value=2)
+            else:
+                with c_mat:
+                    mats_filt = st.session_state.matieres_def[st.session_state.matieres_def["Cycle"] == cycle_sel]["Matière"].tolist()
+                    if not mats_filt:
+                        mats_filt = ["Mathématiques", "Français", "Histoire-Géo"]
+                    matiere_sel = st.selectbox("Matière Prédéfinie", mats_filt)
                 
-            with c_tri:
-                trimestre_sel = st.selectbox("Trimestre", ["1er Trimestre", "2ème Trimestre", "3ème Trimestre"])
+                row_mat = st.session_state.matieres_def[st.session_state.matieres_def["Matière"] == matiere_sel]
+                coef_def = int(row_mat["Coefficient"].values[0]) if not row_mat.empty else 2
+                with c_coef:
+                    coef_val = st.number_input("Coefficient", min_value=1, max_value=10, value=coef_def)
 
-            st.info(f"📌 Cycle : **{cycle_sel}** | Barème de notation : **Note /{bareme_sel}** (Règles Sénégal)")
+            st.info(f"📌 Cycle : **{cycle_sel}** | Barème : **Note /{bareme_sel}** | Coef : **{coef_val}**")
 
             eleves_cls = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_n]["Nom Complet"].tolist()
 
-            if eleves_cls:
-                data_fiche = []
-                for el in eleves_cls:
-                    existing = st.session_state.notes_db[
-                        (st.session_state.notes_db["Classe"] == cls_n) & 
-                        (st.session_state.notes_db["Élève"] == el) & 
-                        (st.session_state.notes_db["Matière"] == matiere_sel) & 
-                        (st.session_state.notes_db["Trimestre"] == trimestre_sel)
-                    ]
-                    note_init = float(existing["Note"].values[0]) if not existing.empty else float(bareme_sel / 2)
-                    appr_init = str(existing["Appréciation"].values[0]) if not existing.empty else "Bon travail"
+            if eleves_cls and matiere_sel.strip() != "":
+                @st.fragment
+                def editeur_notes_fragment():
+                    data_fiche = []
+                    for el in eleves_cls:
+                        existing = st.session_state.notes_db[
+                            (st.session_state.notes_db["Classe"] == cls_n) & 
+                            (st.session_state.notes_db["Élève"] == el) & 
+                            (st.session_state.notes_db["Matière"] == matiere_sel) & 
+                            (st.session_state.notes_db["Trimestre"] == trimestre_sel)
+                        ]
+                        note_init = float(existing["Note"].values[0]) if not existing.empty else float(bareme_sel / 2)
+                        appr_init = str(existing["Appréciation"].values[0]) if not existing.empty else "Bon travail"
 
-                    data_fiche.append({
-                        "Élève": el,
-                        f"Note /{bareme_sel}": note_init,
-                        "Appréciation": appr_init
-                    })
-
-                df_fiche = pd.DataFrame(data_fiche)
-                coef_val = st.number_input("Coefficient de la matière", min_value=1, max_value=10, value=2)
-
-                edited_fiche = st.data_editor(
-                    df_fiche,
-                    num_rows="fixed",
-                    use_container_width=True,
-                    column_config={
-                        f"Note /{bareme_sel}": st.column_config.NumberColumn(
-                            f"Note /{bareme_sel}",
-                            min_value=0.0,
-                            max_value=float(bareme_sel),
-                            step=0.25
-                        ),
-                        "Élève": st.column_config.TextColumn("Nom & Prénom Élève", disabled=True)
-                    }
-                )
-
-                if st.button("💾 Enregistrer la Fiche de Matière"):
-                    st.session_state.notes_db = st.session_state.notes_db[
-                        ~((st.session_state.notes_db["Classe"] == cls_n) & 
-                          (st.session_state.notes_db["Matière"] == matiere_sel) & 
-                          (st.session_state.notes_db["Trimestre"] == trimestre_sel))
-                    ]
-                    
-                    new_rows = []
-                    new_bg_rows = []
-                    d_today = str(datetime.today().date())
-                    m_today = datetime.today().strftime("%B")
-
-                    for _, r in edited_fiche.iterrows():
-                        new_rows.append({
-                            "Classe": cls_n,
-                            "Élève": r["Élève"],
-                            "Matière": matiere_sel,
-                            "Coefficient": coef_val,
-                            "Note": r[f"Note /{bareme_sel}"],
-                            "Barème": bareme_sel,
-                            "Trimestre": trimestre_sel,
-                            "Appréciation": r["Appréciation"]
+                        data_fiche.append({
+                            "Élève": el,
+                            f"Note /{bareme_sel}": note_init,
+                            "Appréciation": appr_init
                         })
-                        new_bg_rows.append({
-                            "Date": d_today, "Année": "2025-2026", "Trimestre": trimestre_sel, "Mois": m_today,
-                            "Type Acteur": "Élève", "Nom Acteur": r["Élève"], "Classe": cls_n,
-                            "Type Entrée": "Note", "Détail / Contenu": f"{matiere_sel}: {r[f'Note /{bareme_sel}']}/{bareme_sel}",
-                            "Appréciation": r["Appréciation"]
-                        })
-                    
-                    st.session_state.notes_db = pd.concat([st.session_state.notes_db, pd.DataFrame(new_rows)], ignore_index=True)
-                    st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, pd.DataFrame(new_bg_rows)], ignore_index=True)
-                    st.success(f"Fiche de {matiere_sel} enregistrée et synchronisée dans la Base Globale !")
 
+                    df_fiche = pd.DataFrame(data_fiche)
+
+                    edited_fiche = st.data_editor(
+                        df_fiche,
+                        num_rows="fixed",
+                        use_container_width=True,
+                        column_config={
+                            f"Note /{bareme_sel}": st.column_config.NumberColumn(
+                                f"Note /{bareme_sel}",
+                                min_value=0.0,
+                                max_value=float(bareme_sel),
+                                step=0.25
+                            ),
+                            "Élève": st.column_config.TextColumn("Nom & Prénom Élève", disabled=True)
+                        },
+                        key=f"editor_{cls_n}_{matiere_sel}_{trimestre_sel}"
+                    )
+
+                    if st.button("💾 Enregistrer la Fiche de Matière"):
+                        st.session_state.notes_db = st.session_state.notes_db[
+                            ~((st.session_state.notes_db["Classe"] == cls_n) & 
+                              (st.session_state.notes_db["Matière"] == matiere_sel) & 
+                              (st.session_state.notes_db["Trimestre"] == trimestre_sel))
+                        ]
+                        
+                        new_rows = []
+                        new_bg_rows = []
+                        d_today = str(datetime.today().date())
+                        m_today = datetime.today().strftime("%B")
+
+                        for _, r in edited_fiche.iterrows():
+                            new_rows.append({
+                                "Classe": cls_n,
+                                "Élève": r["Élève"],
+                                "Matière": matiere_sel,
+                                "Coefficient": coef_val,
+                                "Note": r[f"Note /{bareme_sel}"],
+                                "Barème": bareme_sel,
+                                "Trimestre": trimestre_sel,
+                                "Appréciation": r["Appréciation"]
+                            })
+                            new_bg_rows.append({
+                                "Date": d_today, "Année": "2025-2026", "Trimestre": trimestre_sel, "Mois": m_today,
+                                "Type Acteur": "Élève", "Nom Acteur": r["Élève"], "Classe": cls_n,
+                                "Type Entrée": "Note", "Détail / Contenu": f"{matiere_sel} (Coef {coef_val}): {r[f'Note /{bareme_sel}']}/{bareme_sel}",
+                                "Appréciation": r["Appréciation"]
+                            })
+                        
+                        st.session_state.notes_db = pd.concat([st.session_state.notes_db, pd.DataFrame(new_rows)], ignore_index=True)
+                        st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, pd.DataFrame(new_bg_rows)], ignore_index=True)
+                        st.success(f"Fiche de {matiere_sel} (Coef {coef_val}) enregistrée et synchronisée !")
+
+                editeur_notes_fragment()
+
+            elif not matiere_sel.strip():
+                st.warning("Veuillez indiquer ou saisir le nom de la matière.")
             else:
                 st.warning("Aucun élève trouvé dans cette classe.")
 
@@ -864,7 +871,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "📊 Rapport Journalier":
             st.markdown("### Rédiger un Rapport Journalier")
-            st.caption("Ce rapport sera directement transmitted à la direction et enregistré dans la base globale.")
+            st.caption("Ce rapport sera directement transmis à la direction et enregistré dans la base globale.")
             with st.form("form_rap_prof"):
                 cls_r = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["--"])
                 mat_r = st.text_input("Matière")
@@ -1020,6 +1027,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
         st.markdown("---")
         adm_tab = st.selectbox("Gestion Administrative :", [
+            "📊 Liste & Classement des Élèves (Par Classe & Niveau)",
             "🗄️ Base Globale & Suivi Annuel/Trimestriel/Mensuel",
             "🤖 Assistant IA Administration",
             "📅 Emploi du Temps (Grille Jours x Heures)",
@@ -1030,7 +1038,33 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             "📑 Rapports Journaliers Réceptionnés"
         ])
 
-        if adm_tab == "🗄️ Base Globale & Suivi Annuel/Trimestriel/Mensuel":
+        # --- MODIFICATION SOLICITÉE : Liste des élèves classés par classe et par niveau ---
+        if adm_tab == "📊 Liste & Classement des Élèves (Par Classe & Niveau)":
+            st.subheader("📊 Classement et Liste des Élèves par Classe et par Niveau (Cycle)")
+
+            df_merged = pd.merge(st.session_state.eleves_db, st.session_state.classes_db[["Classe", "Cycle"]], on="Classe", how="left")
+
+            t_niv, t_cls = st.tabs(["🏛️ Par Niveau (Cycle)", "🏫 Par Classe"])
+
+            with t_niv:
+                st.markdown("### 🏛️ Répartition des Élèves par Niveau (Cycle)")
+                cycles_existants = ["Préscolaire", "Élémentaire", "Collège"]
+                for cyc in cycles_existants:
+                    df_c = df_merged[df_merged["Cycle"] == cyc]
+                    if not df_c.empty:
+                        with st.expander(f"📌 Cycle {cyc.upper()} ({len(df_c)} Élèves)", expanded=True):
+                            st.dataframe(df_c[["Nom Complet", "Classe", "Date de Naissance"]].sort_values(by=["Classe", "Nom Complet"]), use_container_width=True)
+
+            with t_cls:
+                st.markdown("### 🏫 Répartition des Élèves par Classe")
+                classes_existantes = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else []
+                for cl in classes_existantes:
+                    df_cl = df_merged[df_merged["Classe"] == cl]
+                    if not df_cl.empty:
+                        with st.expander(f"🏫 Classe : {cl} ({len(df_cl)} Élèves)", expanded=True):
+                            st.dataframe(df_cl[["Nom Complet", "Date de Naissance"]].sort_values(by="Nom Complet"), use_container_width=True)
+
+        elif adm_tab == "🗄️ Base Globale & Suivi Annuel/Trimestriel/Mensuel":
             st.subheader("🗄️ Base Globale de Suivi des Élèves et Professeurs")
             st.caption("Consultation, segmentation par type d'entrée (Notes, Présences/Absences, Rapports) et impression globale.")
 
@@ -1048,16 +1082,11 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
             df_bg = st.session_state.base_globale_db.copy()
 
-            if filtre_acteur != "Tous":
-                df_bg = df_bg[df_bg["Type Acteur"] == filtre_acteur]
-            if filtre_entree != "Toutes":
-                df_bg = df_bg[df_bg["Type Entrée"] == filtre_entree]
-            if filtre_annee != "Toutes":
-                df_bg = df_bg[df_bg["Année"] == filtre_annee]
-            if filtre_tri != "Tous":
-                df_bg = df_bg[df_bg["Trimestre"] == filtre_tri]
-            if filtre_mois != "Tous":
-                df_bg = df_bg[df_bg["Mois"] == filtre_mois]
+            if filtre_acteur != "Tous": df_bg = df_bg[df_bg["Type Acteur"] == filtre_acteur]
+            if filtre_entree != "Toutes": df_bg = df_bg[df_bg["Type Entrée"] == filtre_entree]
+            if filtre_annee != "Toutes": df_bg = df_bg[df_bg["Année"] == filtre_annee]
+            if filtre_tri != "Tous": df_bg = df_bg[df_bg["Trimestre"] == filtre_tri]
+            if filtre_mois != "Tous": df_bg = df_bg[df_bg["Mois"] == filtre_mois]
 
             st.dataframe(df_bg, use_container_width=True)
 
