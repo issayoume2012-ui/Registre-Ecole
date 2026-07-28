@@ -183,9 +183,9 @@ if "base_globale_db" not in st.session_state:
     st.session_state.base_globale_db = pd.DataFrame(
         columns=["Date", "Année", "Trimestre", "Mois", "Type Acteur", "Nom Acteur", "Classe", "Type Entrée", "Détail / Contenu", "Appréciation"],
         data=[
-            {"Date": "2026-01-15", "Année": "2025-2026", "Trimestre": "1er Trimestre", "Mois": "Janvier", "Type Acteur": "Élève", "Nom Acteur": "Mamadou Diallo", "Classe": "6ème A", "Type Entrée": "Note", "Détail / Contenu": "Mathématiques: 15.5/20", "Appréciation": "Très bon travail"},
-            {"Date": "2026-01-20", "Année": "2025-2026", "Trimestre": "1er Trimestre", "Mois": "Janvier", "Type Acteur": "Élève", "Nom Acteur": "Aminata Ba", "Classe": "6ème A", "Type Entrée": "Absence", "Détail / Contenu": "Absent - Motif: Maladie", "Appréciation": "Justifié"},
-            {"Date": "2026-02-05", "Année": "2025-2026", "Trimestre": "2ème Trimestre", "Mois": "Février", "Type Acteur": "Professeur", "Nom Acteur": "Ibrahima Diallo", "Classe": "6ème A", "Type Entrée": "Rapport Cours", "Détail / Contenu": "Algèbre - Chapitre 3 terminé", "Appréciation": "Excellente progression"}
+            {"Date": "2026-01-15", "Année": "2025-2026", "Trimestre": "1er Semestre", "Mois": "Janvier", "Type Acteur": "Élève", "Nom Acteur": "Mamadou Diallo", "Classe": "6ème A", "Type Entrée": "Note", "Détail / Contenu": "Mathématiques (Devoir 1): 15.5/20", "Appréciation": "Très bon travail"},
+            {"Date": "2026-01-20", "Année": "2025-2026", "Trimestre": "1er Semestre", "Mois": "Janvier", "Type Acteur": "Élève", "Nom Acteur": "Aminata Ba", "Classe": "6ème A", "Type Entrée": "Absence", "Détail / Contenu": "Absent - Motif: Maladie", "Appréciation": "Justifié"},
+            {"Date": "2026-02-05", "Année": "2025-2026", "Trimestre": "2ème Semestre", "Mois": "Février", "Type Acteur": "Professeur", "Nom Acteur": "Ibrahima Diallo", "Classe": "6ème A", "Type Entrée": "Rapport Cours", "Détail / Contenu": "Algèbre - Chapitre 3 terminé", "Appréciation": "Excellente progression"}
         ]
     )
 
@@ -228,11 +228,15 @@ if "absences_db" not in st.session_state:
 
 if "notes_db" not in st.session_state:
     st.session_state.notes_db = pd.DataFrame(
-        columns=["Classe", "Élève", "Matière", "Coefficient", "Note", "Barème", "Trimestre", "Appréciation"],
+        columns=["Classe", "Élève", "Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Trimestre", "Appréciation"],
         data=[
-            ["6ème A", "Mamadou Diallo", "Mathématiques", 3, 15.5, 20, "1er Trimestre", "Très bon travail."],
-            ["6ème A", "Mamadou Diallo", "Français", 3, 14.0, 20, "1er Trimestre", "Bon ensemble."],
-            ["CP", "Fatou Sow", "Graphisme / Écriture", 1, 8.5, 10, "1er Trimestre", "Très bien."]
+            ["6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 1", 3, 15.5, 20, "1er Semestre", "Très bon travail."],
+            ["6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 2", 3, 14.0, 20, "1er Semestre", "Bon ensemble."],
+            ["6ème A", "Mamadou Diallo", "Mathématiques", "Composition 1er Semestre", 3, 16.0, 20, "1er Semestre", "Excellent."],
+            ["6ème A", "Mamadou Diallo", "Français", "Devoir 1", 3, 13.0, 20, "1er Semestre", "Assez bon."],
+            ["6ème A", "Mamadou Diallo", "Français", "Devoir 2", 3, 14.5, 20, "1er Semestre", "Bon travail."],
+            ["6ème A", "Mamadou Diallo", "Français", "Composition 1er Semestre", 3, 15.0, 20, "1er Semestre", "Très bien."],
+            ["CP", "Fatou Sow", "Graphisme / Écriture", "Devoir 1", 1, 8.5, 10, "1er Semestre", "Très bien."]
         ]
     )
 
@@ -332,36 +336,57 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
         (st.session_state.notes_db["Trimestre"] == trimestre_sel)
     ]
 
-    pdf.set_font("Arial", "B", 9)
+    pdf.set_font("Arial", "B", 8)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
     
-    w_mat, w_coef, w_note, w_tot, w_app = 55, 20, 30, 30, 55
+    w_mat, w_d1, w_d2, w_comp, w_coef, w_moy, w_app = 40, 20, 20, 25, 15, 20, 50
     pdf.cell(w_mat, 7, "Matière", 1, 0, "C", True)
+    pdf.cell(w_d1, 7, "Devoir 1", 1, 0, "C", True)
+    pdf.cell(w_d2, 7, "Devoir 2", 1, 0, "C", True)
+    pdf.cell(w_comp, 7, "Composition", 1, 0, "C", True)
     pdf.cell(w_coef, 7, "Coef", 1, 0, "C", True)
-    pdf.cell(w_note, 7, f"Note /{bareme}", 1, 0, "C", True)
-    pdf.cell(w_tot, 7, "Total Coef", 1, 0, "C", True)
+    pdf.cell(w_moy, 7, f"Moy. /{bareme}", 1, 0, "C", True)
     pdf.cell(w_app, 7, "Appréciation", 1, 1, "C", True)
 
-    pdf.set_font("Arial", "", 9)
+    pdf.set_font("Arial", "", 8)
     pdf.set_text_color(0, 0, 0)
 
     total_points = 0.0
     total_coefs = 0
 
     if not df_n.empty:
-        for _, r in df_n.iterrows():
-            coef = int(r["Coefficient"])
-            note = float(r["Note"])
-            tot = note * coef
+        matieres_list = df_n["Matière"].unique()
+        for mat in matieres_list:
+            df_mat = df_n[df_n["Matière"] == mat]
+            
+            note_d1 = df_mat[df_mat["Type Évaluation"] == "Devoir 1"]["Note"].values
+            note_d2 = df_mat[df_mat["Type Évaluation"] == "Devoir 2"]["Note"].values
+            comp_type = f"Composition {trimestre_sel}"
+            note_comp = df_mat[df_mat["Type Évaluation"].isin(["Composition", comp_type])]["Note"].values
+
+            d1_str = f"{note_d1[0]:.2f}" if len(note_d1) > 0 else "-"
+            d2_str = f"{note_d2[0]:.2f}" if len(note_d2) > 0 else "-"
+            comp_str = f"{note_comp[0]:.2f}" if len(note_comp) > 0 else "-"
+
+            coef = int(df_mat["Coefficient"].iloc[0])
+            
+            notes_valid = [v for v in [len(note_d1) and note_d1[0], len(note_d2) and note_d2[0], len(note_comp) and note_comp[0]] if v is not False and v is not None]
+            moy_mat = (sum(notes_valid) / len(notes_valid)) if len(notes_valid) > 0 else 0.0
+            
+            tot = moy_mat * coef
             total_points += tot
             total_coefs += coef
 
-            pdf.cell(w_mat, 6, str(r["Matière"])[:28], 1, 0, "L")
+            appr_str = df_mat["Appréciation"].iloc[-1] if not df_mat.empty else "Bon ensemble"
+
+            pdf.cell(w_mat, 6, str(mat)[:20], 1, 0, "L")
+            pdf.cell(w_d1, 6, d1_str, 1, 0, "C")
+            pdf.cell(w_d2, 6, d2_str, 1, 0, "C")
+            pdf.cell(w_comp, 6, comp_str, 1, 0, "C")
             pdf.cell(w_coef, 6, str(coef), 1, 0, "C")
-            pdf.cell(w_note, 6, f"{note:.2f}", 1, 0, "C")
-            pdf.cell(w_tot, 6, f"{tot:.2f}", 1, 0, "C")
-            pdf.cell(w_app, 6, str(r["Appréciation"])[:28], 1, 1, "L")
+            pdf.cell(w_moy, 6, f"{moy_mat:.2f}", 1, 0, "C")
+            pdf.cell(w_app, 6, str(appr_str)[:25], 1, 1, "L")
 
     moyenne = (total_points / total_coefs) if total_coefs > 0 else 0.0
     pdf.ln(3)
@@ -698,7 +723,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             nouvelles_entrées_bg = []
                             
                             mois_actuel = date_jour.strftime("%B")
-                            tri_actuel = "1er Trimestre"
+                            tri_actuel = "1er Semestre"
 
                             for el in eleves_cibles:
                                 if res_appel[el] != "Présent":
@@ -720,17 +745,19 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
         elif menu_prof == "📝 Saisie des Notes par Fiche Matière":
             st.markdown("### Fiche de Matière — Saisie des Notes et Appréciations")
             
-            c_cls, c_tri = st.columns(2)
+            c_cls, c_tri, c_type_eval = st.columns(3)
             with c_cls:
                 cls_n = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["--"])
             with c_tri:
-                trimestre_sel = st.selectbox("Trimestre", ["1er Trimestre", "2ème Trimestre", "3ème Trimestre"])
+                trimestre_sel = st.selectbox("Semestre / Période", ["1er Semestre", "2ème Semestre"])
+            with c_type_eval:
+                comp_label = f"Composition {trimestre_sel}"
+                type_eval_sel = st.selectbox("Type d'Évaluation", ["Devoir 1", "Devoir 2", comp_label])
 
             row_c = st.session_state.classes_db[st.session_state.classes_db["Classe"] == cls_n]
             cycle_sel = row_c["Cycle"].values[0] if not row_c.empty else "Collège"
             bareme_sel = 10 if cycle_sel in ["Préscolaire", "Élémentaire"] else 20
             
-            # --- MODIFICATION SOLICITÉE : Saisie directe de la matière et du coefficient ---
             mode_mat = st.radio("Saisie Matière :", ["Saisir directement la matière & coef", "Choisir parmi les matières prédéfinies"], horizontal=True)
             
             c_mat, c_coef = st.columns([3, 1])
@@ -751,7 +778,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 with c_coef:
                     coef_val = st.number_input("Coefficient", min_value=1, max_value=10, value=coef_def)
 
-            st.info(f"📌 Cycle : **{cycle_sel}** | Barème : **Note /{bareme_sel}** | Coef : **{coef_val}**")
+            st.info(f"📌 Cycle : **{cycle_sel}** | Évaluation : **{type_eval_sel}** | Barème : **Note /{bareme_sel}** | Coef : **{coef_val}**")
 
             eleves_cls = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_n]["Nom Complet"].tolist()
 
@@ -764,6 +791,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             (st.session_state.notes_db["Classe"] == cls_n) & 
                             (st.session_state.notes_db["Élève"] == el) & 
                             (st.session_state.notes_db["Matière"] == matiere_sel) & 
+                            (st.session_state.notes_db["Type Évaluation"] == type_eval_sel) & 
                             (st.session_state.notes_db["Trimestre"] == trimestre_sel)
                         ]
                         note_init = float(existing["Note"].values[0]) if not existing.empty else float(bareme_sel / 2)
@@ -790,13 +818,14 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             ),
                             "Élève": st.column_config.TextColumn("Nom & Prénom Élève", disabled=True)
                         },
-                        key=f"editor_{cls_n}_{matiere_sel}_{trimestre_sel}"
+                        key=f"editor_{cls_n}_{matiere_sel}_{type_eval_sel}_{trimestre_sel}"
                     )
 
                     if st.button("💾 Enregistrer la Fiche de Matière"):
                         st.session_state.notes_db = st.session_state.notes_db[
                             ~((st.session_state.notes_db["Classe"] == cls_n) & 
                               (st.session_state.notes_db["Matière"] == matiere_sel) & 
+                              (st.session_state.notes_db["Type Évaluation"] == type_eval_sel) & 
                               (st.session_state.notes_db["Trimestre"] == trimestre_sel))
                         ]
                         
@@ -810,6 +839,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                                 "Classe": cls_n,
                                 "Élève": r["Élève"],
                                 "Matière": matiere_sel,
+                                "Type Évaluation": type_eval_sel,
                                 "Coefficient": coef_val,
                                 "Note": r[f"Note /{bareme_sel}"],
                                 "Barème": bareme_sel,
@@ -819,13 +849,13 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             new_bg_rows.append({
                                 "Date": d_today, "Année": "2025-2026", "Trimestre": trimestre_sel, "Mois": m_today,
                                 "Type Acteur": "Élève", "Nom Acteur": r["Élève"], "Classe": cls_n,
-                                "Type Entrée": "Note", "Détail / Contenu": f"{matiere_sel} (Coef {coef_val}): {r[f'Note /{bareme_sel}']}/{bareme_sel}",
+                                "Type Entrée": "Note", "Détail / Contenu": f"{matiere_sel} ({type_eval_sel} - Coef {coef_val}): {r[f'Note /{bareme_sel}']}/{bareme_sel}",
                                 "Appréciation": r["Appréciation"]
                             })
                         
                         st.session_state.notes_db = pd.concat([st.session_state.notes_db, pd.DataFrame(new_rows)], ignore_index=True)
                         st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, pd.DataFrame(new_bg_rows)], ignore_index=True)
-                        st.success(f"Fiche de {matiere_sel} (Coef {coef_val}) enregistrée et synchronisée !")
+                        st.success(f"Fiche de {matiere_sel} ({type_eval_sel} - Coef {coef_val}) enregistrée et synchronisée !")
 
                 editeur_notes_fragment()
 
@@ -849,7 +879,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         st.session_state.conduite_db = pd.concat([st.session_state.conduite_db, new_cd], ignore_index=True)
                         
                         bg_entry = pd.DataFrame([{
-                            "Date": d_str, "Année": "2025-2026", "Trimestre": "1er Trimestre", "Mois": datetime.today().strftime("%B"),
+                            "Date": d_str, "Année": "2025-2026", "Trimestre": "1er Semestre", "Mois": datetime.today().strftime("%B"),
                             "Type Acteur": "Élève", "Nom Acteur": el_c, "Classe": cls_c,
                             "Type Entrée": "Conduite", "Détail / Contenu": f"{type_s}: {desc}", "Appréciation": type_s
                         }])
@@ -871,7 +901,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "📊 Rapport Journalier":
             st.markdown("### Rédiger un Rapport Journalier")
-            st.caption("Ce rapport sera directement transmis à la direction et enregistré dans la base globale.")
+            st.caption("Ce rapport sera directement transmitted à la direction et enregistré dans la base globale.")
             with st.form("form_rap_prof"):
                 cls_r = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["--"])
                 mat_r = st.text_input("Matière")
@@ -884,7 +914,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         st.session_state.rapports_journaliers_prof = pd.concat([st.session_state.rapports_journaliers_prof, new_r], ignore_index=True)
                         
                         bg_prof = pd.DataFrame([{
-                            "Date": d_str, "Année": "2025-2026", "Trimestre": "1er Trimestre", "Mois": datetime.today().strftime("%B"),
+                            "Date": d_str, "Année": "2025-2026", "Trimestre": "1er Semestre", "Mois": datetime.today().strftime("%B"),
                             "Type Acteur": "Professeur", "Nom Acteur": prof_connecte, "Classe": cls_r,
                             "Type Entrée": "Rapport", "Détail / Contenu": f"{mat_r} - {bilan}", "Appréciation": diff if diff else "RAS"
                         }])
@@ -932,7 +962,7 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
         
         with t1:
             st.subheader("Bulletin de Notes Officiel Synchronisé")
-            tri_p = st.selectbox("Sélectionner le Trimestre", ["1er Trimestre", "2ème Trimestre", "3ème Trimestre"])
+            tri_p = st.selectbox("Sélectionner la Période", ["1er Semestre", "2ème Semestre"])
             
             notes_el = st.session_state.notes_db[
                 (st.session_state.notes_db["Élève"] == eleve) & 
@@ -940,7 +970,7 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
             ]
 
             if not notes_el.empty:
-                st.dataframe(notes_el[["Matière", "Coefficient", "Note", "Barème", "Appréciation"]], use_container_width=True)
+                st.dataframe(notes_el[["Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Appréciation"]], use_container_width=True)
                 
                 total_pts = (notes_el["Note"] * notes_el["Coefficient"]).sum()
                 total_coef = notes_el["Coefficient"].sum()
@@ -958,7 +988,7 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
                     mime="application/pdf"
                 )
             else:
-                st.info("Aucune note enregistrée pour ce trimestre.")
+                st.info("Aucune note enregistrée pour ce semestre.")
 
         with t2:
             st.subheader("Emploi du Temps de la Classe")
@@ -1038,7 +1068,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             "📑 Rapports Journaliers Réceptionnés"
         ])
 
-        # --- MODIFICATION SOLICITÉE : Liste des élèves classés par classe et par niveau ---
         if adm_tab == "📊 Liste & Classement des Élèves (Par Classe & Niveau)":
             st.subheader("📊 Classement et Liste des Élèves par Classe et par Niveau (Cycle)")
 
@@ -1076,7 +1105,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             with f3:
                 filtre_annee = st.selectbox("Année Scolaire", ["Toutes", "2025-2026", "2024-2025"])
             with f4:
-                filtre_tri = st.selectbox("Trimestre", ["Tous", "1er Trimestre", "2ème Trimestre", "3ème Trimestre"])
+                filtre_tri = st.selectbox("Période / Semestre", ["Tous", "1er Semestre", "2ème Semestre"])
             with f5:
                 filtre_mois = st.selectbox("Mois", ["Tous", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"])
 
@@ -1114,7 +1143,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 with st.form("form_add_bg"):
                     c_date = st.date_input("Date", value=datetime.today())
                     c_annee = st.selectbox("Année Scolaire", ["2025-2026", "2026-2027"])
-                    c_tri = st.selectbox("Trimestre", ["1er Trimestre", "2ème Trimestre", "3ème Trimestre"])
+                    c_tri = st.selectbox("Semestre", ["1er Semestre", "2ème Semestre"])
                     c_mois = st.selectbox("Mois", ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"])
                     c_type_act = st.selectbox("Type d'Acteur", ["Élève", "Professeur"])
                     c_nom_act = st.text_input("Nom de l'Élève ou Enseignant")
