@@ -1151,6 +1151,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
         st.markdown("---")
         adm_tab = st.selectbox("Gestion Administrative :", [
+            "🏫 Insertion d'une Classe Entière (Prof, Élèves & Dates)",
             "🛡️ Gestionnaires & Propriétaires (Liste Blanche)",
             "📊 Liste & Classement des Élèves (Par Classe & Niveau)",
             "🗄️ Base Globale & Suivi Annuel/Trimestriel/Mensuel",
@@ -1163,7 +1164,82 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             "📑 Rapports Journaliers Réceptionnés"
         ])
 
-        if adm_tab == "🛡️ Gestionnaires & Propriétaires (Liste Blanche)":
+        if adm_tab == "🏫 Insertion d'une Classe Entière (Prof, Élèves & Dates)":
+            st.subheader("🏫 Insertion Complète d'une Classe Entière")
+            st.caption("Permet d'ajouter simultanément la classe, son professeur responsable, et la liste des élèves avec leurs dates de naissance.")
+
+            with st.form("form_inserer_classe_entiere"):
+                st.markdown("#### 1. Informations de la Classe")
+                c_nom_classe = st.text_input("Nom de la Classe (ex: 4ème B ou CM2 A)")
+                c_cycle_classe = st.selectbox("Cycle d'Appartenance", ["Préscolaire", "Élémentaire", "Collège"])
+
+                st.markdown("#### 2. Professeur Responsable / Principal")
+                p_nom = st.text_input("Nom du Professeur")
+                p_prenom = st.text_input("Prénom du Professeur")
+                p_matiere = st.text_input("Matière Principale")
+                p_password = st.text_input("Mot de passe provisoire du Professeur", type="password")
+
+                st.markdown("#### 3. Liste des Élèves de cette Classe")
+                st.info("Saisissez les élèves ci-dessous (Nom complet et Date de naissance). Vous pouvez ajouter ou supprimer des lignes.")
+                
+                # Tableau éditable pour saisir les élèves en masse
+                df_saisie_eleves_init = pd.DataFrame([
+                    {"Nom Complet": "Prénom Nom 1", "Date de Naissance": "2012-01-01"},
+                    {"Nom Complet": "Prénom Nom 2", "Date de Naissance": "2012-05-15"}
+                ])
+                
+                eleves_saisies_edit = st.data_editor(
+                    df_saisie_eleves_init, 
+                    num_rows="dynamic", 
+                    use_container_width=True,
+                    key="table_saisie_eleves_masse"
+                )
+
+                btn_valider_classe = st.form_submit_button("🚀 Enregistrer toute la Classe, le Prof et les Élèves")
+
+                if btn_valider_classe:
+                    if not c_nom_classe.strip():
+                        st.error("Le nom de la classe ne peut pas être vide.")
+                    elif not p_nom.strip() or not p_prenom.strip():
+                        st.error("Veuillez renseigner le nom et le prénom du professeur responsable.")
+                    else:
+                        # 1. Enregistrement / Mise à jour de la classe dans classes_db
+                        prof_resp_complet = f"{p_prenom} {p_nom}"
+                        if c_nom_classe in st.session_state.classes_db["Classe"].values:
+                            st.session_state.classes_db.loc[st.session_state.classes_db["Classe"] == c_nom_classe, "Cycle"] = c_cycle_classe
+                            st.session_state.classes_db.loc[st.session_state.classes_db["Classe"] == c_nom_classe, "Professeur Responsable"] = prof_resp_complet
+                        else:
+                            new_cls_row = pd.DataFrame([{"Classe": c_nom_classe, "Cycle": c_cycle_classe, "Professeur Responsable": prof_resp_complet}])
+                            st.session_state.classes_db = pd.concat([st.session_state.classes_db, new_cls_row], ignore_index=True)
+
+                        # 2. Enregistrement du professeur dans prof_credentials
+                        if p_password:
+                            new_prof_row = pd.DataFrame([{
+                                "Nom": p_nom, "Prénom": p_prenom, "Mot de passe": p_password, 
+                                "Matière Principale": p_matiere, "Classe Attribuée": c_nom_classe
+                            }])
+                            st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_prof_row], ignore_index=True)
+
+                        # 3. Enregistrement des élèves dans eleves_db
+                        nouveaux_eleves_list = []
+                        for _, row_el in eleves_saisies_edit.iterrows():
+                            nom_eleve = str(row_el["Nom Complet"]).strip()
+                            date_naiss = str(row_el["Date de Naissance"]).strip()
+                            if nom_eleve and nom_eleve != "Prénom Nom 1":
+                                nouveaux_eleves_list.append({
+                                    "Nom Complet": nom_eleve,
+                                    "Date de Naissance": date_naiss,
+                                    "Classe": c_nom_classe,
+                                    "Photo": None
+                                ])
+                        
+                        if nouveaux_eleves_list:
+                            df_nouveaux_eleves = pd.DataFrame(nouveaux_eleves_list)
+                            st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, df_nouveaux_eleves], ignore_index=True)
+
+                        st.success(f"🎉 La classe **{c_nom_classe}**, le professeur **{prof_resp_complet}** et **{len(nouveaux_eleves_list)} élève(s)** ont été insérés avec succès dans le système !")
+
+        elif adm_tab == "🛡️ Gestionnaires & Propriétaires (Liste Blanche)":
             st.subheader("🛡️ Liste Blanche des Gestionnaires & Propriétaires")
             st.info("💡 **Règle d'accès :** Seul l'administrateur principal (`cpnm@gmail.com`) a les privilèges exclusifs d'ajouter ou de révoquer des membres dans cette liste.")
 
@@ -1380,7 +1456,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.success(f"Emploi du temps de la classe {cls_selected} mis à jour !")
 
         elif adm_tab == "👨‍🎓 Élèves (Export PDF, Modif, Suppr)":
-            st.subheader("Gestion des Élèves & Impression PDF")
+            st.subheader("Gestion des Élèves & Suppression / Modification")
             
             pdf_eleves = export_table_pdf("LISTE OFFICIELLE DES ÉLÈVES", st.session_state.eleves_db, ["Nom Complet", "Date de Naissance", "Classe"])
             st.download_button(
@@ -1403,14 +1479,25 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             st.success("Élève ajouté avec succès.")
                             st.rerun()
 
-            st.markdown("#### Liste des Élèves (Modifiable & Supprimable)")
+            st.markdown("#### 🗑️ Supprimer un Élève Spécifique")
+            if not st.session_state.eleves_db.empty:
+                eleve_a_supprimer = st.selectbox("Sélectionner l'élève à supprimer", st.session_state.eleves_db["Nom Complet"].tolist())
+                if st.button("❌ Supprimer cet élève"):
+                    st.session_state.eleves_db = st.session_state.eleves_db[st.session_state.eleves_db["Nom Complet"] != eleve_a_supprimer].reset_index(drop=True)
+                    st.success(f"L'élève **{eleve_a_supprimer}** a été supprimé de la base avec succès !")
+                    st.rerun()
+            else:
+                st.info("Aucun élève enregistré.")
+
+            st.markdown("---")
+            st.markdown("#### Liste des Élèves (Modifiable directement)")
             edited_eleves = st.data_editor(st.session_state.eleves_db, num_rows="dynamic", use_container_width=True, key="editor_eleves")
             if st.button("💾 Enregistrer les Modifications Élèves"):
                 st.session_state.eleves_db = edited_eleves
                 st.success("Base des élèves mise à jour !")
 
         elif adm_tab == "👨‍🏫 Professeurs (Export PDF, Modif, Suppr)":
-            st.subheader("Gestion des Professeurs & Impression PDF")
+            st.subheader("Gestion des Professeurs & Suppression / Modification")
             
             pdf_profs = export_table_pdf("LISTE DU CORPS ENSEIGNANT", st.session_state.prof_credentials, ["Nom", "Prénom", "Matière Principale", "Classe Attribuée"])
             st.download_button(
@@ -1435,7 +1522,26 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             st.success("Professeur enregistré.")
                             st.rerun()
 
-            st.markdown("#### Liste des Professeurs (Modifiable & Supprimable)")
+            st.markdown("#### 🗑️ Supprimer un Professeur Spécifique")
+            if not st.session_state.prof_credentials.empty:
+                liste_profs_combo = [f"{row['Prénom']} {row['Nom']} ({row['Matière Principale']})" for _, row in st.session_state.prof_credentials.iterrows()]
+                prof_choisi_del = st.selectbox("Sélectionner le professeur à supprimer", liste_profs_combo)
+                if st.button("❌ Supprimer ce professeur"):
+                    # Retrouver l'index correspondant
+                    idx_to_drop = None
+                    for idx, row in st.session_state.prof_credentials.iterrows():
+                        if f"{row['Prénom']} {row['Nom']} ({row['Matière Principale']})" == prof_choisi_del:
+                            idx_to_drop = idx
+                            break
+                    if idx_to_drop is not None:
+                        st.session_state.prof_credentials = st.session_state.prof_credentials.drop(idx_to_drop).reset_index(drop=True)
+                        st.success(f"Le professeur **{prof_choisi_del}** a été supprimé avec succès !")
+                        st.rerun()
+            else:
+                st.info("Aucun professeur enregistré.")
+
+            st.markdown("---")
+            st.markdown("#### Liste des Professeurs (Modifiable directement)")
             edited_profs = st.data_editor(st.session_state.prof_credentials, num_rows="dynamic", use_container_width=True, key="editor_profs")
             if st.button("💾 Enregistrer les Modifications Professeurs"):
                 st.session_state.prof_credentials = edited_profs
