@@ -290,7 +290,7 @@ def export_table_pdf(title, df, columns_to_show=None):
         pdf.ln()
         fill = not fill
 
-    return pdf.output(dest='S').encode('latin1')
+    return bytes(pdf.output())
 
 def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
     pdf = PDFReport()
@@ -301,7 +301,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
     bareme = 10 if cycle in ["Préscolaire", "Élémentaire"] else 20
     
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 7, f"BULLETIN DE NOTES ET BILIEN GLOBAL - {trimestre_sel.upper()}", 0, 1, "C")
+    pdf.cell(0, 7, f"BULLETIN DE NOTES ET BILAN GLOBAL - {trimestre_sel.upper()}", 0, 1, "C")
     pdf.ln(2)
     
     pdf.set_font("Arial", "", 10)
@@ -311,7 +311,6 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
     pdf.cell(90, 6, f"Barème officiel : / {bareme}", 0, 1, "R")
     pdf.ln(5)
 
-    # Récupérer les notes de l'élève
     df_n = st.session_state.notes_db[
         (st.session_state.notes_db["Élève"] == eleve_nom) & 
         (st.session_state.notes_db["Trimestre"] == trimestre_sel)
@@ -357,7 +356,6 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
     pdf.set_fill_color(230, 242, 255)
     pdf.cell(190, 8, f"MOYENNE GÉNÉRALE : {moyenne:.2f} / {bareme}", 1, 1, "C", True)
 
-    # EXTRACTION SYNCHRONISÉE DE LA BASE GLOBALE (ABSENCES & CONDUITE)
     df_bg_abs = st.session_state.base_globale_db[
         (st.session_state.base_globale_db["Nom Acteur"] == eleve_nom) & 
         (st.session_state.base_globale_db["Trimestre"] == trimestre_sel) & 
@@ -375,7 +373,6 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
     rem_cond = df_bg_cond["Type"].iloc[-1] if not df_bg_cond.empty else "R.A.S"
     pdf.cell(95, 6, f"Remarque Conduite : {rem_cond}", 1, 1, "L")
 
-    # Mention officielle
     if bareme == 20:
         if moyenne >= 16: mention = "Très Bien (Félicitations du Conseil)"
         elif moyenne >= 14: mention = "Bien (Tableau d'Honneur)"
@@ -398,7 +395,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
     pdf.cell(70, 6, "Les Parents", 0, 0, "C")
     pdf.cell(60, 6, "Le Directeur des Études", 0, 1, "C")
 
-    return pdf.output(dest='S').encode('latin1')
+    return bytes(pdf.output())
 
 def generer_rapport_general_pdf():
     pdf = PDFReport()
@@ -410,7 +407,6 @@ def generer_rapport_general_pdf():
     pdf.cell(0, 5, "Synthèse Globale des Évaluations, Renseignements, Absences et Activités", 0, 1, "C")
     pdf.ln(6)
 
-    # Section 1 : Statistiques Établissement
     pdf.set_font("Arial", "B", 11)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
@@ -424,7 +420,6 @@ def generer_rapport_general_pdf():
     pdf.cell(95, 6, f"Total Entrées Base Globale : {len(st.session_state.base_globale_db)}", 1, 1, "L")
     pdf.ln(5)
 
-    # Section 2 : Activité et Suivi des Enseignants
     pdf.set_font("Arial", "B", 11)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
@@ -439,7 +434,6 @@ def generer_rapport_general_pdf():
         pdf.cell(190, 6, "Aucun rapport déposé.", 1, 1, "L")
     pdf.ln(5)
 
-    # Section 3 : Synthèse de la Base Globale (Absences / Évaluations / Appréciations)
     pdf.set_font("Arial", "B", 11)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
@@ -463,7 +457,7 @@ def generer_rapport_general_pdf():
             pdf.cell(30, 6, str(row["Type Entrée"])[:15], 1, 0, "C")
             pdf.cell(60, 6, str(row["Détail / Contenu"])[:35], 1, 1, "L")
 
-    return pdf.output(dest='S').encode('latin1')
+    return bytes(pdf.output())
 
 def assistant_ia_repondre(question):
     q = question.lower()
@@ -664,11 +658,11 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             for el in eleves_cibles:
                                 if res_appel[el] != "Présent":
                                     nouveaux_abs.append({"Date": str(date_jour), "Classe": cls_appel, "Élève": el, "Statut": res_appel[el], "Motif": "Non renseigné"})
-                                    # Synchronisation Base Globale
                                     nouvelles_entrées_bg.append({
                                         "Date": str(date_jour), "Année": "2025-2026", "Trimestre": tri_actuel, "Mois": mois_actuel,
                                         "Type Acteur": "Élève", "Nom Acteur": el, "Classe": cls_appel,
-                                        "Type Entrée": "Absence", "Détail / Contenu": f"Statut : {res_appel[el]}", "Appréciation": "Non justifiée"
+                                        "Type Entrée": "Absence" if res_appel[el] == "Absent" else "Présence/Retard", 
+                                        "Détail / Contenu": f"Statut : {res_appel[el]}", "Appréciation": "Non justifiée"
                                     })
                             
                             if nouveaux_abs:
@@ -761,7 +755,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             "Trimestre": trimestre_sel,
                             "Appréciation": r["Appréciation"]
                         })
-                        # Alimentation de la Base Globale
                         new_bg_rows.append({
                             "Date": d_today, "Année": "2025-2026", "Trimestre": trimestre_sel, "Mois": m_today,
                             "Type Acteur": "Élève", "Nom Acteur": r["Élève"], "Classe": cls_n,
@@ -790,7 +783,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         new_cd = pd.DataFrame([{"Classe": cls_c, "Élève": el_c, "Date": d_str, "Type": type_s, "Description": desc}])
                         st.session_state.conduite_db = pd.concat([st.session_state.conduite_db, new_cd], ignore_index=True)
                         
-                        # Synchronisation Base Globale
                         bg_entry = pd.DataFrame([{
                             "Date": d_str, "Année": "2025-2026", "Trimestre": "1er Trimestre", "Mois": datetime.today().strftime("%B"),
                             "Type Acteur": "Élève", "Nom Acteur": el_c, "Classe": cls_c,
@@ -826,11 +818,10 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         new_r = pd.DataFrame([{"Professeur": prof_connecte, "Date": d_str, "Classe": cls_r, "Matière": mat_r, "Bilan du Cours": bilan, "Difficultés / Remarques": diff}])
                         st.session_state.rapports_journaliers_prof = pd.concat([st.session_state.rapports_journaliers_prof, new_r], ignore_index=True)
                         
-                        # Synchronisation Base Globale pour l'enseignant
                         bg_prof = pd.DataFrame([{
                             "Date": d_str, "Année": "2025-2026", "Trimestre": "1er Trimestre", "Mois": datetime.today().strftime("%B"),
                             "Type Acteur": "Professeur", "Nom Acteur": prof_connecte, "Classe": cls_r,
-                            "Type Entrée": "Rapport Cours", "Détail / Contenu": f"{mat_r} - {bilan}", "Appréciation": diff if diff else "RAS"
+                            "Type Entrée": "Rapport", "Détail / Contenu": f"{mat_r} - {bilan}", "Appréciation": diff if diff else "RAS"
                         }])
                         st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, bg_prof], ignore_index=True)
                         st.success("Rapport transmis et centralisé dans la Base Globale !")
@@ -981,26 +972,30 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             "📑 Rapports Journaliers Réceptionnés"
         ])
 
-        # NOUVELLE FONCTIONNALITÉ : BASE GLOBALE CENTRALISÉE DE SUIVI
+        # BASE GLOBALE CENTRALISÉE DE SUIVI AVEC SEGMENTATION
         if adm_tab == "🗄️ Base Globale & Suivi Annuel/Trimestriel/Mensuel":
             st.subheader("🗄️ Base Globale de Suivi des Élèves et Professeurs")
-            st.caption("Consultation, filtrage temporel et impression globale du rapport de l'établissement.")
+            st.caption("Consultation, segmentation par type d'entrée (Notes, Présences/Absences, Rapports) et impression globale.")
 
-            # Filtres temporels et catégories
-            f1, f2, f3, f4 = st.columns(4)
+            # Filtres temporels, catégories et types d'entrées
+            f1, f2, f3, f4, f5 = st.columns(5)
             with f1:
                 filtre_acteur = st.selectbox("Type d'Acteur", ["Tous", "Élève", "Professeur"])
             with f2:
-                filtre_annee = st.selectbox("Année Scolaire", ["Toutes", "2025-2026", "2024-2025"])
+                filtre_entree = st.selectbox("Catégorie d'Entrée", ["Toutes", "Note", "Absence", "Présence/Retard", "Rapport", "Conduite", "Appréciation"])
             with f3:
-                filtre_tri = st.selectbox("Trimestre", ["Tous", "1er Trimestre", "2ème Trimestre", "3ème Trimestre"])
+                filtre_annee = st.selectbox("Année Scolaire", ["Toutes", "2025-2026", "2024-2025"])
             with f4:
+                filtre_tri = st.selectbox("Trimestre", ["Tous", "1er Trimestre", "2ème Trimestre", "3ème Trimestre"])
+            with f5:
                 filtre_mois = st.selectbox("Mois", ["Tous", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"])
 
             df_bg = st.session_state.base_globale_db.copy()
 
             if filtre_acteur != "Tous":
                 df_bg = df_bg[df_bg["Type Acteur"] == filtre_acteur]
+            if filtre_entree != "Toutes":
+                df_bg = df_bg[df_bg["Type Entrée"] == filtre_entree]
             if filtre_annee != "Toutes":
                 df_bg = df_bg[df_bg["Année"] == filtre_annee]
             if filtre_tri != "Tous":
@@ -1039,7 +1034,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     c_type_act = st.selectbox("Type d'Acteur", ["Élève", "Professeur"])
                     c_nom_act = st.text_input("Nom de l'Élève ou Enseignant")
                     c_cls = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
-                    c_type_ent = st.selectbox("Type d'Entrée", ["Rapport", "Note", "Absence", "Présence", "Appréciation", "Sanction", "Félicitation"])
+                    c_type_ent = st.selectbox("Type d'Entrée", ["Note", "Absence", "Présence/Retard", "Rapport", "Conduite", "Appréciation", "Sanction", "Félicitation"])
                     c_det = st.text_area("Détail / Contenu")
                     c_app = st.text_input("Appréciation Générale")
 
