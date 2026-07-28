@@ -764,7 +764,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 else:
                     st.info("Aucun élève dans cette classe.")
 
-       elif menu_prof == "📝 Saisie des Notes par Fiche Matière":
+        elif menu_prof == "📝 Saisie des Notes par Fiche Matière":
             st.markdown("### Fiche de Matière — Saisie des Notes et Appréciations")
             
             # SÉCURISATION : S'assurer que les colonnes indispensables existent dans notes_db
