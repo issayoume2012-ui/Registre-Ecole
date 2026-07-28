@@ -145,9 +145,9 @@ if "admin_credentials" not in st.session_state:
 
 if "prof_credentials" not in st.session_state:
     st.session_state.prof_credentials = pd.DataFrame([
-        {"Nom": "Diallo", "Prénom": "Ibrahima", "Mot de passe": "prof123", "Matière Principale": "Mathématiques"},
-        {"Nom": "Sow", "Prénom": "Aissatou", "Mot de passe": "prof456", "Matière Principale": "Français"},
-        {"Nom": "Ndiaye", "Prénom": "Cheikh", "Mot de passe": "prof789", "Matière Principale": "Histoire-Géographie"}
+        {"Nom": "Diallo", "Prénom": "Ibrahima", "Mot de passe": "prof123", "Matière Principale": "Mathématiques", "Classe Attribuée": "6ème A"},
+        {"Nom": "Sow", "Prénom": "Aissatou", "Mot de passe": "prof456", "Matière Principale": "Français", "Classe Attribuée": "CP"},
+        {"Nom": "Ndiaye", "Prénom": "Cheikh", "Mot de passe": "prof789", "Matière Principale": "Histoire-Géographie", "Classe Attribuée": "5ème A"}
     ])
 
 if "parents_white_list" not in st.session_state:
@@ -691,6 +691,8 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
         st.session_state.prof_logged = False
     if "prof_nom_connecte" not in st.session_state:
         st.session_state.prof_nom_connecte = ""
+    if "prof_classe_autorisee" not in st.session_state:
+        st.session_state.prof_classe_autorisee = ""
 
     if not st.session_state.prof_logged:
         st.info("Veuillez vous identifier avec vos accès professeurs.")
@@ -702,24 +704,30 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
             if btn_p_login:
                 match_prof = False
+                classe_trouvee = ""
                 for _, row in st.session_state.prof_credentials.iterrows():
                     if (str(row["Nom"]).strip().lower() == p_nom.strip().lower() and 
                         str(row["Prénom"]).strip().lower() == p_prenom.strip().lower() and 
                         str(row["Mot de passe"]) == p_pass):
                         match_prof = True
+                        classe_trouvee = str(row.get("Classe Attribuée", "6ème A"))
                         break
                 if match_prof:
                     st.session_state.prof_logged = True
                     st.session_state.prof_nom_connecte = f"{p_prenom} {p_nom}"
+                    st.session_state.prof_classe_autorisee = classe_trouvee
                     st.success("Connexion réussie !")
                     st.rerun()
                 else:
                     st.error("Identifiants incorrects.")
     else:
-        st.success(f"Connecté en tant que : **{st.session_state.prof_nom_connecte}**")
+        prof_connecte = st.session_state.prof_nom_connecte
+        classe_autorisee = st.session_state.prof_classe_autorisee
+        st.success(f"Connecté en tant que : **{prof_connecte}** | Classe autorisée : **{classe_autorisee}**")
         if st.button("Se déconnecter"):
             st.session_state.prof_logged = False
             st.session_state.prof_nom_connecte = ""
+            st.session_state.prof_classe_autorisee = ""
             st.rerun()
 
         st.markdown("---")
@@ -730,13 +738,14 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             "📖 Cahier de Textes", 
             "📊 Rapport Journalier"
         ], horizontal=True)
-        prof_connecte = st.session_state.prof_nom_connecte
 
         if menu_prof == "📋 Fiche d'Appel":
             st.markdown("### Feuille d'Appel Journalière")
-            if not st.session_state.classes_db.empty and not st.session_state.eleves_db.empty:
+            st.info(f"📌 Accès restreint à votre classe assignée : **{classe_autorisee}**")
+            if not st.session_state.eleves_db.empty:
                 date_jour = st.date_input("Date", value=datetime.today())
-                cls_appel = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist())
+                cls_appel = classe_autorisee
+                st.write(f"**Classe concernée :** {cls_appel}")
                 eleves_cibles = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_appel]["Nom Complet"].tolist()
 
                 if eleves_cibles:
@@ -774,6 +783,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "📝 Saisie des Notes par Fiche Matière":
             st.markdown("### Fiche de Matière — Saisie des Notes et Appréciations")
+            st.info(f"📌 Accès restreint à votre classe assignée : **{classe_autorisee}**")
             
             # SÉCURISATION : S'assurer que les colonnes indispensables existent dans notes_db
             cols_requis = ["Classe", "Élève", "Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Trimestre", "Appréciation"]
@@ -781,14 +791,13 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 if col not in st.session_state.notes_db.columns:
                     st.session_state.notes_db[col] = None
 
-            c_cls, c_tri, c_type_eval = st.columns(3)
-            with c_cls:
-                cls_n = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["--"])
+            cls_n = classe_autorisee
             
             row_c = st.session_state.classes_db[st.session_state.classes_db["Classe"] == cls_n]
             cycle_sel = row_c["Cycle"].values[0] if not row_c.empty else "Collège"
             bareme_sel = 10 if cycle_sel in ["Préscolaire", "Élémentaire"] else 20
             
+            c_tri, c_type_eval = st.columns(2)
             with c_tri:
                 if cycle_sel == "Collège":
                     trimestre_sel = st.selectbox("Semestre", ["1er Semestre", "2ème Semestre"])
@@ -821,7 +830,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 with c_coef:
                     coef_val = st.number_input("Coefficient", min_value=1, max_value=10, value=coef_def)
 
-            st.info(f"📌 Cycle : **{cycle_sel}** | Période : **{trimestre_sel}** | Évaluation : **{type_eval_sel}** | Barème : **Note /{bareme_sel}** | Coef : **{coef_val}**")
+            st.info(f"📌 Cycle : **{cycle_sel}** | Classe : **{cls_n}** | Période : **{trimestre_sel}** | Évaluation : **{type_eval_sel}** | Barème : **Note /{bareme_sel}** | Coef : **{coef_val}**")
 
             eleves_cls = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_n]["Nom Complet"].tolist()
 
@@ -830,7 +839,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 def editeur_notes_fragment():
                     data_fiche = []
                     for el in eleves_cls:
-                        # Filtrage sécurisé
                         existing = st.session_state.notes_db[
                             (st.session_state.notes_db["Classe"] == cls_n) & 
                             (st.session_state.notes_db["Élève"] == el) & 
@@ -910,8 +918,10 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "⚠️ Conduite":
             st.markdown("### Suivi de Conduite")
+            st.info(f"📌 Accès restreint à votre classe assignée : **{classe_autorisee}**")
             with st.form("form_cond_prof"):
-                cls_c = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["--"])
+                cls_c = classe_autorisee
+                st.write(f"**Classe concernée :** {cls_c}")
                 eleves_c = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_c]["Nom Complet"].tolist()
                 el_c = st.selectbox("Élève", eleves_c if eleves_c else ["--"])
                 type_s = st.selectbox("Type", ["Avertissement", "Blâme", "Retenue", "Félicitations", "Encouragement"])
@@ -936,8 +946,10 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "📖 Cahier de Textes":
             st.markdown("### Cahier de Textes Numérique")
+            st.info(f"📌 Accès restreint à votre classe assignée : **{classe_autorisee}**")
             with st.form("form_cahier"):
-                cls_ct = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["--"])
+                cls_ct = classe_autorisee
+                st.write(f"**Classe concernée :** {cls_ct}")
                 mat_ct = st.text_input("Matière")
                 contenu = st.text_area("Contenu de la séance")
                 travail = st.text_area("Travail à faire")
@@ -949,9 +961,11 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "📊 Rapport Journalier":
             st.markdown("### Rédiger un Rapport Journalier")
+            st.info(f"📌 Accès restreint à votre classe assignée : **{classe_autorisee}**")
             st.caption("Ce rapport sera directement transmis à la direction et enregistré dans la base globale.")
             with st.form("form_rap_prof"):
-                cls_r = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["--"])
+                cls_r = classe_autorisee
+                st.write(f"**Classe concernée :** {cls_r}")
                 mat_r = st.text_input("Matière")
                 bilan = st.text_area("Bilan du cours")
                 diff = st.text_area("Difficultés ou remarques")
@@ -1327,7 +1341,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
         elif adm_tab == "👨‍🏫 Professeurs (Export PDF, Modif, Suppr)":
             st.subheader("Gestion des Professeurs & Impression PDF")
             
-            pdf_profs = export_table_pdf("LISTE DU CORPS ENSEIGNANT", st.session_state.prof_credentials, ["Nom", "Prénom", "Matière Principale"])
+            pdf_profs = export_table_pdf("LISTE DU CORPS ENSEIGNANT", st.session_state.prof_credentials, ["Nom", "Prénom", "Matière Principale", "Classe Attribuée"])
             st.download_button(
                 label="🖨️ Imprimer / Télécharger la Liste des Professeurs (PDF)",
                 data=pdf_profs,
@@ -1341,10 +1355,11 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     p_n = st.text_input("Nom")
                     p_p = st.text_input("Prénom")
                     p_mat = st.text_input("Matière principale")
+                    p_cls_attrib = st.selectbox("Classe Attribuée", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
                     p_pwd = st.text_input("Mot de passe", type="password")
                     if st.form_submit_button("Enregistrer le professeur"):
                         if p_n and p_p and p_pwd:
-                            new_p = pd.DataFrame([{"Nom": p_n, "Prénom": p_p, "Mot de passe": p_pwd, "Matière Principale": p_mat}])
+                            new_p = pd.DataFrame([{"Nom": p_n, "Prénom": p_p, "Mot de passe": p_pwd, "Matière Principale": p_mat, "Classe Attribuée": p_cls_attrib}])
                             st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_p], ignore_index=True)
                             st.success("Professeur enregistré.")
                             st.rerun()
