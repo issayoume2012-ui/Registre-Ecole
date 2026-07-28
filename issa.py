@@ -7,7 +7,6 @@ import io
 import os
 
 # ==========================================
-# ==========================================
 # 1. CONFIGURATION DE LA PAGE & DESIGN XXL RESPONSIVE
 # ==========================================
 st.set_page_config(
@@ -48,6 +47,12 @@ st.markdown(
         to { opacity: 1; transform: translateY(0); }
     }
 
+    @keyframes pulseCard {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+        100% { transform: scale(1); }
+    }
+
     /* Cartes adaptatives pour iPhone, Tablettes et Ordinateurs */
     .animated-card {
         animation: fadeIn 0.6s ease-in-out;
@@ -69,7 +74,18 @@ st.markdown(
         border-color: #2563EB;
     }
 
-    /* Boutons tactiles optimisés pour mobile (iPhone/Android) et desktop */
+    /* Animation pour les indicateurs (KPIs) */
+    .kpi-card-animated {
+        animation: fadeIn 0.8s ease-in-out, pulseCard 3s infinite ease-in-out;
+        border-left: 5px solid #2563EB;
+        background: #FFFFFF;
+        padding: 15px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        text-align: center;
+    }
+
+    /* Boutons tactiles optimisés */
     .stButton>button { 
         background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%); 
         color: white; 
@@ -79,7 +95,7 @@ st.markdown(
         padding: 0.75rem 1rem;
         transition: all 0.3s ease;
         width: 100%;
-        min-height: 44px; /* Norme ergonomique tactile mobile */
+        min-height: 44px;
         font-size: 1rem;
     }
     
@@ -88,23 +104,16 @@ st.markdown(
         box-shadow: 0 5px 15px rgba(37, 99, 235, 0.3);
     }
 
-    /* Media Queries spécifiques pour petits écrans (smartphones / iPhones) */
     @media screen and (max-width: 768px) {
-        .header-ecole {
-            font-size: 1.6rem;
-        }
-        .sub-header {
-            font-size: 0.95rem;
-        }
-        .animated-card {
-            padding: 15px;
-            margin-bottom: 12px;
-        }
+        .header-ecole { font-size: 1.6rem; }
+        .sub-header { font-size: 0.95rem; }
+        .animated-card { padding: 15px; margin-bottom: 12px; }
     }
     </style>
 """,
     unsafe_allow_html=True,
 )
+
 # ==========================================
 # 2. INITIALISATION EXHAUSTIVE DES DONNÉES
 # ==========================================
@@ -153,6 +162,16 @@ if "eleves_db" not in st.session_state:
         ]
     )
 
+if "edt_db" not in st.session_state:
+    st.session_state.edt_db = pd.DataFrame(
+        columns=["Classe", "Jour", "Créneau", "Matière", "Professeur"],
+        data=[
+            ["6ème A", "Lundi", "08h00 - 10h00", "Mathématiques", "Ibrahima Diallo"],
+            ["6ème A", "Lundi", "10h00 - 12h00", "Français", "Aissatou Sow"],
+            ["CP", "Mardi", "08h00 - 10h00", "Français", "Aissatou Sow"]
+        ]
+    )
+
 if "cahier_textes" not in st.session_state:
     st.session_state.cahier_textes = pd.DataFrame(
         columns=["Professeur", "Date", "Classe", "Matière", "Contenu", "Travail à faire"],
@@ -185,17 +204,21 @@ if "notes_db" not in st.session_state:
         ]
     )
 
+if "matieres_def" not in st.session_state:
+    st.session_state.matieres_def = pd.DataFrame([
+        {"Matière": "Mathématiques", "Coefficient": 3},
+        {"Matière": "Français", "Coefficient": 3},
+        {"Matière": "Histoire-Géographie", "Coefficient": 2},
+        {"Matière": "SVT", "Coefficient": 2},
+        {"Matière": "Anglais", "Coefficient": 2}
+    ])
+
 if "conduite_db" not in st.session_state:
     st.session_state.conduite_db = pd.DataFrame(
         columns=["Classe", "Élève", "Date", "Type", "Description"],
         data=[
             ["6ème A", "Mamadou Diallo", "2026-06-02", "Encouragement", "Participation active en classe."]
         ]
-    )
-
-if "messagerie_db" not in st.session_state:
-    st.session_state.messagerie_db = pd.DataFrame(
-        columns=["Auteur", "Destinataire", "Date", "Message"]
     )
 
 # ==========================================
@@ -218,6 +241,23 @@ def creer_rapport_pdf(titre_rapport, data_dict):
     pdf.set_font("Arial", "I", 9)
     pdf.cell(0, 10, f"Genere automatiquement le {datetime.now().strftime('%d/%m/%Y a %H:%M')}", 0, 1, "C")
     return pdf.output(dest='S').encode('latin1')
+
+def assistant_ia_repondre(question):
+    q = question.lower()
+    if "élève" in q or "effectif" in q or "nombre" in q:
+        nb_e = len(st.session_state.eleves_db)
+        nb_c = len(st.session_state.classes_db)
+        return f"📊 Actuellement, l'établissement compte **{nb_e} élèves** répartis dans **{nb_c} classes**."
+    elif "professeur" in q or "prof" in q:
+        nb_p = len(st.session_state.prof_credentials)
+        return f"👨‍🏫 Nous avons **{nb_p} professeurs** enregistrés dans le système."
+    elif "rapport" in q:
+        nb_r = len(st.session_state.rapports_journaliers_prof)
+        return f"📑 **{nb_r} rapport(s) journalier(s)** ont été soumis par les enseignants."
+    elif "emploi du temps" in q or "edt" in q:
+        return "📅 Vous pouvez consulter et ajuster les créneaux de chaque classe depuis l'onglet 'Emploi du Temps' dans l'administration."
+    else:
+        return "🤖 **IA Administration Nelson Mandela :** Je suis là pour vous assister ! Vous pouvez me poser des questions sur les effectifs, les rapports des enseignants, ou les statistiques globales de l'établissement."
 
 # ==========================================
 # 4. EN-TÊTE ET NAVIGATION GLOBALE
@@ -287,7 +327,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
             <div class="animated-card">
                 <h1 style="font-size: 3rem; margin: 0;">🔒</h1>
                 <h3 style="color: #1E3A8A; margin: 10px 0;">Administration</h3>
-                <p style="font-size: 0.85rem; color: #64748B;">Gestion complète des effectifs, classes et listes blanches.</p>
+                <p style="font-size: 0.85rem; color: #64748B;">Gestion des effectifs, emplois du temps, IA & modification globale.</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -314,10 +354,14 @@ if st.session_state.espace_actif == "🏠 Accueil":
     st.markdown("---")
     st.markdown("### 📊 Indicateurs en Temps Réel")
     s1, s2, s3, s4 = st.columns(4)
-    with s1: st.metric("Élèves Inscrits", len(st.session_state.eleves_db))
-    with s2: st.metric("Classes Actives", len(st.session_state.classes_db))
-    with s3: st.metric("Professeurs", len(st.session_state.prof_credentials))
-    with s4: st.metric("Rapports Journaliers", len(st.session_state.rapports_journaliers_prof))
+    with s1:
+        st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Élèves Inscrits</h4><h2 style="margin:0;color:#1E3A8A;">{len(st.session_state.eleves_db)}</h2></div>', unsafe_allow_html=True)
+    with s2:
+        st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Classes Actives</h4><h2 style="margin:0;color:#1E3A8A;">{len(st.session_state.classes_db)}</h2></div>', unsafe_allow_html=True)
+    with s3:
+        st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Professeurs</h4><h2 style="margin:0;color:#1E3A8A;">{len(st.session_state.prof_credentials)}</h2></div>', unsafe_allow_html=True)
+    with s4:
+        st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Rapports Soumis</h4><h2 style="margin:0;color:#1E3A8A;">{len(st.session_state.rapports_journaliers_prof)}</h2></div>', unsafe_allow_html=True)
 
 # ==========================================
 # 6. MODULES MÉTIERS DÉDIÉS ET FILTRÉS
@@ -363,7 +407,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             st.rerun()
 
         st.markdown("---")
-        menu_prof = st.radio("Menu Professeur :", ["📋 Fiche d'Appel", "📝 Saisie des Notes", "⚠️ Conduite", "📖 Cahier de Textes", "📊 Rapport Journalier"], horizontal=True)
+        menu_prof = st.radio("Menu Professeur :", ["📋 Fiche d'Appel", "📝 Saisie des Notes (Format Tableau)", "⚠️ Conduite", "📖 Cahier de Textes", "📊 Rapport Journalier"], horizontal=True)
         prof_connecte = st.session_state.prof_nom_connecte
 
         if menu_prof == "📋 Fiche d'Appel":
@@ -391,24 +435,56 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 else:
                     st.info("Aucun élève dans cette classe.")
 
-        elif menu_prof == "📝 Saisie des Notes":
-            st.markdown("### Saisie des Notes")
-            with st.form("form_notes_prof"):
-                cls_n = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["--"])
-                eleves_cls = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_n]["Nom Complet"].tolist()
-                eleve_n = st.selectbox("Élève", eleves_cls if eleves_cls else ["--"])
-                matiere_n = st.text_input("Matière")
-                coef_n = st.number_input("Coefficient", 1, 5, 2)
-                note_val = st.number_input("Note (/20)", 0.0, 20.0, 10.0, 0.5)
-                trimestre = st.selectbox("Trimestre", ["1er Trimestre", "2ème Trimestre", "3ème Trimestre"])
-                appr = st.text_input("Appréciation")
-                if st.form_submit_button("Enregistrer la note"):
-                    if eleves_cls and matiere_n:
-                        new_n = pd.DataFrame([{"Classe": cls_n, "Élève": eleve_n, "Matière": matiere_n, "Coefficient": coef_n, "Note": note_val, "Trimestre": trimestre, "Appréciation": appr}])
-                        st.session_state.notes_db = pd.concat([st.session_state.notes_db, new_n], ignore_index=True)
-                        st.success("Note enregistrée avec succès.")
-                    else:
-                        st.error("Veuillez remplir les champs obligatoires.")
+        elif menu_prof == "📝 Saisie des Notes (Format Tableau)":
+            st.markdown("### Saisie des Notes par Classe sous Format Tableau")
+            cls_n = st.selectbox("Sélectionner la Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["--"])
+            eleves_cls = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_n]["Nom Complet"].tolist()
+            trimestre = st.selectbox("Trimestre", ["1er Trimestre", "2ème Trimestre", "3ème Trimestre"])
+
+            if eleves_cls:
+                st.info("Saisissez les notes directement dans le tableau ci-dessous, puis validez.")
+                
+                # Construction d'un tableau interactif pour la saisie
+                data_notes = []
+                for el in eleves_cls:
+                    for _, m in st.session_state.matieres_def.iterrows():
+                        data_notes.append({
+                            "Élève": el,
+                            "Matière": m["Matière"],
+                            "Coefficient": m["Coefficient"],
+                            "Note /20": 10.0,
+                            "Appréciation": "AOP"
+                        })
+                df_notes_input = pd.DataFrame(data_notes)
+                
+                edited_df = st.data_editor(
+                    df_notes_input,
+                    num_rows="fixed",
+                    use_container_width=True,
+                    column_config={
+                        "Note /20": st.column_config.NumberColumn("Note /20", min_value=0.0, max_value=20.0, step=0.5),
+                        "Coefficient": st.column_config.NumberColumn("Coef", min_value=1, max_value=10, disabled=True),
+                        "Élève": st.column_config.TextColumn("Élève", disabled=True),
+                        "Matière": st.column_config.TextColumn("Matière", disabled=True)
+                    }
+                )
+
+                if st.button("💾 Enregistrer la Liste des Notes"):
+                    new_records = []
+                    for idx, row in edited_df.iterrows():
+                        new_records.append({
+                            "Classe": cls_n,
+                            "Élève": row["Élève"],
+                            "Matière": row["Matière"],
+                            "Coefficient": row["Coefficient"],
+                            "Note": row["Note /20"],
+                            "Trimestre": trimestre,
+                            "Appréciation": row["Appréciation"]
+                        })
+                    st.session_state.notes_db = pd.concat([st.session_state.notes_db, pd.DataFrame(new_records)], ignore_index=True)
+                    st.success("Toutes les notes du tableau ont été enregistrées avec succès !")
+            else:
+                st.warning("Aucun élève trouvé pour cette classe.")
 
         elif menu_prof == "⚠️ Conduite":
             st.markdown("### Suivi de Conduite")
@@ -439,6 +515,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "📊 Rapport Journalier":
             st.markdown("### Rédiger un Rapport Journalier")
+            st.caption("Ce rapport sera directement transmis au bureau de l'administration.")
             with st.form("form_rap_prof"):
                 cls_r = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["--"])
                 mat_r = st.text_input("Matière")
@@ -487,7 +564,7 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
             st.rerun()
 
         st.markdown("---")
-        t1, t2, t3, t4, t5 = st.tabs(["📊 Notes", "📉 Absences", "⚠️ Conduite", "📖 Cahier de Textes", "🪪 Carte Scolaire"])
+        t1, t2, t3, t4, t5, t6 = st.tabs(["📊 Notes", "📅 Emploi du Temps", "📉 Absences", "⚠️ Conduite", "📖 Cahier de Textes", "🪪 Carte Scolaire"])
         
         with t1:
             st.subheader("Bulletins & Notes")
@@ -502,24 +579,32 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
                 st.info("Aucune note enregistrée.")
 
         with t2:
+            st.subheader("Emploi du Temps de la Classe")
+            edt_c = st.session_state.edt_db[st.session_state.edt_db["Classe"] == classe]
+            if not edt_c.empty:
+                st.dataframe(edt_c[["Jour", "Créneau", "Matière", "Professeur"]], use_container_width=True)
+            else:
+                st.info("Emploi du temps non encore renseigné pour cette classe.")
+
+        with t3:
             st.subheader("Absences")
             abs_el = st.session_state.absences_db[st.session_state.absences_db["Élève"].str.contains(eleve, case=False, na=False)]
             if not abs_el.empty: st.dataframe(abs_el, use_container_width=True)
             else: st.success("Aucune absence recensée.")
 
-        with t3:
+        with t4:
             st.subheader("Conduite")
             cond_el = st.session_state.conduite_db[st.session_state.conduite_db["Élève"].str.contains(eleve, case=False, na=False)]
             if not cond_el.empty: st.dataframe(cond_el, use_container_width=True)
             else: st.info("Aucune observation disciplinaire.")
 
-        with t4:
+        with t5:
             st.subheader("Cahier de Textes de la Classe")
             ct_cls = st.session_state.cahier_textes[st.session_state.cahier_textes["Classe"] == classe]
             if not ct_cls.empty: st.dataframe(ct_cls, use_container_width=True)
             else: st.info("Aucune leçon publiée.")
 
-        with t5:
+        with t6:
             st.subheader("Carte Scolaire Numérique")
             st.markdown(
                 f"""
@@ -556,53 +641,136 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 else:
                     st.error("Identifiants erronés.")
     else:
-        st.success("Mode Administrateur Général Activé — Accès complet sur toutes les tables.")
+        st.success("Mode Administrateur Général Activé — Gestion Complète et Édition.")
         if st.button("Se déconnecter de l'admin"):
             st.session_state.authenticated_admin = False
             st.rerun()
 
         st.markdown("---")
-        adm_tab = st.selectbox("Gestion Administrative :", ["Élèves", "Classes", "Professeurs", "Listes Blanches Parents", "Rapports Journaliers des Profs"])
+        adm_tab = st.selectbox("Gestion Administrative :", [
+            "🤖 Assistant IA Administration",
+            "📅 Emploi du Temps par Classe",
+            "👨‍🎓 Élèves (Ajouter, Modifier, Supprimer)", 
+            "🏫 Classes (Ajouter, Modifier, Supprimer)", 
+            "👨‍🏫 Professeurs (Ajouter, Modifier, Supprimer)", 
+            "📋 Listes Blanches Parents", 
+            "📑 Rapports Journaliers Réceptionnés"
+        ])
 
-        if adm_tab == "Élèves":
-            st.subheader("Gestion des Élèves")
-            with st.form("form_add_eleve"):
-                c_nom = st.text_input("Nom complet de l'élève")
-                c_cls = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
-                if st.form_submit_button("Ajouter l'élève"):
-                    if c_nom:
-                        new_el = pd.DataFrame([{"Nom Complet": c_nom, "Date de Naissance": "2012-01-01", "Classe": c_cls, "Photo": None}])
-                        st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, new_el], ignore_index=True)
-                        st.success("Élève ajouté avec succès.")
-            st.dataframe(st.session_state.eleves_db, use_container_width=True)
+        # MODULE ASSISTANT IA
+        if adm_tab == "🤖 Assistant IA Administration":
+            st.subheader("🤖 Assistant virtuel IA - Administration Nelson Mandela")
+            st.caption("Posez une question ou demandez une analyse de situation de l'établissement.")
+            q_ia = st.text_input("Posez votre question à l'IA :", placeholder="ex: Quel est le nombre total d'élèves ou le bilan des rapports ?")
+            if st.button("Consulter l'IA"):
+                if q_ia:
+                    rep = assistant_ia_repondre(q_ia)
+                    st.markdown(f"> {rep}")
+                else:
+                    st.warning("Veuillez saisir une question.")
 
-        elif adm_tab == "Classes":
+        # MODULE EMPLOI DU TEMPS
+        elif adm_tab == "📅 Emploi du Temps par Classe":
+            st.subheader("Édition & Gestion des Emplois du Temps")
+            cls_selected = st.selectbox("Sélectionner la classe à gérer", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
+            
+            st.markdown("#### Ajouter / Modifier un Créneau")
+            with st.form("form_edt"):
+                col_j, col_h, col_m, col_p = st.columns(4)
+                with col_j:
+                    jour = st.selectbox("Jour", ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"])
+                with col_h:
+                    creneau = st.selectbox("Créneau Horaire", ["08h00 - 09h00", "09h00 - 10h00", "10h15 - 11h15", "11h15 - 12h15", "15h00 - 17h00"])
+                with col_m:
+                    matiere = st.text_input("Matière", value="Mathématiques")
+                with col_p:
+                    profs_list = (st.session_state.prof_credentials["Prénom"] + " " + st.session_state.prof_credentials["Nom"]).tolist()
+                    prof_assigne = st.selectbox("Professeur", profs_list if profs_list else ["Non assigné"])
+                
+                if st.form_submit_button("Enregistrer le Créneau"):
+                    new_edt = pd.DataFrame([{"Classe": cls_selected, "Jour": jour, "Créneau": creneau, "Matière": matiere, "Professeur": prof_assigne}])
+                    st.session_state.edt_db = pd.concat([st.session_state.edt_db, new_edt], ignore_index=True)
+                    st.success("Créneau ajouté avec succès !")
+            
+            st.markdown(f"#### Emploi du Temps Actuel - {cls_selected}")
+            df_edt_cls = st.session_state.edt_db[st.session_state.edt_db["Classe"] == cls_selected]
+            st.dataframe(df_edt_cls, use_container_width=True)
+
+            if not df_edt_cls.empty:
+                st.markdown("#### Supprimer un Créneau")
+                idx_to_del = st.selectbox("Choisir l'index du créneau à supprimer", df_edt_cls.index.tolist())
+                if st.button("❌ Supprimer ce créneau"):
+                    st.session_state.edt_db = st.session_state.edt_db.drop(idx_to_del).reset_index(drop=True)
+                    st.success("Créneau supprimé !")
+                    st.rerun()
+
+        # MODULE ELEVES (CRUD)
+        elif adm_tab == "👨‍🎓 Élèves (Ajouter, Modifier, Supprimer)":
+            st.subheader("Gestion Intégrale des Élèves")
+            
+            with st.expander("➕ Ajouter un nouvel élève"):
+                with st.form("form_add_eleve"):
+                    c_nom = st.text_input("Nom complet de l'élève")
+                    c_date = st.date_input("Date de naissance", value=datetime(2012, 1, 1))
+                    c_cls = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
+                    if st.form_submit_button("Ajouter l'élève"):
+                        if c_nom:
+                            new_el = pd.DataFrame([{"Nom Complet": c_nom, "Date de Naissance": str(c_date), "Classe": c_cls, "Photo": None}])
+                            st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, new_el], ignore_index=True)
+                            st.success("Élève ajouté avec succès.")
+                            st.rerun()
+
+            st.markdown("#### Liste Actuelle des Élèves (Modifiable directement)")
+            edited_eleves = st.data_editor(st.session_state.eleves_db, num_rows="dynamic", use_container_width=True, key="editor_eleves")
+            if st.button("💾 Enregistrer les Modifications Élèves"):
+                st.session_state.eleves_db = edited_eleves
+                st.success("Base des élèves mise à jour !")
+
+        # MODULE CLASSES (CRUD)
+        elif adm_tab == "🏫 Classes (Ajouter, Modifier, Supprimer)":
             st.subheader("Gestion des Classes")
-            with st.form("form_add_classe"):
-                nom_c = st.text_input("Nom de la classe (ex: 4ème A)")
-                cycle = st.selectbox("Cycle", ["Préscolaire", "Élémentaire", "Collège"])
-                if st.form_submit_button("Créer la classe"):
-                    if nom_c:
-                        new_cl = pd.DataFrame([{"Classe": nom_c, "Cycle": cycle, "Professeur Responsable": "Non assigné"}])
-                        st.session_state.classes_db = pd.concat([st.session_state.classes_db, new_cl], ignore_index=True)
-                        st.success("Classe créée.")
-            st.dataframe(st.session_state.classes_db, use_container_width=True)
+            
+            with st.expander("➕ Créer une classe"):
+                with st.form("form_add_classe"):
+                    nom_c = st.text_input("Nom de la classe (ex: 4ème A)")
+                    cycle = st.selectbox("Cycle", ["Préscolaire", "Élémentaire", "Collège"])
+                    if st.form_submit_button("Créer la classe"):
+                        if nom_c:
+                            new_cl = pd.DataFrame([{"Classe": nom_c, "Cycle": cycle, "Professeur Responsable": "Non assigné"}])
+                            st.session_state.classes_db = pd.concat([st.session_state.classes_db, new_cl], ignore_index=True)
+                            st.success("Classe créée.")
+                            st.rerun()
 
-        elif adm_tab == "Professeurs":
+            st.markdown("#### Liste des Classes (Modifiable)")
+            edited_classes = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True, key="editor_classes")
+            if st.button("💾 Enregistrer les Modifications Classes"):
+                st.session_state.classes_db = edited_classes
+                st.success("Classes mises à jour !")
+
+        # MODULE PROFESSEURS (CRUD)
+        elif adm_tab == "👨‍🏫 Professeurs (Ajouter, Modifier, Supprimer)":
             st.subheader("Gestion des Professeurs")
-            with st.form("form_add_prof"):
-                p_n = st.text_input("Nom")
-                p_p = st.text_input("Prénom")
-                p_mat = st.text_input("Matière principale")
-                p_pwd = st.text_input("Mot de passe", type="password")
-                if st.form_submit_button("Enregistrer le professeur"):
-                    if p_n and p_p and p_pwd:
-                        new_p = pd.DataFrame([{"Nom": p_n, "Prénom": p_p, "Mot de passe": p_pwd, "Matière Principale": p_mat}])
-                        st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_p], ignore_index=True)
-                        st.success("Professeur enregistré.")
-            st.dataframe(st.session_state.prof_credentials, use_container_width=True)
+            
+            with st.expander("➕ Enregistrer un professeur"):
+                with st.form("form_add_prof"):
+                    p_n = st.text_input("Nom")
+                    p_p = st.text_input("Prénom")
+                    p_mat = st.text_input("Matière principale")
+                    p_pwd = st.text_input("Mot de passe", type="password")
+                    if st.form_submit_button("Enregistrer le professeur"):
+                        if p_n and p_p and p_pwd:
+                            new_p = pd.DataFrame([{"Nom": p_n, "Prénom": p_p, "Mot de passe": p_pwd, "Matière Principale": p_mat}])
+                            st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_p], ignore_index=True)
+                            st.success("Professeur enregistré.")
+                            st.rerun()
 
-        elif adm_tab == "Listes Blanches Parents":
+            st.markdown("#### Liste des Professeurs (Modifiable)")
+            edited_profs = st.data_editor(st.session_state.prof_credentials, num_rows="dynamic", use_container_width=True, key="editor_profs")
+            if st.button("💾 Enregistrer les Modifications Professeurs"):
+                st.session_state.prof_credentials = edited_profs
+                st.success("Base professeurs mise à jour !")
+
+        elif adm_tab == "📋 Listes Blanches Parents":
             st.subheader("Listes Blanches des Parents")
             with st.form("form_wl"):
                 t_p = st.text_input("Téléphone parent")
@@ -617,8 +785,8 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                         st.success("Autorisation enregistrée.")
             st.dataframe(st.session_state.parents_white_list, use_container_width=True)
 
-        elif adm_tab == "Rapports Journaliers des Profs":
-            st.subheader("Rapports Journaliers Soumis par le Corps Enseignant")
+        elif adm_tab == "📑 Rapports Journaliers Réceptionnés":
+            st.subheader("Rapports Journaliers Déposés par les Professeurs")
             if not st.session_state.rapports_journaliers_prof.empty:
                 st.dataframe(st.session_state.rapports_journaliers_prof, use_container_width=True)
             else:
