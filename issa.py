@@ -263,7 +263,7 @@ if "conduite_db" not in st.session_state:
     )
 
 # ==========================================
-# 3. FONCTIONS UTILITAIRES & GÉNÉRATION PDF
+# 3. FONCTIONS UTILITAIRES & GÉNÉRATION PDF/EXCEL
 # ==========================================
 class PDFReport(FPDF):
     def header(self):
@@ -311,6 +311,14 @@ def export_table_pdf(title, df, columns_to_show=None):
         fill = not fill
 
     return bytes(pdf.output())
+
+def export_table_excel(df, columns_to_show=None):
+    """Génère un tableau Excel binaire bien délimité pour le téléchargement."""
+    df_sub = df[columns_to_show] if columns_to_show else df
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_sub.to_excel(writer, index=False, sheet_name='Élèves')
+    return output.getvalue()
 
 def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
     pdf = PDFReport()
@@ -1133,7 +1141,28 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     df_c = df_merged[df_merged["Cycle"] == cyc]
                     if not df_c.empty:
                         with st.expander(f"📌 Cycle {cyc.upper()} ({len(df_c)} Élèves)", expanded=True):
-                            st.dataframe(df_c[["Nom Complet", "Classe", "Date de Naissance"]].sort_values(by=["Classe", "Nom Complet"]), use_container_width=True)
+                            df_export_niv = df_c[["Nom Complet", "Classe", "Date de Naissance"]].sort_values(by=["Classe", "Nom Complet"])
+                            st.dataframe(df_export_niv, use_container_width=True)
+                            
+                            c_exp_pdf, c_exp_excel = st.columns(2)
+                            with c_exp_pdf:
+                                pdf_niv = export_table_pdf(f"LISTE DES ÉLÈVES - CYCLE {cyc.upper()}", df_export_niv)
+                                st.download_button(
+                                    label=f"📄 Télécharger PDF ({cyc})",
+                                    data=pdf_niv,
+                                    file_name=f"eleves_cycle_{cyc.lower()}.pdf",
+                                    mime="application/pdf",
+                                    key=f"btn_pdf_cycle_{cyc}"
+                                )
+                            with c_exp_excel:
+                                excel_niv = export_table_excel(df_export_niv)
+                                st.download_button(
+                                    label=f"📊 Télécharger Excel ({cyc})",
+                                    data=excel_niv,
+                                    file_name=f"eleves_cycle_{cyc.lower()}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    key=f"btn_excel_cycle_{cyc}"
+                                )
 
             with t_cls:
                 st.markdown("### 🏫 Répartition des Élèves par Classe")
@@ -1142,7 +1171,29 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     df_cl = df_merged[df_merged["Classe"] == cl]
                     if not df_cl.empty:
                         with st.expander(f"🏫 Classe : {cl} ({len(df_cl)} Élèves)", expanded=True):
-                            st.dataframe(df_cl[["Nom Complet", "Date de Naissance"]].sort_values(by="Nom Complet"), use_container_width=True)
+                            df_export_cls = df_cl[["Nom Complet", "Date de Naissance"]].sort_values(by="Nom Complet")
+                            st.dataframe(df_export_cls, use_container_width=True)
+                            
+                            c_exp_pdf_cls, c_exp_excel_cls = st.columns(2)
+                            clean_cl_name = cl.replace(" ", "_").lower()
+                            with c_exp_pdf_cls:
+                                pdf_cls = export_table_pdf(f"LISTE DES ÉLÈVES - CLASSE {cl.upper()}", df_export_cls)
+                                st.download_button(
+                                    label=f"📄 Télécharger PDF ({cl})",
+                                    data=pdf_cls,
+                                    file_name=f"eleves_classe_{clean_cl_name}.pdf",
+                                    mime="application/pdf",
+                                    key=f"btn_pdf_classe_{clean_cl_name}"
+                                )
+                            with c_exp_excel_cls:
+                                excel_cls = export_table_excel(df_export_cls)
+                                st.download_button(
+                                    label=f"📊 Télécharger Excel ({cl})",
+                                    data=excel_cls,
+                                    file_name=f"eleves_classe_{clean_cl_name}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    key=f"btn_excel_classe_{clean_cl_name}"
+                                )
 
         elif adm_tab == "🗄️ Base Globale & Suivi Annuel/Trimestriel/Mensuel":
             st.subheader("🗄️ Base Globale de Suivi des Élèves et Professeurs")
