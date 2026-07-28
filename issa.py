@@ -5,12 +5,17 @@ import pandas as pd
 import streamlit as st
 import io
 import os
-
+import urllib.request
 # ==========================================
 # 1. CONFIGURATION DE LA PAGE & DESIGN XXL RESPONSIVE
 # ==========================================
+# S'assurer que la police Unicode existe
+FONT_PATH = "DejaVuSans.ttf"
+if not os.path.exists(FONT_PATH):
+    url = "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf"
+    urllib.request.urlretrieve(url, FONT_PATH)
 st.set_page_config(
-    page_title="Portail Pédagogique XXL - Cours Privé Nelson Mandela | Sénégal",
+    page_title="Portail Pédagogique - Cours Privé Nelson Mandela | Sénégal",
     page_icon="🇸🇳",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -401,18 +406,27 @@ def generer_rapport_general_pdf():
     pdf = PDFReport()
     pdf.add_page()
     
-    pdf.set_font("Arial", "B", 14)
+    # --- CHARGEMENT DES VARIANTES DE LA POLICE DEJAVU ---
+    # S'assurer que les fichiers DejaVuSans.ttf, DejaVuSans-Bold.ttf et DejaVuSans-Oblique.ttf
+    # sont accessibles via FONT_PATH ou dans le même dossier.
+    pdf.add_font("DejaVu", "", FONT_PATH, uni=True)
+    pdf.add_font("DejaVu", "B", "DejaVuSans-Bold.ttf", uni=True)
+    pdf.add_font("DejaVu", "I", "DejaVuSans-Oblique.ttf", uni=True)
+    
+    # EN-TÊTE DU RAPPORT
+    pdf.set_font("DejaVu", "B", 14)
     pdf.cell(0, 8, "RAPPORT GÉNÉRAL & CONSOLIDATION ANNUELLE", 0, 1, "C")
-    pdf.set_font("Arial", "I", 10)
+    pdf.set_font("DejaVu", "I", 10)
     pdf.cell(0, 5, "Synthèse Globale des Évaluations, Renseignements, Absences et Activités", 0, 1, "C")
     pdf.ln(6)
 
-    pdf.set_font("Arial", "B", 11)
+    # 1. STATISTIQUES GÉNÉRALES
+    pdf.set_font("DejaVu", "B", 11)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(190, 7, "1. STATISTIQUES GÉNÉRALES DE L'ÉTABLISSEMENT", 1, 1, "L", True)
     
-    pdf.set_font("Arial", "", 10)
+    pdf.set_font("DejaVu", "", 10)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(95, 6, f"Total Élèves Inscrits : {len(st.session_state.eleves_db)}", 1, 0, "L")
     pdf.cell(95, 6, f"Total Classes Actives : {len(st.session_state.classes_db)}", 1, 1, "L")
@@ -420,12 +434,13 @@ def generer_rapport_general_pdf():
     pdf.cell(95, 6, f"Total Entrées Base Globale : {len(st.session_state.base_globale_db)}", 1, 1, "L")
     pdf.ln(5)
 
-    pdf.set_font("Arial", "B", 11)
+    # 2. SUIVI DES ENSEIGNANTS
+    pdf.set_font("DejaVu", "B", 11)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(190, 7, "2. SUIVI DES ENSEIGNANTS ET RAPPORTS DE SÉANCE", 1, 1, "L", True)
     
-    pdf.set_font("Arial", "", 9)
+    pdf.set_font("DejaVu", "", 9)
     pdf.set_text_color(0, 0, 0)
     if not st.session_state.rapports_journaliers_prof.empty:
         for _, r in st.session_state.rapports_journaliers_prof.iterrows():
@@ -434,12 +449,13 @@ def generer_rapport_general_pdf():
         pdf.cell(190, 6, "Aucun rapport déposé.", 1, 1, "L")
     pdf.ln(5)
 
-    pdf.set_font("Arial", "B", 11)
+    # 3. EXTRAIT RENSEIGNEMENTS BASE GLOBALE
+    pdf.set_font("DejaVu", "B", 11)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(190, 7, "3. EXTRAIT RENSEIGNEMENTS BASE GLOBALE", 1, 1, "L", True)
 
-    pdf.set_font("Arial", "B", 8)
+    pdf.set_font("DejaVu", "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(25, 6, "Date", 1, 0, "C", True)
@@ -448,7 +464,7 @@ def generer_rapport_general_pdf():
     pdf.cell(30, 6, "Type", 1, 0, "C", True)
     pdf.cell(60, 6, "Détail", 1, 1, "C", True)
 
-    pdf.set_font("Arial", "", 8)
+    pdf.set_font("DejaVu", "", 8)
     if not st.session_state.base_globale_db.empty:
         for _, row in st.session_state.base_globale_db.head(15).iterrows():
             pdf.cell(25, 6, str(row["Date"]), 1, 0, "C")
@@ -458,7 +474,6 @@ def generer_rapport_general_pdf():
             pdf.cell(60, 6, str(row["Détail / Contenu"])[:35], 1, 1, "L")
 
     return bytes(pdf.output())
-
 def assistant_ia_repondre(question):
     q = question.lower()
     if "élève" in q or "effectif" in q or "nombre" in q:
