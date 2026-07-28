@@ -143,7 +143,6 @@ if "admin_credentials" not in st.session_state:
         {"Nom": "Admin", "Prénom": "Principal", "Email": "cpnm@gmail.com", "Mot de passe": "cpnm2026"}
     ])
 
-# NOUVELLE LISTE BLANCHE : GESTIONNAIRES ET PROPRIÉTAIRES
 if "gestionnaires_proprietaires_db" not in st.session_state:
     st.session_state.gestionnaires_proprietaires_db = pd.DataFrame([
         {"Nom": "Mandela", "Prénom": "Propriétaire", "Email": "proprio@cpnm.sn", "Mot de passe": "proprio2026", "Rôle": "Propriétaire"},
@@ -792,7 +791,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             st.markdown("### Fiche de Matière — Saisie des Notes et Appréciations")
             st.info(f"📌 Accès restreint à votre classe assignée : **{classe_autorisee}**")
             
-            # SÉCURISATION : S'assurer que les colonnes indispensables existent dans notes_db
             cols_requis = ["Classe", "Élève", "Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Trimestre", "Appréciation"]
             for col in cols_requis:
                 if col not in st.session_state.notes_db.columns:
@@ -1121,13 +1119,11 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 match_a = False
                 role_connecte = "Administrateur"
                 
-                # Vérification Admin Principal
                 for _, row in st.session_state.admin_credentials.iterrows():
                     if row["Email"] == em and row["Mot de passe"] == pw:
                         match_a = True
                         break
                 
-                # Vérification Liste Blanche Gestionnaires & Propriétaires
                 if not match_a:
                     for _, row in st.session_state.gestionnaires_proprietaires_db.iterrows():
                         if str(row["Email"]).strip().lower() == em.strip().lower() and str(row["Mot de passe"]) == pw:
@@ -1145,6 +1141,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     st.error("Identifiants erronés.")
     else:
         role_actuel = st.session_state.get("admin_role_connecte", "Administrateur")
+        email_actuel = st.session_state.get("admin_email_connecte", "")
         st.success(f"Mode {role_actuel} Activé — Gestion Centralisée Complète.")
         if st.button("Se déconnecter de l'admin"):
             st.session_state.authenticated_admin = False
@@ -1168,11 +1165,11 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
         if adm_tab == "🛡️ Gestionnaires & Propriétaires (Liste Blanche)":
             st.subheader("🛡️ Liste Blanche des Gestionnaires & Propriétaires")
-            st.info("💡 **Règles de sécurité :** Les gestionnaires et propriétaires ont accès à tout, sauf à la capacité de se révoquer eux-mêmes ou de révoquer un autre administrateur/propriétaire. L'ajout d'un nouveau membre est soumis à autorisation préalable.")
+            st.info("💡 **Règle d'accès :** Seul l'administrateur principal (`cpnm@gmail.com`) a les privilèges exclusifs d'ajouter ou de révoquer des membres dans cette liste.")
 
             df_gp = st.session_state.gestionnaires_proprietaires_db
-            
-            # Affichage de la liste actuelle avec restriction de révocation
+            is_super_admin = (email_actuel.strip().lower() == "cpnm@gmail.com")
+
             st.markdown("#### Membres Actuels")
             for idx, row in df_gp.iterrows():
                 col_i1, col_i2, col_i3, col_i4 = st.columns([2, 2, 2, 2])
@@ -1180,40 +1177,40 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 with col_i2: st.write(row['Email'])
                 with col_i3: st.write(f"Rôle : {row['Rôle']}")
                 with col_i4:
-                    # Empêcher la révocation d'un admin ou de soi-même si connecté
-                    email_connecte = st.session_state.get("admin_email_connecte", "")
-                    is_self = (str(row['Email']).strip().lower() == email_connecte.strip().lower())
-                    
-                    if is_self:
-                        st.caption("🔒 (Vous-même)")
-                    else:
+                    if is_super_admin:
                         if st.button(f"🗑️ Révoquer", key=f"rev_{idx}"):
-                            st.error(f"Action interdite : Impossible de révoquer {row['Prénom']} {row['Nom']} (Protection des administrateurs/propriétaires).")
+                            st.session_state.gestionnaires_proprietaires_db = df_gp.drop(idx).reset_index(drop=True)
+                            st.success(f"Membre {row['Prénom']} {row['Nom']} révoqué avec succès !")
+                            st.rerun()
+                    else:
+                        st.caption("🔒 (Réservé à cpnm@gmail.com)")
 
             st.markdown("---")
-            with st.expander("➕ Demander / Ajouter un Gestionnaire ou Propriétaire (Sous réserve d'autorisation)"):
-                with st.form("form_add_gp"):
-                    gp_nom = st.text_input("Nom")
-                    gp_prenom = st.text_input("Prénom")
-                    gp_email = st.text_input("Email professionnel")
-                    gp_pass = st.text_input("Mot de passe temporaire", type="password")
-                    gp_role = st.selectbox("Rôle", ["Gestionnaire", "Propriétaire"])
-                    
-                    if st.form_submit_button("Soumettre pour Autorisation & Ajout"):
-                        if gp_nom and gp_email and gp_pass:
-                            # Vérification si l'email existe déjà
-                            if gp_email in df_gp["Email"].values:
-                                st.warning("Cet email est déjà enregistré.")
+            if is_super_admin:
+                with st.expander("➕ Ajouter un Gestionnaire ou Propriétaire"):
+                    with st.form("form_add_gp"):
+                        gp_nom = st.text_input("Nom")
+                        gp_prenom = st.text_input("Prénom")
+                        gp_email = st.text_input("Email professionnel")
+                        gp_pass = st.text_input("Mot de passe temporaire", type="password")
+                        gp_role = st.selectbox("Rôle", ["Gestionnaire", "Propriétaire"])
+                        
+                        if st.form_submit_button("Ajouter à la liste blanche"):
+                            if gp_nom and gp_email and gp_pass:
+                                if gp_email in df_gp["Email"].values:
+                                    st.warning("Cet email est déjà enregistré.")
+                                else:
+                                    new_member = pd.DataFrame([{
+                                        "Nom": gp_nom, "Prénom": gp_prenom, "Email": gp_email, 
+                                        "Mot de passe": gp_pass, "Rôle": gp_role
+                                    }])
+                                    st.session_state.gestionnaires_proprietaires_db = pd.concat([df_gp, new_member], ignore_index=True)
+                                    st.success("Nouveau membre ajouté avec succès à la liste blanche !")
+                                    st.rerun()
                             else:
-                                new_member = pd.DataFrame([{
-                                    "Nom": gp_nom, "Prénom": gp_prenom, "Email": gp_email, 
-                                    "Mot de passe": gp_pass, "Rôle": gp_role
-                                }])
-                                st.session_state.gestionnaires_proprietaires_db = pd.concat([df_gp, new_member], ignore_index=True)
-                                st.success("Demande approuvée : Le nouveau gestionnaire/propriétaire a été ajouté avec succès à la liste blanche !")
-                                st.rerun()
-                        else:
-                            st.warning("Veuillez remplir tous les champs obligatoires.")
+                                st.warning("Veuillez remplir tous les champs obligatoires.")
+            else:
+                st.warning("⚠️ Vous devez être connecté avec l'adresse `cpnm@gmail.com` pour pouvoir ajouter de nouveaux gestionnaires ou propriétaires.")
 
         elif adm_tab == "📊 Liste & Classement des Élèves (Par Classe & Niveau)":
             st.subheader("📊 Classement et Liste des Élèves par Classe et par Niveau (Cycle)")
