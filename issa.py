@@ -7,7 +7,8 @@ import io
 import os
 
 # ==========================================
-# 1. CONFIGURATION DE LA PAGE & DESIGN XXL
+# ==========================================
+# 1. CONFIGURATION DE LA PAGE & DESIGN XXL RESPONSIVE
 # ==========================================
 st.set_page_config(
     page_title="Portail Pédagogique XXL - Cours Privé Nelson Mandela | Sénégal",
@@ -19,62 +20,91 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    /* Global Styles & Mobile Reset */
     .main { background-color: #F8FAFC; }
+    
     .header-ecole { 
         color: #1E3A8A; 
-        font-size: 2.8rem; 
+        font-size: clamp(1.8rem, 4vw, 2.8rem); 
         font-weight: 900; 
         text-align: center; 
         margin-bottom: 5px;
         text-transform: uppercase;
         letter-spacing: 1px;
+        padding: 0 10px;
     }
+    
     .sub-header { 
         color: #047857; 
-        font-size: 1.2rem; 
+        font-size: clamp(0.9rem, 2vw, 1.2rem); 
         font-weight: 700; 
         text-align: center; 
         margin-bottom: 25px; 
+        padding: 0 10px;
     }
+
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(15px); }
         to { opacity: 1; transform: translateY(0); }
     }
+
+    /* Cartes adaptatives pour iPhone, Tablettes et Ordinateurs */
     .animated-card {
         animation: fadeIn 0.6s ease-in-out;
         border: 2px solid #E2E8F0;
-        padding: 25px;
+        padding: clamp(15px, 3vw, 25px);
         border-radius: 16px;
         background: linear-gradient(135deg, #FFFFFF 0%, #F1F5F9 100%);
         box-shadow: 0 10px 25px rgba(0,0,0,0.05);
         transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
         text-align: center;
         cursor: pointer;
+        margin-bottom: 15px;
+        height: 100%;
     }
+    
     .animated-card:hover {
-        transform: translateY(-8px);
+        transform: translateY(-5px);
         box-shadow: 0 20px 35px rgba(30, 58, 138, 0.15);
         border-color: #2563EB;
     }
+
+    /* Boutons tactiles optimisés pour mobile (iPhone/Android) et desktop */
     .stButton>button { 
         background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%); 
         color: white; 
         border-radius: 8px; 
         font-weight: bold; 
         border: none;
-        padding: 0.6rem 1.2rem;
+        padding: 0.75rem 1rem;
         transition: all 0.3s ease;
         width: 100%;
+        min-height: 44px; /* Norme ergonomique tactile mobile */
+        font-size: 1rem;
     }
+    
     .stButton>button:hover {
         background: linear-gradient(135deg, #152E69 0%, #1D4ED8 100%);
         box-shadow: 0 5px 15px rgba(37, 99, 235, 0.3);
+    }
+
+    /* Media Queries spécifiques pour petits écrans (smartphones / iPhones) */
+    @media screen and (max-width: 768px) {
+        .header-ecole {
+            font-size: 1.6rem;
+        }
+        .sub-header {
+            font-size: 0.95rem;
+        }
+        .animated-card {
+            padding: 15px;
+            margin-bottom: 12px;
+        }
     }
     </style>
 """,
     unsafe_allow_html=True,
 )
-
 # ==========================================
 # 2. INITIALISATION EXHAUSTIVE DES DONNÉES
 # ==========================================
