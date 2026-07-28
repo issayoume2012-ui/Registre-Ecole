@@ -764,9 +764,15 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 else:
                     st.info("Aucun élève dans cette classe.")
 
-        elif menu_prof == "📝 Saisie des Notes par Fiche Matière":
+       elif menu_prof == "📝 Saisie des Notes par Fiche Matière":
             st.markdown("### Fiche de Matière — Saisie des Notes et Appréciations")
             
+            # SÉCURISATION : S'assurer que les colonnes indispensables existent dans notes_db
+            cols_requis = ["Classe", "Élève", "Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Trimestre", "Appréciation"]
+            for col in cols_requis:
+                if col not in st.session_state.notes_db.columns:
+                    st.session_state.notes_db[col] = None
+
             c_cls, c_tri, c_type_eval = st.columns(3)
             with c_cls:
                 cls_n = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["--"])
@@ -816,6 +822,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 def editeur_notes_fragment():
                     data_fiche = []
                     for el in eleves_cls:
+                        # Filtrage sécurisé
                         existing = st.session_state.notes_db[
                             (st.session_state.notes_db["Classe"] == cls_n) & 
                             (st.session_state.notes_db["Élève"] == el) & 
@@ -823,8 +830,8 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             (st.session_state.notes_db["Type Évaluation"] == type_eval_sel) & 
                             (st.session_state.notes_db["Trimestre"] == trimestre_sel)
                         ]
-                        note_init = float(existing["Note"].values[0]) if not existing.empty else float(bareme_sel / 2)
-                        appr_init = str(existing["Appréciation"].values[0]) if not existing.empty else "Bon travail"
+                        note_init = float(existing["Note"].values[0]) if (not existing.empty and pd.notnull(existing["Note"].values[0])) else float(bareme_sel / 2)
+                        appr_init = str(existing["Appréciation"].values[0]) if (not existing.empty and pd.notnull(existing["Appréciation"].values[0])) else "Bon travail"
 
                         data_fiche.append({
                             "Élève": el,
