@@ -1220,24 +1220,25 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             }])
                             st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_prof_row], ignore_index=True)
 
-                        # 3. Enregistrement des élèves dans eleves_db
-                        nouveaux_eleves_list = []
-                        for _, row_el in eleves_saisies_edit.iterrows():
-                            nom_eleve = str(row_el["Nom Complet"]).strip()
-                            date_naiss = str(row_el["Date de Naissance"]).strip()
-                            if nom_eleve and nom_eleve != "Prénom Nom 1":
-                                nouveaux_eleves_list.append({
-                                    "Nom Complet": nom_eleve,
-                                    "Date de Naissance": date_naiss,
-                                    "Classe": c_nom_classe,
-                                    "Photo": None
-                                ])
-                        
-                        if nouveaux_eleves_list:
-                            df_nouveaux_eleves = pd.DataFrame(nouveaux_eleves_list)
-                            st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, df_nouveaux_eleves], ignore_index=True)
+                       # 3. Enregistrement des élèves dans eleves_db
+nouveaux_eleves_list = []
+for _, row_el in eleves_saisies_edit.iterrows():
+    nom_eleve = str(row_el["Nom Complet"]).strip()
+    date_naiss = str(row_el["Date de Naissance"]).strip()
+    if nom_eleve and nom_eleve != "Prénom Nom 1":
+        nouveaux_eleves_list.append({
+            "Nom Complet": nom_eleve,
+            "Date de Naissance": date_naiss,
+            "Classe": c_nom_classe,
+            "Photo": None
+        })  # <- L'accolade ferme bien le dictionnaire ici
 
-                        st.success(f"🎉 La classe **{c_nom_classe}**, le professeur **{prof_resp_complet}** et **{len(nouveaux_eleves_list)} élève(s)** ont été insérés avec succès dans le système !")
+# La suite doit être alignée au même niveau que le 'for' (sortie de la boucle)
+if nouveaux_eleves_list:
+    df_nouveaux_eleves = pd.DataFrame(nouveaux_eleves_list)
+    st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, df_nouveaux_eleves], ignore_index=True)
+
+st.success(f"🎉 La classe **{c_nom_classe}**, le professeur **{prof_resp_complet}** et **{len(nouveaux_eleves_list)} élève(s)** ont été insérés avec succès dans le système !")
 
         elif adm_tab == "🛡️ Gestionnaires & Propriétaires (Liste Blanche)":
             st.subheader("🛡️ Liste Blanche des Gestionnaires & Propriétaires")
