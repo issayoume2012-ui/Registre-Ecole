@@ -1220,25 +1220,24 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             }])
                             st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_prof_row], ignore_index=True)
 
-                       # 3. Enregistrement des élèves dans eleves_db
-nouveaux_eleves_list = []
-for _, row_el in eleves_saisies_edit.iterrows():
-    nom_eleve = str(row_el["Nom Complet"]).strip()
-    date_naiss = str(row_el["Date de Naissance"]).strip()
-    if nom_eleve and nom_eleve != "Prénom Nom 1":
-        nouveaux_eleves_list.append({
-            "Nom Complet": nom_eleve,
-            "Date de Naissance": date_naiss,
-            "Classe": c_nom_classe,
-            "Photo": None
-        })  # <- L'accolade ferme bien le dictionnaire ici
+                        # 3. Enregistrement des élèves dans eleves_db
+                        nouveaux_eleves_list = []
+                        for _, row_el in eleves_saisies_edit.iterrows():
+                            nom_eleve = str(row_el["Nom Complet"]).strip()
+                            date_naiss = str(row_el["Date de Naissance"]).strip()
+                            if nom_eleve and nom_eleve != "Prénom Nom 1":
+                                nouveaux_eleves_list.append({
+                                    "Nom Complet": nom_eleve,
+                                    "Date de Naissance": date_naiss,
+                                    "Classe": c_nom_classe,
+                                    "Photo": None
+                                })
 
-# La suite doit être alignée au même niveau que le 'for' (sortie de la boucle)
-if nouveaux_eleves_list:
-    df_nouveaux_eleves = pd.DataFrame(nouveaux_eleves_list)
-    st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, df_nouveaux_eleves], ignore_index=True)
+                        if nouveaux_eleves_list:
+                            df_nouveaux_eleves = pd.DataFrame(nouveaux_eleves_list)
+                            st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, df_nouveaux_eleves], ignore_index=True)
 
-st.success(f"🎉 La classe **{c_nom_classe}**, le professeur **{prof_resp_complet}** et **{len(nouveaux_eleves_list)} élève(s)** ont été insérés avec succès dans le système !")
+                        st.success(f"🎉 La classe **{c_nom_classe}**, le professeur **{prof_resp_complet}** et **{len(nouveaux_eleves_list)} élève(s)** ont été insérés avec succès dans le système !")
 
         elif adm_tab == "🛡️ Gestionnaires & Propriétaires (Liste Blanche)":
             st.subheader("🛡️ Liste Blanche des Gestionnaires & Propriétaires")
@@ -1528,7 +1527,6 @@ st.success(f"🎉 La classe **{c_nom_classe}**, le professeur **{prof_resp_compl
                 liste_profs_combo = [f"{row['Prénom']} {row['Nom']} ({row['Matière Principale']})" for _, row in st.session_state.prof_credentials.iterrows()]
                 prof_choisi_del = st.selectbox("Sélectionner le professeur à supprimer", liste_profs_combo)
                 if st.button("❌ Supprimer ce professeur"):
-                    # Retrouver l'index correspondant
                     idx_to_drop = None
                     for idx, row in st.session_state.prof_credentials.iterrows():
                         if f"{row['Prénom']} {row['Nom']} ({row['Matière Principale']})" == prof_choisi_del:
@@ -1566,48 +1564,4 @@ st.success(f"🎉 La classe **{c_nom_classe}**, le professeur **{prof_resp_compl
             edited_classes = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True, key="editor_classes")
             if st.button("💾 Enregistrer les Modifications Classes"):
                 st.session_state.classes_db = edited_classes
-                st.success("Classes mises à jour !")
-
-        elif adm_tab == "📋 Listes Blanches Parents":
-            st.subheader("Listes Blanches des Parents")
-            with st.form("form_wl"):
-                t_p = st.text_input("Téléphone parent")
-                pr_e = st.text_input("Prénom de l'élève")
-                no_e = st.text_input("Nom de l'élève")
-                an_n = st.number_input("Année de naissance", 2012)
-                cl_s = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
-                if st.form_submit_button("Ajouter l'autorisation"):
-                    if t_p and pr_e:
-                        new_w = pd.DataFrame([{"Téléphone": t_p, "Prénom Élève": pr_e, "Nom Élève": no_e, "Année Naissance": int(an_n), "Classe": cl_s}])
-                        st.session_state.parents_white_list = pd.concat([st.session_state.parents_white_list, new_w], ignore_index=True)
-                        st.success("Autorisation enregistrée.")
-            st.dataframe(st.session_state.parents_white_list, use_container_width=True)
-
-        elif adm_tab == "📑 Rapports Journaliers Réceptionnés":
-            st.subheader("Rapports Journaliers Déposés par les Professeurs")
-            if not st.session_state.rapports_journaliers_prof.empty:
-                st.dataframe(st.session_state.rapports_journaliers_prof, use_container_width=True)
-            else:
-                st.info("Aucun rapport journalier reçu pour l'instant.")
-
-# ESPACE RAPPORTS GLOBAUX
-elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
-    if not st.session_state.authenticated_admin and not st.session_state.get("prof_logged", False):
-        st.error("Accès restreint. Veuillez vous connecter en tant qu'administrateur ou professeur pour consulter les rapports globaux.")
-    else:
-        st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Tableau de Bord Global & Rapports Officiels</div>', unsafe_allow_html=True)
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1: st.metric("Total Élèves Inscrits", len(st.session_state.eleves_db))
-        with col2: st.metric("Classes Actives", len(st.session_state.classes_db))
-        with col3: st.metric("Professeurs Répertoriés", len(st.session_state.prof_credentials))
-        with col4: st.metric("Historiques Base Globale", len(st.session_state.base_globale_db))
-
-        st.markdown("### Exportation du Rapport Général Complet")
-        pdf_gen = generer_rapport_general_pdf()
-        st.download_button(
-            label="📊 Télécharger le Rapport Général de l'Établissement (PDF)",
-            data=pdf_gen,
-            file_name="rapport_general_nelson_mandela.pdf",
-            mime="application/pdf"
-        )
+                st.success("Base des classes mise à jour !")
