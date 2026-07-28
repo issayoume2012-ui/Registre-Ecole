@@ -1182,7 +1182,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.markdown("#### 3. Liste des Élèves de cette Classe")
                 st.info("Saisissez les élèves ci-dessous (Nom complet et Date de naissance). Vous pouvez ajouter ou supprimer des lignes.")
                 
-                # Tableau éditable pour saisir les élèves en masse
                 df_saisie_eleves_init = pd.DataFrame([
                     {"Nom Complet": "Prénom Nom 1", "Date de Naissance": "2012-01-01"},
                     {"Nom Complet": "Prénom Nom 2", "Date de Naissance": "2012-05-15"}
@@ -1203,7 +1202,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     elif not p_nom.strip() or not p_prenom.strip():
                         st.error("Veuillez renseigner le nom et le prénom du professeur responsable.")
                     else:
-                        # 1. Enregistrement / Mise à jour de la classe dans classes_db
                         prof_resp_complet = f"{p_prenom} {p_nom}"
                         if c_nom_classe in st.session_state.classes_db["Classe"].values:
                             st.session_state.classes_db.loc[st.session_state.classes_db["Classe"] == c_nom_classe, "Cycle"] = c_cycle_classe
@@ -1212,7 +1210,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             new_cls_row = pd.DataFrame([{"Classe": c_nom_classe, "Cycle": c_cycle_classe, "Professeur Responsable": prof_resp_complet}])
                             st.session_state.classes_db = pd.concat([st.session_state.classes_db, new_cls_row], ignore_index=True)
 
-                        # 2. Enregistrement du professeur dans prof_credentials
                         if p_password:
                             new_prof_row = pd.DataFrame([{
                                 "Nom": p_nom, "Prénom": p_prenom, "Mot de passe": p_password, 
@@ -1220,7 +1217,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             }])
                             st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_prof_row], ignore_index=True)
 
-                        # 3. Enregistrement des élèves dans eleves_db
                         nouveaux_eleves_list = []
                         for _, row_el in eleves_saisies_edit.iterrows():
                             nom_eleve = str(row_el["Nom Complet"]).strip()
@@ -1565,3 +1561,35 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             if st.button("💾 Enregistrer les Modifications Classes"):
                 st.session_state.classes_db = edited_classes
                 st.success("Base des classes mise à jour !")
+
+        elif adm_tab == "📋 Listes Blanches Parents":
+            st.subheader("Gestion de la Liste Blanche des Parents")
+            st.caption("Consultez, modifiez ou mettez à jour les numéros de téléphone et élèves autorisés à se connecter sur l'espace parents.")
+            
+            edited_parents = st.data_editor(
+                st.session_state.parents_white_list, 
+                num_rows="dynamic", 
+                use_container_width=True, 
+                key="editor_parents_white_list"
+            )
+            
+            if st.button("💾 Enregistrer les modifications de la Liste Blanche"):
+                st.session_state.parents_white_list = edited_parents
+                st.success("La liste blanche des parents a été mise à jour avec succès !")
+
+        elif adm_tab == "📑 Rapports Journaliers Réceptionnés":
+            st.subheader("Rapports Journaliers Transmis par les Enseignants")
+            st.caption("Consultez l'ensemble des bilans et remarques de séance envoyés par le corps enseignant.")
+            
+            if not st.session_state.rapports_journaliers_prof.empty:
+                st.dataframe(st.session_state.rapports_journaliers_prof, use_container_width=True)
+                
+                pdf_rapports = export_table_pdf("RAPPORTS JOURNALIERS DES ENSEIGNANTS", st.session_state.rapports_journaliers_prof)
+                st.download_button(
+                    label="📄 Télécharger les Rapports Journaliers (PDF)",
+                    data=pdf_rapports,
+                    file_name="rapports_journaliers_professeurs.pdf",
+                    mime="application/pdf"
+                )
+            else:
+                st.info("Aucun rapport journalier n'a été soumis pour le moment.")
