@@ -1414,19 +1414,22 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
 # ESPACE RAPPORTS GLOBAUX
 elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
-    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Tableau de Bord Global & Rapports Officiels</div>', unsafe_allow_html=True)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1: st.metric("Total Élèves Inscrits", len(st.session_state.eleves_db))
-    with col2: st.metric("Classes Actives", len(st.session_state.classes_db))
-    with col3: st.metric("Professeurs Répertoriés", len(st.session_state.prof_credentials))
-    with col4: st.metric("Historiques Base Globale", len(st.session_state.base_globale_db))
+    if not st.session_state.authenticated_admin and not st.session_state.get("prof_logged", False):
+        st.error("Accès restreint. Veuillez vous connecter en tant qu'administrateur ou professeur pour consulter les rapports globaux.")
+    else:
+        st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Tableau de Bord Global & Rapports Officiels</div>', unsafe_allow_html=True)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1: st.metric("Total Élèves Inscrits", len(st.session_state.eleves_db))
+        with col2: st.metric("Classes Actives", len(st.session_state.classes_db))
+        with col3: st.metric("Professeurs Répertoriés", len(st.session_state.prof_credentials))
+        with col4: st.metric("Historiques Base Globale", len(st.session_state.base_globale_db))
 
-    st.markdown("### Exportation du Rapport Général Complet")
-    pdf_gen = generer_rapport_general_pdf()
-    st.download_button(
-        label="📊 Télécharger le Rapport Général de l'Établissement (PDF)",
-        data=pdf_gen,
-        file_name="rapport_general_nelson_mandela.pdf",
-        mime="application/pdf"
-    )
+        st.markdown("### Exportation du Rapport Général Complet")
+        pdf_gen = generer_rapport_general_pdf()
+        st.download_button(
+            label="📊 Télécharger le Rapport Général de l'Établissement (PDF)",
+            data=pdf_gen,
+            file_name="rapport_general_nelson_mandela.pdf",
+            mime="application/pdf"
+        )
