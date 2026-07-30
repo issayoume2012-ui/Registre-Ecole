@@ -10,12 +10,15 @@ import streamlit as st
 # ==========================================
 # 0. GESTION DU CHIFFREMENT DES MOTS DE PASSE (SÉCURITÉ PRODUCTION)
 # ==========================================
+# ==========================================
+# 0. GESTION DU CHIFFREMENT DES MOTS DE PASSE (SÉCURITÉ PRODUCTION)
+# ==========================================
 try:
     import bcrypt
-   HAS_BCRYPT = True
+    HAS_BCRYPT = True
 except ImportError:
     import hashlib
-   HAS_BCRYPT = False
+    HAS_BCRYPT = False
 
 def hacher_mot_de_passe(password: str) -> str:
     """Hache un mot de passe avec bcrypt ou hashlib en fallback."""
