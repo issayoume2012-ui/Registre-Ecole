@@ -8,7 +8,43 @@ import pandas as pd
 import streamlit as st
 
 # ==========================================
-# 0. GESTION DES POLICES UNICODE (OPTIMISÉE POUR MOBILE)
+# 0. GESTION DU CHIFFREMENT DES MOTS DE PASSE (SÉCURITÉ PRODUCTION)
+# ==========================================
+try:
+    import bcrypt
+    HAS_BCRYPT = True
+except ImportError:
+    import hashlib
+    HAS_BCRYPT = False
+
+def hacher_mot_de passe(password: str) -> str:
+    """Hache un mot de passe avec bcrypt ou hashlib en fallback."""
+    if not password:
+        return ""
+    if HAS_BCRYPT:
+        # Utilisation de bcrypt avec sel automatique
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+    else:
+        # Fallback sécurisé SHA-256 si bcrypt n'est pas disponible
+        return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+def verifier_mot_de_passe(password: str, hashed: str) -> bool:
+    """Vérifie un mot de passe par rapport à son hachage."""
+    if not password or not hashed:
+        return False
+    if HAS_BCRYPT:
+        try:
+            return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+        except ValueError:
+            # Si le hash stocké provient d'un autre format ou texte brut de test
+            return password == hashed
+    else:
+        return hashlib.sha256(password.encode('utf-8')).hexdigest() == hashed or password == hashed
+
+
+# ==========================================
+# 0. BIS. GESTION DES POLICES UNICODE (OPTIMISÉE POUR MOBILE)
 # ==========================================
 FONT_PATH = "DejaVuSans.ttf"
 
@@ -130,7 +166,7 @@ st.markdown(
 )
 
 # ==========================================
-# 2. INITIALISATION EXHAUSTIVE DES DONNÉES
+# 2. INITIALISATION EXHAUSTIVE DES DONNÉES (AVEC HACHAGE SÉCURISÉ)
 # ==========================================
 if "espace_actif" not in st.session_state:
     st.session_state.espace_actif = "🏠 Accueil"
@@ -140,20 +176,20 @@ if "authenticated_admin" not in st.session_state:
 
 if "admin_credentials" not in st.session_state:
     st.session_state.admin_credentials = pd.DataFrame([
-        {"Nom": "Admin", "Prénom": "Principal", "Email": "cpnm@gmail.com", "Mot de passe": "cpnm2026"}
+        {"Nom": "Admin", "Prénom": "Principal", "Email": "cpnm@gmail.com", "Mot de passe": hacher_mot_de passe("cpnm2026")}
     ])
 
 if "gestionnaires_proprietaires_db" not in st.session_state:
     st.session_state.gestionnaires_proprietaires_db = pd.DataFrame([
-        {"Nom": "Mandela", "Prénom": "Propriétaire", "Email": "proprio@cpnm.sn", "Mot de passe": "proprio2026", "Rôle": "Propriétaire"},
-        {"Nom": "Diop", "Prénom": "Gestionnaire", "Email": "gestion@cpnm.sn", "Mot de passe": "gestion2026", "Rôle": "Gestionnaire"}
+        {"Nom": "Mandela", "Prénom": "Propriétaire", "Email": "proprio@cpnm.sn", "Mot de passe": hacher_mot_de passe("proprio2026"), "Rôle": "Propriétaire"},
+        {"Nom": "Diop", "Prénom": "Gestionnaire", "Email": "gestion@cpnm.sn", "Mot de passe": hacher_mot_de passe("gestion2026"), "Rôle": "Gestionnaire"}
     ])
 
 if "prof_credentials" not in st.session_state:
     st.session_state.prof_credentials = pd.DataFrame([
-        {"Nom": "Diallo", "Prénom": "Ibrahima", "Mot de passe": "prof123", "Matière Principale": "Mathématiques", "Classe Attribuée": "6ème A"},
-        {"Nom": "Sow", "Prénom": "Aissatou", "Mot de passe": "prof456", "Matière Principale": "Français", "Classe Attribuée": "CP"},
-        {"Nom": "Ndiaye", "Prénom": "Cheikh", "Mot de passe": "prof789", "Matière Principale": "Histoire-Géographie", "Classe Attribuée": "5ème A"}
+        {"Nom": "Diallo", "Prénom": "Ibrahima", "Mot de passe": hacher_mot_de passe("prof123"), "Matière Principale": "Mathématiques", "Classe Attribuée": "6ème A"},
+        {"Nom": "Sow", "Prénom": "Aissatou", "Mot de passe": hacher_mot_de passe("prof456"), "Matière Principale": "Français", "Classe Attribuée": "CP"},
+        {"Nom": "Ndiaye", "Prénom": "Cheikh", "Mot de passe": hacher_mot_de passe("prof789"), "Matière Principale": "Histoire-Géographie", "Classe Attribuée": "5ème A"}
     ])
 
 if "parents_white_list" not in st.session_state:
@@ -714,7 +750,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 for _, row in st.session_state.prof_credentials.iterrows():
                     if (str(row["Nom"]).strip().lower() == p_nom.strip().lower() and 
                         str(row["Prénom"]).strip().lower() == p_prenom.strip().lower() and 
-                        str(row["Mot de passe"]) == p_pass):
+                        verifier_mot_de_passe(p_pass, str(row["Mot de passe"]))):
                         match_prof = True
                         classe_trouvee = str(row.get("Classe Attribuée", "6ème A"))
                         break
@@ -1120,13 +1156,13 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 role_connecte = "Administrateur"
                 
                 for _, row in st.session_state.admin_credentials.iterrows():
-                    if row["Email"] == em and row["Mot de passe"] == pw:
+                    if row["Email"] == em and verifier_mot_de_passe(pw, str(row["Mot de passe"])):
                         match_a = True
                         break
                 
                 if not match_a:
                     for _, row in st.session_state.gestionnaires_proprietaires_db.iterrows():
-                        if str(row["Email"]).strip().lower() == em.strip().lower() and str(row["Mot de passe"]) == pw:
+                        if str(row["Email"]).strip().lower() == em.strip().lower() and verifier_mot_de_passe(pw, str(row["Mot de passe"])):
                             match_a = True
                             role_connecte = row["Rôle"]
                             break
@@ -1212,7 +1248,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
                         if p_password:
                             new_prof_row = pd.DataFrame([{
-                                "Nom": p_nom, "Prénom": p_prenom, "Mot de passe": p_password, 
+                                "Nom": p_nom, "Prénom": p_prenom, "Mot de passe": hacher_mot_de passe(p_password), 
                                 "Matière Principale": p_matiere, "Classe Attribuée": c_nom_classe
                             }])
                             st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_prof_row], ignore_index=True)
@@ -1274,7 +1310,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                                 else:
                                     new_member = pd.DataFrame([{
                                         "Nom": gp_nom, "Prénom": gp_prenom, "Email": gp_email, 
-                                        "Mot de passe": gp_pass, "Rôle": gp_role
+                                        "Mot de passe": hacher_mot_de passe(gp_pass), "Rôle": gp_role
                                     }])
                                     st.session_state.gestionnaires_proprietaires_db = pd.concat([df_gp, new_member], ignore_index=True)
                                     st.success("Nouveau membre ajouté avec succès à la liste blanche !")
@@ -1513,7 +1549,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     p_pwd = st.text_input("Mot de passe", type="password")
                     if st.form_submit_button("Enregistrer le professeur"):
                         if p_n and p_p and p_pwd:
-                            new_p = pd.DataFrame([{"Nom": p_n, "Prénom": p_p, "Mot de passe": p_pwd, "Matière Principale": p_mat, "Classe Attribuée": p_cls_attrib}])
+                            new_p = pd.DataFrame([{"Nom": p_n, "Prénom": p_p, "Mot de passe": hacher_mot_de passe(p_pwd), "Matière Principale": p_mat, "Classe Attribuée": p_cls_attrib}])
                             st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_p], ignore_index=True)
                             st.success("Professeur enregistré.")
                             st.rerun()
