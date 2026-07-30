@@ -15,7 +15,7 @@ try:
    HAS_BCRYPT = True
 except ImportError:
     import hashlib
-   [cite: 8]HAS_BCRYPT = False
+   HAS_BCRYPT = False
 
 def hacher_mot_de_passe(password: str) -> str:
     """Hache un mot de passe avec bcrypt ou hashlib en fallback."""
