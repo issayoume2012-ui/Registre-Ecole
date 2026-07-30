@@ -17,7 +17,7 @@ except ImportError:
     import hashlib
     HAS_BCRYPT = False
 
-def hacher_mot_de passe(password: str) -> str:
+def hacher_mot_de_passe(password: str) -> str:
     """Hache un mot de passe avec bcrypt ou hashlib en fallback."""
     if not password:
         return ""
@@ -176,20 +176,20 @@ if "authenticated_admin" not in st.session_state:
 
 if "admin_credentials" not in st.session_state:
     st.session_state.admin_credentials = pd.DataFrame([
-        {"Nom": "Admin", "Prénom": "Principal", "Email": "cpnm@gmail.com", "Mot de passe": hacher_mot_de passe("cpnm2026")}
+        {"Nom": "Admin", "Prénom": "Principal", "Email": "cpnm@gmail.com", "Mot de passe": hacher_mot_de_passe("cpnm2026")}
     ])
 
 if "gestionnaires_proprietaires_db" not in st.session_state:
     st.session_state.gestionnaires_proprietaires_db = pd.DataFrame([
-        {"Nom": "Mandela", "Prénom": "Propriétaire", "Email": "proprio@cpnm.sn", "Mot de passe": hacher_mot_de passe("proprio2026"), "Rôle": "Propriétaire"},
-        {"Nom": "Diop", "Prénom": "Gestionnaire", "Email": "gestion@cpnm.sn", "Mot de passe": hacher_mot_de passe("gestion2026"), "Rôle": "Gestionnaire"}
+        {"Nom": "Mandela", "Prénom": "Propriétaire", "Email": "proprio@cpnm.sn", "Mot de passe": hacher_mot_de_passe("proprio2026"), "Rôle": "Propriétaire"},
+        {"Nom": "Diop", "Prénom": "Gestionnaire", "Email": "gestion@cpnm.sn", "Mot de passe": hacher_mot_de_passe("gestion2026"), "Rôle": "Gestionnaire"}
     ])
 
 if "prof_credentials" not in st.session_state:
     st.session_state.prof_credentials = pd.DataFrame([
-        {"Nom": "Diallo", "Prénom": "Ibrahima", "Mot de passe": hacher_mot_de passe("prof123"), "Matière Principale": "Mathématiques", "Classe Attribuée": "6ème A"},
-        {"Nom": "Sow", "Prénom": "Aissatou", "Mot de passe": hacher_mot_de passe("prof456"), "Matière Principale": "Français", "Classe Attribuée": "CP"},
-        {"Nom": "Ndiaye", "Prénom": "Cheikh", "Mot de passe": hacher_mot_de passe("prof789"), "Matière Principale": "Histoire-Géographie", "Classe Attribuée": "5ème A"}
+        {"Nom": "Diallo", "Prénom": "Ibrahima", "Mot de passe": hacher_mot_de_passe("prof123"), "Matière Principale": "Mathématiques", "Classe Attribuée": "6ème A"},
+        {"Nom": "Sow", "Prénom": "Aissatou", "Mot de passe": hacher_mot_de_passe("prof456"), "Matière Principale": "Français", "Classe Attribuée": "CP"},
+        {"Nom": "Ndiaye", "Prénom": "Cheikh", "Mot de passe": hacher_mot_de_passe("prof789"), "Matière Principale": "Histoire-Géographie", "Classe Attribuée": "5ème A"}
     ])
 
 if "parents_white_list" not in st.session_state:
@@ -726,7 +726,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
 # ==========================================
 
 # ESPACE PROFESSEURS
-elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
+if st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
     st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Espace Enseignants & Maîtres</div>', unsafe_allow_html=True)
 
     if "prof_logged" not in st.session_state:
@@ -1248,7 +1248,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
                         if p_password:
                             new_prof_row = pd.DataFrame([{
-                                "Nom": p_nom, "Prénom": p_prenom, "Mot de passe": hacher_mot_de passe(p_password), 
+                                "Nom": p_nom, "Prénom": p_prenom, "Mot de passe": hacher_mot_de_passe(p_password), 
                                 "Matière Principale": p_matiere, "Classe Attribuée": c_nom_classe
                             }])
                             st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_prof_row], ignore_index=True)
@@ -1310,7 +1310,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                                 else:
                                     new_member = pd.DataFrame([{
                                         "Nom": gp_nom, "Prénom": gp_prenom, "Email": gp_email, 
-                                        "Mot de passe": hacher_mot_de passe(gp_pass), "Rôle": gp_role
+                                        "Mot de passe": hacher_mot_de_passe(gp_pass), "Rôle": gp_role
                                     }])
                                     st.session_state.gestionnaires_proprietaires_db = pd.concat([df_gp, new_member], ignore_index=True)
                                     st.success("Nouveau membre ajouté avec succès à la liste blanche !")
@@ -1549,7 +1549,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     p_pwd = st.text_input("Mot de passe", type="password")
                     if st.form_submit_button("Enregistrer le professeur"):
                         if p_n and p_p and p_pwd:
-                            new_p = pd.DataFrame([{"Nom": p_n, "Prénom": p_p, "Mot de passe": hacher_mot_de passe(p_pwd), "Matière Principale": p_mat, "Classe Attribuée": p_cls_attrib}])
+                            new_p = pd.DataFrame([{"Nom": p_n, "Prénom": p_p, "Mot de passe": hacher_mot_de_passe(p_pwd), "Matière Principale": p_mat, "Classe Attribuée": p_cls_attrib}])
                             st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_p], ignore_index=True)
                             st.success("Professeur enregistré.")
                             st.rerun()
