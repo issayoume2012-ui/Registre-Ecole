@@ -1,4 +1,4 @@
-import base64
+[cite: 8]import base64
 from datetime import datetime
 import io
 import os
@@ -12,12 +12,12 @@ import streamlit as st
 # ==========================================
 try:
     import bcrypt
-    HAS_BCRYPT = True
+   [cite: 8]HAS_BCRYPT = True
 except ImportError:
     import hashlib
-    HAS_BCRYPT = False
+   [cite: 8]HAS_BCRYPT = False
 
-def hacher_mot_de_passe(password: str) -> str:
+[cite: 8]def hacher_mot_de_passe(password: str) -> str:
     """Hache un mot de passe avec bcrypt ou hashlib en fallback."""
     if not password:
         return ""
@@ -29,7 +29,7 @@ def hacher_mot_de_passe(password: str) -> str:
         # Fallback sécurisé SHA-256 si bcrypt n'est pas disponible
         return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
-def verifier_mot_de_passe(password: str, hashed: str) -> bool:
+[cite: 8]def verifier_mot_de_passe(password: str, hashed: str) -> bool:
     """Vérifie un mot de passe par rapport à son hachage."""
     if not password or not hashed:
         return False
@@ -46,7 +46,7 @@ def verifier_mot_de_passe(password: str, hashed: str) -> bool:
 # ==========================================
 # 0. BIS. GESTION DES POLICES UNICODE (OPTIMISÉE POUR MOBILE)
 # ==========================================
-FONT_PATH = "DejaVuSans.ttf"
+[cite: 8]FONT_PATH = "DejaVuSans.ttf"
 
 @st.cache_resource
 def telecharger_polices():
@@ -69,19 +69,19 @@ def telecharger_polices():
                 pass
 
 # Téléchargement au premier lancement (mis en cache)
-telecharger_polices()
+[cite: 8]telecharger_polices()
 
 # ==========================================
 # 1. CONFIGURATION DE LA PAGE & DESIGN XXL RESPONSIVE FAST-LOAD
 # ==========================================
-st.set_page_config(
+[cite: 8]st.set_page_config(
     page_title="Portail Pédagogique - Cours Privé Nelson Mandela | Sénégal",
     page_icon="🇸🇳",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-st.markdown(
+[cite: 8]st.markdown(
     """
     <style>
     /* Global Styles & Mobile Reset Optimisé */
@@ -169,37 +169,37 @@ st.markdown(
 # 2. INITIALISATION EXHAUSTIVE DES DONNÉES (AVEC HACHAGE SÉCURISÉ)
 # ==========================================
 if "espace_actif" not in st.session_state:
-    st.session_state.espace_actif = "🏠 Accueil"
+   [cite: 8]st.session_state.espace_actif = "🏠 Accueil"
 
 if "authenticated_admin" not in st.session_state:
-    st.session_state.authenticated_admin = False
+   [cite: 8]st.session_state.authenticated_admin = False
 
 if "admin_credentials" not in st.session_state:
-    st.session_state.admin_credentials = pd.DataFrame([
+   [cite: 8]st.session_state.admin_credentials = pd.DataFrame([
         {"Nom": "Admin", "Prénom": "Principal", "Email": "cpnm@gmail.com", "Mot de passe": hacher_mot_de_passe("cpnm2026")}
     ])
 
 if "gestionnaires_proprietaires_db" not in st.session_state:
-    st.session_state.gestionnaires_proprietaires_db = pd.DataFrame([
+   [cite: 8]st.session_state.gestionnaires_proprietaires_db = pd.DataFrame([
         {"Nom": "Mandela", "Prénom": "Propriétaire", "Email": "proprio@cpnm.sn", "Mot de passe": hacher_mot_de_passe("proprio2026"), "Rôle": "Propriétaire"},
         {"Nom": "Diop", "Prénom": "Gestionnaire", "Email": "gestion@cpnm.sn", "Mot de passe": hacher_mot_de_passe("gestion2026"), "Rôle": "Gestionnaire"}
     ])
 
 if "prof_credentials" not in st.session_state:
-    st.session_state.prof_credentials = pd.DataFrame([
+   [cite: 8]st.session_state.prof_credentials = pd.DataFrame([
         {"Nom": "Diallo", "Prénom": "Ibrahima", "Mot de passe": hacher_mot_de_passe("prof123"), "Matière Principale": "Mathématiques", "Classe Attribuée": "6ème A"},
         {"Nom": "Sow", "Prénom": "Aissatou", "Mot de passe": hacher_mot_de_passe("prof456"), "Matière Principale": "Français", "Classe Attribuée": "CP"},
         {"Nom": "Ndiaye", "Prénom": "Cheikh", "Mot de passe": hacher_mot_de_passe("prof789"), "Matière Principale": "Histoire-Géographie", "Classe Attribuée": "5ème A"}
     ])
 
 if "parents_white_list" not in st.session_state:
-    st.session_state.parents_white_list = pd.DataFrame([
+   [cite: 8]st.session_state.parents_white_list = pd.DataFrame([
         {"Téléphone": "+221771234567", "Prénom Élève": "Mamadou", "Nom Élève": "Diallo", "Année Naissance": 2012, "Classe": "6ème A"},
         {"Téléphone": "+221769876543", "Prénom Élève": "Fatou", "Nom Élève": "Sow", "Année Naissance": 2015, "Classe": "CP"},
     ])
 
 if "classes_db" not in st.session_state:
-    st.session_state.classes_db = pd.DataFrame(
+   [cite: 8]st.session_state.classes_db = pd.DataFrame(
         columns=["Classe", "Cycle", "Professeur Responsable"],
         data=[
             ["6ème A", "Collège", "Ibrahima Diallo"],
@@ -211,7 +211,7 @@ if "classes_db" not in st.session_state:
     )
 
 if "eleves_db" not in st.session_state:
-    st.session_state.eleves_db = pd.DataFrame(
+   [cite: 8]st.session_state.eleves_db = pd.DataFrame(
         columns=["Nom Complet", "Date de Naissance", "Classe", "Photo"],
         data=[
             ["Mamadou Diallo", "2012-05-14", "6ème A", None],
@@ -222,7 +222,7 @@ if "eleves_db" not in st.session_state:
     )
 
 if "base_globale_db" not in st.session_state:
-    st.session_state.base_globale_db = pd.DataFrame(
+   [cite: 8]st.session_state.base_globale_db = pd.DataFrame(
         columns=["Date", "Année", "Trimestre", "Mois", "Type Acteur", "Nom Acteur", "Classe", "Type Entrée", "Détail / Contenu", "Appréciation"],
         data=[
             {"Date": "2026-01-15", "Année": "2025-2026", "Trimestre": "1er Semestre", "Mois": "Janvier", "Type Acteur": "Élève", "Nom Acteur": "Mamadou Diallo", "Classe": "6ème A", "Type Entrée": "Note", "Détail / Contenu": "Mathématiques (Devoir 1): 15.5/20", "Appréciation": "Très bon travail"},
@@ -231,13 +231,13 @@ if "base_globale_db" not in st.session_state:
         ]
     )
 
-JOURS_LIST = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"]
-HEURES_LIST = ["08h-09h", "09h-10h", "10h-11h", "11h-12h", "15h-16h", "16h-17h"]
+[cite: 8]JOURS_LIST = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"]
+[cite: 8]HEURES_LIST = ["08h-09h", "09h-10h", "10h-11h", "11h-12h", "15h-16h", "16h-17h"]
 
 if "edt_grid_db" not in st.session_state:
-    st.session_state.edt_grid_db = {}
+   [cite: 8]st.session_state.edt_grid_db = {}
 
-def get_or_create_edt(classe):
+[cite: 8]def get_or_create_edt(classe):
     if classe not in st.session_state.edt_grid_db:
         st.session_state.edt_grid_db[classe] = pd.DataFrame(
             "", index=JOURS_LIST, columns=HEURES_LIST
@@ -245,7 +245,7 @@ def get_or_create_edt(classe):
     return st.session_state.edt_grid_db[classe]
 
 if "cahier_textes" not in st.session_state:
-    st.session_state.cahier_textes = pd.DataFrame(
+   [cite: 8]st.session_state.cahier_textes = pd.DataFrame(
         columns=["Professeur", "Date", "Classe", "Matière", "Contenu", "Travail à faire"],
         data=[
             ["Ibrahima Diallo", "2026-06-01", "6ème A", "Mathématiques", "Introduction aux nombres relatifs.", "Exercices 1 et 2 page 45."]
@@ -253,7 +253,7 @@ if "cahier_textes" not in st.session_state:
     )
 
 if "rapports_journaliers_prof" not in st.session_state:
-    st.session_state.rapports_journaliers_prof = pd.DataFrame(
+   [cite: 8]st.session_state.rapports_journaliers_prof = pd.DataFrame(
         columns=["Professeur", "Date", "Classe", "Matière", "Bilan du Cours", "Difficultés / Remarques"],
         data=[
             ["Ibrahima Diallo", "2026-06-01", "6ème A", "Mathématiques", "Bonne participation globale des élèves.", "Quelques difficultés sur les soustractions de négatifs."]
@@ -261,7 +261,7 @@ if "rapports_journaliers_prof" not in st.session_state:
     )
 
 if "absences_db" not in st.session_state:
-    st.session_state.absences_db = pd.DataFrame(
+   [cite: 8]st.session_state.absences_db = pd.DataFrame(
         columns=["Date", "Classe", "Élève", "Statut", "Motif"],
         data=[
             ["2026-06-01", "6ème A", "Aminata Ba", "Absent", "Maladie"]
@@ -269,7 +269,7 @@ if "absences_db" not in st.session_state:
     )
 
 if "notes_db" not in st.session_state:
-    st.session_state.notes_db = pd.DataFrame(
+   [cite: 8]st.session_state.notes_db = pd.DataFrame(
         columns=["Classe", "Élève", "Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Trimestre", "Appréciation"],
         data=[
             ["6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 1", 3, 15.5, 20, "1er Semestre", "Très bon travail."],
@@ -283,7 +283,7 @@ if "notes_db" not in st.session_state:
     )
 
 if "matieres_def" not in st.session_state:
-    st.session_state.matieres_def = pd.DataFrame([
+   [cite: 8]st.session_state.matieres_def = pd.DataFrame([
         {"Matière": "Mathématiques", "Coefficient": 3, "Cycle": "Collège"},
         {"Matière": "Français", "Coefficient": 3, "Cycle": "Collège"},
         {"Matière": "Histoire-Géographie", "Coefficient": 2, "Cycle": "Collège"},
@@ -297,7 +297,7 @@ if "matieres_def" not in st.session_state:
     ])
 
 if "conduite_db" not in st.session_state:
-    st.session_state.conduite_db = pd.DataFrame(
+   [cite: 8]st.session_state.conduite_db = pd.DataFrame(
         columns=["Classe", "Élève", "Date", "Type", "Description"],
         data=[
             ["6ème A", "Mamadou Diallo", "2026-06-02", "Encouragement", "Participation active en classe."]
@@ -308,7 +308,7 @@ if "conduite_db" not in st.session_state:
 # 3. FONCTIONS UTILITAIRES & GÉNÉRATION PDF/EXCEL
 # ==========================================
 class PDFReport(FPDF):
-    def header(self):
+   [cite: 8]def header(self):
         self.set_font("Arial", "B", 14)
         self.cell(0, 8, "COURS PRIVÉ NELSON MANDELA - SÉNÉGAL", 0, 1, "C")
         self.set_font("Arial", "I", 9)
@@ -316,12 +316,12 @@ class PDFReport(FPDF):
         self.line(10, 25, 200, 25)
         self.ln(8)
 
-    def footer(self):
+   [cite: 8]def footer(self):
         self.set_y(-15)
         self.set_font("Arial", "I", 8)
         self.cell(0, 10, f"Page {self.page_no()} - Document Officiel CPNM Généré le {datetime.now().strftime('%d/%m/%Y')}", 0, 0, "C")
 
-def export_table_pdf(title, df, columns_to_show=None):
+[cite: 8]def export_table_pdf(title, df, columns_to_show=None):
     pdf = PDFReport()
     pdf.add_page()
     pdf.set_font("Arial", "B", 13)
@@ -354,7 +354,7 @@ def export_table_pdf(title, df, columns_to_show=None):
 
     return bytes(pdf.output())
 
-def export_table_excel(df, columns_to_show=None):
+[cite: 8]def export_table_excel(df, columns_to_show=None):
     """Génère un tableau Excel binaire bien délimité pour le téléchargement."""
     df_sub = df[columns_to_show] if columns_to_show else df
     output = io.BytesIO()
@@ -362,7 +362,7 @@ def export_table_excel(df, columns_to_show=None):
         df_sub.to_excel(writer, index=False, sheet_name='Élèves')
     return output.getvalue()
 
-def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
+[cite: 8]def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
     pdf = PDFReport()
     pdf.add_page()
     
@@ -508,7 +508,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
 
     return bytes(pdf.output())
 
-def generer_rapport_general_pdf():
+[cite: 8]def generer_rapport_general_pdf():
     pdf = PDFReport()
     pdf.add_page()
     
@@ -599,7 +599,7 @@ def generer_rapport_general_pdf():
 
     return bytes(pdf.output())
 
-def assistant_ia_repondre(question):
+[cite: 8]def assistant_ia_repondre(question):
     q = question.lower()
     if "élève" in q or "effectif" in q or "nombre" in q:
         nb_e = len(st.session_state.eleves_db)
