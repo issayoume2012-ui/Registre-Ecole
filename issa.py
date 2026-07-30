@@ -238,7 +238,7 @@ JOURS_LIST = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"]
 HEURES_LIST = ["08h-09h", "09h-10h", "10h-11h", "11h-12h", "15h-16h", "16h-17h"]
 
 if "edt_grid_db" not in st.session_state:
-   [cite: 8]st.session_state.edt_grid_db = {}
+   st.session_state.edt_grid_db = {}
 
 def get_or_create_edt(classe):
     if classe not in st.session_state.edt_grid_db:
