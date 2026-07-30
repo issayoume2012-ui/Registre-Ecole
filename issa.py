@@ -183,7 +183,7 @@ if "admin_credentials" not in st.session_state:
     ])
 
 if "gestionnaires_proprietaires_db" not in st.session_state:
-   [cite: 8]st.session_state.gestionnaires_proprietaires_db = pd.DataFrame([
+   st.session_state.gestionnaires_proprietaires_db = pd.DataFrame([
         {"Nom": "Mandela", "Prénom": "Propriétaire", "Email": "proprio@cpnm.sn", "Mot de passe": hacher_mot_de_passe("proprio2026"), "Rôle": "Propriétaire"},
         {"Nom": "Diop", "Prénom": "Gestionnaire", "Email": "gestion@cpnm.sn", "Mot de passe": hacher_mot_de_passe("gestion2026"), "Rôle": "Gestionnaire"}
     ])
