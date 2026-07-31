@@ -39,7 +39,8 @@ def verifier_mot_de_passe(password: str, hashed: str) -> bool:
             return password == hashed
     else:
         return hashlib.sha256(password.encode('utf-8')).hexdigest() == hashed or password == hashed
-
+    if "classes_db" not in st.session_state:
+    st.session_state.classes_db = pd.DataFrame() # ou [] selon ton code
 
 # ==========================================
 # 0. BIS. GESTION DE LA BASE DE DONNÉES SQLITE EXTERNE
@@ -804,7 +805,9 @@ if st.session_state.espace_actif == "🏠 Accueil":
     with s1:
         st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Élèves Inscrits</h4><h2 style="margin:0;color:#1E3A8A;">{len(st.session_state.eleves_db)}</h2></div>', unsafe_allow_html=True)
     with s2:
-        st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Classes Actives</h4><h2 style="margin:0;color:#1E3A8A;">{len(st.session_state.classes_db)}</h2></div>', unsafe_allow_html=True)
+        classes_count = len(st.session_state.classes_db) if "classes_db" in st.session_state and st.session_state.classes_db is not None else 0
+
+        st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Classes Actives</h4><h2 style="margin:0;color:#1E3A8A;">{classes_count}</h2></div>', unsafe_allow_html=True)
     with s3:
         st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Professeurs</h4><h2 style="margin:0;color:#1E3A8A;">{len(st.session_state.prof_credentials)}</h2></div>', unsafe_allow_html=True)
     with s4:
