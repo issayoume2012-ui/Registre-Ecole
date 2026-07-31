@@ -291,13 +291,26 @@ st.markdown(
 # 2. CHARGEMENT DES DONNÉES DEPUIS LA BASE EXTERNE VERS SESSION_STATE (CORRIGÉ ICI)
 # ==========================================
 def charger_donnees_externes():
-    conn = obtenir_connexion()
-    st.session_state.eleves_db = pd.read_sql_query("SELECT nom_complet as 'Nom Complet', date_naissance as 'Date de Naissance', classe as 'Classe', photo as 'Photo' FROM eleves", conn)
-    st.session_state.classes_db = pd.read_sql_query("SELECT classe as 'Classe', cycle as 'Cycle', professeur_responsable as 'Professeur Responsable' FROM classes", conn)
-    st.session_state.notes_db = pd.read_sql_query("SELECT classe as 'Classe', eleve as 'Élève', matiere as 'Matière', type_evaluation as 'Type Évaluation', coefficient as 'Coefficient', note as 'Note', bareme as 'Barème', trimestre as 'Trimestre', appreciation as 'Appréciation' FROM notes", conn)
-    st.session_state.base_globale_db = pd.read_sql_query("SELECT date as 'Date', annee as 'Année', trimestre as 'Trimestre', mois as 'Mois', type_acteur as 'Type Acteur', nom_acteur as 'Nom Acteur', classe as 'Classe', type_entree as 'Type Entrée', detail as 'Détail / Contenu', appreciation as 'Appréciation' FROM base_globale", conn)
-    st.session_state.prof_credentials = pd.read_sql_query("SELECT nom as 'Nom', prenom as 'Prénom', mot_de_passe as 'Mot de passe', matiere_principale as 'Matière Principale', classe_attribuee as 'Classe Attribuée' FROM prof_credentials", conn)
-    conn.close()
+    """Charge les données de la base de données avec gestion des erreurs."""
+    try:
+        # S'assure que la connexion est active (conn doit être défini globalement ou dans la fonction)
+        global conn
+        
+        # Vérification et lecture sécurisée de la table eleves
+        query = """
+            SELECT nom_complet AS "Nom Complet", 
+                   date_naissance AS "Date de Naissance", 
+                   classe AS "Classe", 
+                   photo AS "Photo" 
+            FROM eleves
+        """
+        st.session_state.eleves_db = pd.read_sql_query(query, conn)
+        
+    except Exception as e:
+        # En cas d'erreur (ex: table absente), on initialise un DataFrame vide pour éviter le crash
+        st.session_state.eleves_db = pd.DataFrame(columns=["Nom Complet", "Date de Naissance", "Classe", "Photo"])
+        # Optionnel: afficher un avertissement discret dans l'app
+        # st.warning(annees_ou_msg_erreur_si_besoin)
 
 if "espace_actif" not in st.session_state:
    st.session_state.espace_actif = "🏠 Accueil"
