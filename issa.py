@@ -1,30 +1,53 @@
 import base64
 from datetime import datetime
 import io
-import json
 import os
+import sqlite3
 import urllib.request
 from fpdf import FPDF
 import pandas as pd
 import streamlit as st
 
 # ==========================================
-# 0. GESTION DE LA PERSISTANCE EXTERNE (JSON)
+# 0. GESTION DE LA PERSISTANCE EXTERNE (SQLITE)
 # ==========================================
-DB_FILE = "cpnm_database.json"
+DB_FILE = "cpnm_database.db"
+
+def init_sqlite_db():
+    """Initialise la base de données SQLite et les tables nécessaires."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS app_data (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_sqlite_db()
 
 def charger_donnees_externes():
-    """Charge les données depuis le fichier JSON externe s'il existe."""
+    """Charge les données depuis la base de données SQLite externe."""
+    data = {}
     if os.path.exists(DB_FILE):
         try:
-            with open(DB_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT key, value FROM app_data")
+            rows = cursor.fetchall()
+            conn.close()
+            for key, val_json in rows:
+                import json
+                data[key] = json.loads(val_json)
         except Exception:
             return {}
-    return {}
+    return data
 
 def sauvegarder_donnees_externes():
-    """Sauvegarde toutes les bases de données de session dans le fichier JSON externe."""
+    """Sauvegarde toutes les bases de données de session dans la base SQLite externe."""
+    import json
     data_to_save = {
         "admin_credentials": st.session_state.admin_credentials.to_dict(orient="split"),
         "gestionnaires_proprietaires_db": st.session_state.gestionnaires_proprietaires_db.to_dict(orient="split"),
@@ -42,10 +65,17 @@ def sauvegarder_donnees_externes():
         "edt_grid_db": {k: v.to_dict(orient="split") for k, v in st.session_state.edt_grid_db.items()}
     }
     try:
-        with open(DB_FILE, "w", encoding="utf-8") as f:
-            json.dump(data_to_save, f, ensure_ascii=False, indent=4)
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        for key, value in data_to_save.items():
+            cursor.execute("""
+                INSERT INTO app_data (key, value) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+            """, (key, json.dumps(value, ensure_ascii=False)))
+        conn.commit()
+        conn.close()
     except Exception as e:
-        st.error(f"Erreur lors de la sauvegarde externe : {e}")
+        st.error(f"Erreur lors de la sauvegarde externe SQLite : {e}")
 
 saved_data = charger_donnees_externes()
 
@@ -712,7 +742,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
         <div style="text-align: center; padding: 10px 0 30px 0;">
             <h3 style="color: #1E3A8A; font-weight: 800;">Portail Numérique Intelligent & Suivi Pédagogique Centralisé</h3>
             <p style="font-size: 1.1rem; color: #475569; max-width: 800px; margin: 0 auto;">
-                Sélectionnez votre espace. Le système intègre une Base Globale centralisant tout l'historique annuel des élèves et professeurs avec persistance externe sécurisée (JSON).
+                Sélectionnez votre espace. Le système intègre une Base Globale centralisant tout l'historique annuel des élèves et professeurs avec persistance externe sécurisée (SQLite).
             </p>
         </div>
         """,
