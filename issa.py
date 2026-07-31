@@ -44,18 +44,12 @@ def verifier_mot_de_passe(password: str, hashed: str) -> bool:
 # ==========================================
 # 0. BIS. GESTION DE LA BASE DE DONNÉES SQLITE EXTERNE
 # ==========================================
-
-# Utilisation du dossier /tmp sur Streamlit Cloud pour garantir les droits en écriture
+# Utilisation de /tmp sur Streamlit Cloud pour éviter les erreurs d'écriture
 DB_DIR = "/tmp" if os.path.exists("/tmp") else "."
 DB_NAME = os.path.join(DB_DIR, "ecole_nelson_mandela.db")
 
 def obtenir_connexion():
-    conn = sqlite3.connect(DB_NAME, timeout=10, check_same_thread=False)
-    return conn
-DB_NAME = "ecole_nelson_mandela.db"
-
-def obtenir_connexion():
-    return sqlite3.connect(DB_NAME, check_same_thread=False)
+    return sqlite3.connect(DB_NAME, check_same_thread=False, timeout=10)
 
 def initialiser_base_de_donnees_externe():
     """Crée les tables SQL si elles n'existent pas et insère les données par défaut."""
