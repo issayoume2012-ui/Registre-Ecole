@@ -91,20 +91,36 @@ def initialiser_base_de_donnees_externe():
             )
         ''')
 
-        # Correction de la table prof_credentials pour éviter les conflits d'insertion
+        # 1. Création de la table prof_credentials avec toutes les colonnes nécessaires
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS prof_credentials (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nom TEXT NOT NULL,
-                prenom TEXT NOT NULL,
-                mot_de_passe TEXT NOT NULL,
+                nom TEXT,
+                prenom TEXT,
+                mot_de_passe TEXT,
                 matiere_principale TEXT,
-                classe_attribuee TEXT,
-                UNIQUE(nom, prenom)
+                classe_attribuee TEXT
             )
         """)
 
-        # Insertion sécurisée des données par défaut si les tables sont vides
+        # 2. Sécurité supplémentaire : s'assurer que les colonnes existent
+        # (Utile si la table existait déjà sans certaines colonnes sur Streamlit Cloud)
+        cursor.execute("PRAGMA table_info(prof_credentials)")
+        colonnes_existantes = [col[1] for col in cursor.fetchall()]
+
+        colonnes_requises = {
+            "nom": "TEXT",
+            "prenom": "TEXT",
+            "mot_de_passe": "TEXT",
+            "matiere_principale": "TEXT",
+            "classe_attribuee": "TEXT",
+        }
+
+        for col, type_col in colonnes_requises.items():
+            if col not in colonnes_existantes:
+                cursor.execute(f"ALTER TABLE prof_credentials ADD COLUMN {col} {type_col}")
+
+        # Insertion des données par défaut si les tables sont vides
         cursor.execute("SELECT COUNT(*) FROM eleves")
         if cursor.fetchone()[0] == 0:
             cursor.executemany("INSERT INTO eleves (nom_complet, date_naissance, classe, photo) VALUES (?, ?, ?, ?)", [
@@ -132,11 +148,14 @@ def initialiser_base_de_donnees_externe():
                 ("Ndiaye", "Cheikh", hacher_mot_de_passe("prof789"), "Histoire-Géographie", "5ème A")
             ]
             for p in professeurs:
-                cursor.execute("""
-                    INSERT OR IGNORE INTO prof_credentials 
-                    (nom, prenom, mot_de_passe, matiere_principale, classe_attribuee) 
-                    VALUES (?, ?, ?, ?, ?)
-                """, p)
+                try:
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO prof_credentials 
+                        (nom, prenom, mot_de_passe, matiere_principale, classe_attribuee) 
+                        VALUES (?, ?, ?, ?, ?)
+                    """, p)
+                except Exception as e:
+                    print(f"Erreur lors de l'insertion : {e}")
 
         cursor.execute("SELECT COUNT(*) FROM notes")
         if cursor.fetchone()[0] == 0:
@@ -1911,9 +1930,9 @@ elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
     with col_d2:
         st.markdown(
             """
-            **Ce document officiel contient :**
-            - Les statistiques générales et effectifs de l'établissement.
-            - Le suivi des enseignants et les bilans de cours journaliers.
-            - Un extrait consolidé et chronologique de la Base Globale de suivi.
+            **Ce rapport officiel inclut :**
+            * La synthèse globale des effectifs élèves et classes.
+            * Les rapports d'activités déposés par le corps enseignant.
+            * Les entrées enregistrées dans la Base Globale de l'établissement.
             """
         )
