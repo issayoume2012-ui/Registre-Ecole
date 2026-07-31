@@ -51,60 +51,7 @@ DB_NAME = os.path.join(DB_DIR, "ecole_nelson_mandela.db")
 def obtenir_connexion():
     return sqlite3.connect(DB_NAME, check_same_thread=False, timeout=10)
 
-def initialiser_base_de_donnees_externe():
-    """Crée les tables SQL si elles n'existent pas et insère les données par défaut."""
-    conn = obtenir_connexion()
-    cursor = conn.cursor()
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS eleves (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nom_complet TEXT,
-            date_naissance TEXT,
-            classe TEXT,
-            photo TEXT
-        )
-    ''')
-
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS classes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            classe TEXT UNIQUE,
-            cycle TEXT,
-            professeur_responsable TEXT
-        )
-    ''')
-
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            classe TEXT,
-            eleve TEXT,
-            matiere TEXT,
-            type_evaluation TEXT,
-            coefficient INTEGER,
-            note REAL,
-            bareme REAL,
-            trimestre TEXT,
-            appreciation TEXT
-        )
-    ''')
-
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS base_globale (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT,
-            annee TEXT,
-            trimestre TEXT,
-            mois TEXT,
-            type_acteur TEXT,
-            nom_acteur TEXT,
-            classe TEXT,
-            type_entree TEXT,
-            detail TEXT,
-            appreciation TEXT
-        )
-    ''')
 
     # Table des identifiants des professeurs (sécurisée contre les DatabaseError)
     cursor.execute('''
@@ -131,7 +78,37 @@ def initialiser_base_de_donnees_externe():
     cursor.execute("SELECT COUNT(*) FROM classes")
     if cursor.fetchone()[0] == 0:
         cursor.executemany("INSERT INTO classes (classe, cycle, professeur_responsable) VALUES (?, ?, ?)", [
-            ("6ème A", "Collège", "Ibrahima Diallo"),
+            ("6ème A", "Collège", "def initialiser_base_de_donnees_externe():
+    connexion = sqlite3.connect("nom_de_votre_base.db") # Remplacez par le nom de votre base de données
+    cursor = connexion.cursor()
+    
+    # 1. Créer la table si elle n'existe pas déjà
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS prof_credentials (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nom TEXT,
+            prenom TEXT,
+            mot_de_passe TEXT,
+            matiere_principale TEXT,
+            classe_attribuee TEXT
+        )
+    """)
+    
+    # 2. Insérer les données en évitant les doublons (par exemple avec INSERT OR IGNORE si vous avez une contrainte UNIQUE, ou simplement exécuter si la table est vide)
+    try:
+        cursor.executemany("""
+            INSERT INTO prof_credentials (nom, prenom, mot_de_passe, matiere_principale, classe_attribuee) 
+            VALUES (?, ?, ?, ?, ?)
+        """, [
+            ("Diallo", "Ibrahima", hacher_mot_de_passe("prof123"), "Mathématiques", "6ème A"),
+            ("Sow", "Aissatou", hacher_mot_de_passe("prof456"), "Français", "CP"),
+            ("Ndiaye", "Cheikh", hacher_mot_de_passe("prof789"), "Histoire-Géographie", "5ème A")
+        ])
+        connexion.commit()
+    except sqlite3.OperationalError as e:
+        print(f"Erreur lors de l'insertion : {e}")
+    finally:
+        connexion.close()Ibrahima Diallo"),
             ("5ème A", "Collège", "Cheikh Ndiaye"),
             ("CP", "Élémentaire", "Aissatou Sow"),
             ("Grande Section", "Préscolaire", "Marie Faye"),
