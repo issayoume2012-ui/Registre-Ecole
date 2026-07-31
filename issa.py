@@ -1625,36 +1625,24 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     st.warning("Veuillez saisir une question.")
 
         elif adm_tab == "📅 Emploi du Temps (Grille Jours x Heures)":
-            st.subheader("Édition de l'Emploi du Temps (Jours à gauche | Heures, Professeurs et Matières)")
-            
-            # Paramètres de personnalisation des heures et ajout de profs
-            with st.expander("⚙️ Configuration des Heures de Cours"):
-                nouveau_creneau = st.text_input("Ajouter un nouveau créneau horaire (ex: 12h-13h ou 17h-18h)", "")
-                if st.button("Ajouter le créneau"):
-                    if nouveau_creneau and nouveau_creneau not in HEURES_LIST:
-                        HEURES_LIST.append(nouveau_creneau)
-                        st.success(f"Créneau {nouveau_creneau} ajouté avec succès !")
-                        st.rerun()
+            if "emploi_du_temps" not in st.session_state:
+                st.session_state.emploi_du_temps = pd.DataFrame({
+                    "Créneau": ["08:00 - 09:00", "09:00 - 10:00", "10:15 - 11:15"],
+                    "Lundi": ["Maths", "Français", "Histoire"],
+                    "Mardi": ["Physique", "Anglais", "SVT"],
+                })
 
-            cls_selected = st.selectbox("Sélectionner la classe à configurer", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
-            
-            st.info("Remplissez la grille d'emploi du temps ci-dessous. Indiquez la matière et le nom du professeur (ex: Mathématiques - M. Diallo).")
-            
-            # S'assurer que le DataFrame utilise les heures actuelles (éventuellement modifiées)
-            grid_edt = get_or_create_edt(cls_selected)
-            for h in HEURES_LIST:
-                if h not in grid_edt.columns:
-                    grid_edt[h] = ""
+            st.subheader("📅 Gestion et Modification de l'Emploi du Temps")
 
-            edited_grid = st.data_editor(
-                grid_edt[HEURES_LIST],
-                use_container_width=True,
-                key=f"edt_editor_{cls_selected}"
+            emploi_modifie = st.data_editor(
+                st.session_state.emploi_du_temps,
+                num_rows="dynamic", 
+                key="editeur_emploi_du_temps"
             )
 
-            if st.button("💾 Enregistrer la Grille de l'Emploi du Temps"):
-                st.session_state.edt_grid_db[cls_selected] = edited_grid
-                st.success(f"Emploi du temps de la classe {cls_selected} mis à jour avec les nouveaux horaires et professeurs !")
+            if st.button("Enregistrer les modifications"):
+                st.session_state.emploi_du_temps = emploi_modifie
+                st.success("L'emploi du temps a été mis à jour avec succès !")
 
         elif adm_tab == "👨‍🎓 Élèves (Export PDF, Modif, Suppr)":
             st.subheader("Gestion des Élèves & Suppression / Modification")
