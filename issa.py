@@ -288,15 +288,15 @@ st.markdown(
 )
 
 # ==========================================
-# 2. CHARGEMENT DES DONNÉES DEPUIS LA BASE EXTERNE VERS SESSION_STATE
+# 2. CHARGEMENT DES DONNÉES DEPUIS LA BASE EXTERNE VERS SESSION_STATE (CORRIGÉ ICI)
 # ==========================================
 def charger_donnees_externes():
     conn = obtenir_connexion()
-    st.session_state.eleves_db = pd.read_sql("SELECT nom_complet as 'Nom Complet', date_naissance as 'Date de Naissance', classe as 'Classe', photo as 'Photo' FROM eleves", conn)
-    st.session_state.classes_db = pd.read_sql("SELECT classe as 'Classe', cycle as 'Cycle', professeur_responsable as 'Professeur Responsable' FROM classes", conn)
-    st.session_state.notes_db = pd.read_sql("SELECT classe as 'Classe', eleve as 'Élève', matiere as 'Matière', type_evaluation as 'Type Évaluation', coefficient as 'Coefficient', note as 'Note', bareme as 'Barème', trimestre as 'Trimestre', appreciation as 'Appréciation' FROM notes", conn)
-    st.session_state.base_globale_db = pd.read_sql("SELECT date as 'Date', annee as 'Année', trimestre as 'Trimestre', mois as 'Mois', type_acteur as 'Type Acteur', nom_acteur as 'Nom Acteur', classe as 'Classe', type_entree as 'Type Entrée', detail as 'Détail / Contenu', appreciation as 'Appréciation' FROM base_globale", conn)
-    st.session_state.prof_credentials = pd.read_sql("SELECT nom as 'Nom', prenom as 'Prénom', mot_de_passe as 'Mot de passe', matiere_principale as 'Matière Principale', classe_attribuee as 'Classe Attribuée' FROM prof_credentials", conn)
+    st.session_state.eleves_db = pd.read_sql_query("SELECT nom_complet as 'Nom Complet', date_naissance as 'Date de Naissance', classe as 'Classe', photo as 'Photo' FROM eleves", conn)
+    st.session_state.classes_db = pd.read_sql_query("SELECT classe as 'Classe', cycle as 'Cycle', professeur_responsable as 'Professeur Responsable' FROM classes", conn)
+    st.session_state.notes_db = pd.read_sql_query("SELECT classe as 'Classe', eleve as 'Élève', matiere as 'Matière', type_evaluation as 'Type Évaluation', coefficient as 'Coefficient', note as 'Note', bareme as 'Barème', trimestre as 'Trimestre', appreciation as 'Appréciation' FROM notes", conn)
+    st.session_state.base_globale_db = pd.read_sql_query("SELECT date as 'Date', annee as 'Année', trimestre as 'Trimestre', mois as 'Mois', type_acteur as 'Type Acteur', nom_acteur as 'Nom Acteur', classe as 'Classe', type_entree as 'Type Entrée', detail as 'Détail / Contenu', appreciation as 'Appréciation' FROM base_globale", conn)
+    st.session_state.prof_credentials = pd.read_sql_query("SELECT nom as 'Nom', prenom as 'Prénom', mot_de_passe as 'Mot de passe', matiere_principale as 'Matière Principale', classe_attribuee as 'Classe Attribuée' FROM prof_credentials", conn)
     conn.close()
 
 if "espace_actif" not in st.session_state:
@@ -1728,91 +1728,3 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                         if c_nom_cls:
                             new_cls = pd.DataFrame([{"Classe": c_nom_cls, "Cycle": c_cyc, "Professeur Responsable": c_prof_resp}])
                             st.session_state.classes_db = pd.concat([st.session_state.classes_db, new_cls], ignore_index=True)
-                            
-                            conn = obtenir_connexion()
-                            st.session_state.classes_db.to_sql('classes', conn, if_exists='replace', index=False)
-                            conn.close()
-
-                            st.success("Classe ajoutée avec succès.")
-                            st.rerun()
-
-            edited_classes = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True, key="editor_classes")
-            if st.button("💾 Enregistrer les Modifications Classes"):
-                st.session_state.classes_db = edited_classes
-                
-                conn = obtenir_connexion()
-                st.session_state.classes_db.to_sql('classes', conn, if_exists='replace', index=False)
-                conn.close()
-
-                st.success("Classes mises à jour !")
-
-        elif adm_tab == "📋 Listes Blanches Parents":
-            st.subheader("Gestion de la Liste Blanche des Parents (Autorisation d'accès)")
-            st.caption("Ces numéros de téléphone et informations permettent aux parents de s'authentifier.")
-            edited_wl = st.data_editor(st.session_state.parents_white_list, num_rows="dynamic", use_container_width=True, key="editor_wl")
-            if st.button("💾 Enregistrer la Liste Blanche"):
-                st.session_state.parents_white_list = edited_wl
-                st.success("Liste blanche mise à jour.")
-
-        elif adm_tab == "📑 Rapports Journaliers Réceptionnés":
-            st.subheader("📑 Rapports Journaliers Transmis par les Professeurs")
-            if not st.session_state.rapports_journaliers_prof.empty:
-                st.dataframe(st.session_state.rapports_journaliers_prof, use_container_width=True)
-                pdf_r_jour = export_table_pdf("RAPPORTS JOURNALIER DES ENSEIGNANTS", st.session_state.rapports_journaliers_prof)
-                st.download_button(
-                    label="📄 Télécharger les Rapports Journaliers (PDF)",
-                    data=pdf_r_jour,
-                    file_name="rapports_journaliers_profs.pdf",
-                    mime="application/pdf"
-                )
-            else:
-                st.info("Aucun rapport journalier soumis pour le moment.")
-
-# ESPACE RAPPORTS GLOBAUX (REMIS EN PLACE ET INTACT)
-elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
-    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Tableau de Bord & Rapports Globaux Consolidés</div>', unsafe_allow_html=True)
-    st.markdown("Vue d'ensemble et consolidation annuelle de l'établissement **Cours Privé Nelson Mandela**.")
-
-    tab_rg1, tab_rg2, tab_rg3 = st.tabs(["📈 Statistiques Globales", "📑 Rapports de Séances & Activités", "📥 Téléchargement Rapport Complet"])
-
-    with tab_rg1:
-        st.subheader("Indicateurs Clés de l'Établissement")
-        k1, k2, k3, k4 = st.columns(4)
-        with k1:
-            st.metric("Total Élèves", len(st.session_state.eleves_db))
-        with k2:
-            st.metric("Total Classes", len(st.session_state.classes_db))
-        with k3:
-            st.metric("Total Professeurs", len(st.session_state.prof_credentials))
-        with k4:
-            st.metric("Entrées Base Globale", len(st.session_state.base_globale_db))
-
-        st.markdown("---")
-        st.markdown("### Répartition des Élèves par Cycle")
-        if not st.session_state.eleves_db.empty and not st.session_state.classes_db.empty:
-            df_m_rg = pd.merge(st.session_state.eleves_db, st.session_state.classes_db, on="Classe", how="left")
-            cycle_counts = df_m_rg["Cycle"].value_counts().reset_index()
-            cycle_counts.columns = ["Cycle", "Nombre d'Élèves"]
-            st.dataframe(cycle_counts, use_container_width=True)
-        else:
-            st.info("Données insuffisantes pour les statistiques par cycle.")
-
-    with tab_rg2:
-        st.subheader("Journal Global des Rapports et Activités Pédagogiques")
-        if not st.session_state.rapports_journaliers_prof.empty:
-            st.dataframe(st.session_state.rapports_journaliers_prof, use_container_width=True)
-        else:
-            st.info("Aucun rapport journalier consigné pour l'instant.")
-
-    with tab_rg3:
-        st.subheader("Export Officiel du Rapport Général de l'Établissement")
-        st.caption("Ce document rassemble la synthèse complète des statistiques, des rapports d'enseignants et des entrées de la base globale au format PDF.")
-        
-        pdf_general_final = generer_rapport_general_pdf()
-        st.download_button(
-            label="📄 Télécharger le Rapport Général Officiel (PDF)",
-            data=pdf_general_final,
-            file_name="rapport_general_officiel_nelson_mandela.pdf",
-            mime="application/pdf",
-            type="primary"
-        )
