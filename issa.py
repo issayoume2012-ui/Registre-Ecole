@@ -140,7 +140,7 @@ if "authenticated_admin" not in st.session_state:
 
 if "admin_credentials" not in st.session_state:
     st.session_state.admin_credentials = pd.DataFrame([
-        {"Nom": "Admin", "Prénom": "Principal", "Email": "cpnm@gmail.com", "Mot de passe": "cpnm2026"}
+        {"Nom": "Admin", "Prénom": "Principal", "Email": "cpnm2026", "Mot de passe": "cpnm2026"}
     ])
 
 if "gestionnaires_proprietaires_db" not in st.session_state:
@@ -1113,8 +1113,8 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
     if not st.session_state.authenticated_admin:
         with st.form("form_adm_secu"):
-            em = st.text_input("Email Administrateur / Gestionnaire / Propriétaire")
-            pw = st.text_input("Mot de passe", type="password")
+            em = st.text_input("Identifiant Administrateur / Email (ex: cpnm2026)")
+            pw = st.text_input("Mot de passe (ex: cpnm2026)", type="password")
             if st.form_submit_button("Connexion Admin"):
                 match_a = False
                 role_connecte = "Administrateur"
@@ -1138,7 +1138,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     st.success(f"Accès accordé en tant que **{role_connecte}** !")
                     st.rerun()
                 else:
-                    st.error("Identifiants erronés. Vérifiez votre email et votre mot de passe.")
+                    st.error("Identifiants erronés. Veuillez utiliser cpnm2026 comme identifiant et mot de passe.")
     else:
         role_actuel = st.session_state.get("admin_role_connecte", "Administrateur")
         email_actuel = st.session_state.get("admin_email_connecte", "")
@@ -1237,10 +1237,10 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
         elif adm_tab == "🛡️ Gestionnaires & Propriétaires (Liste Blanche)":
             st.subheader("🛡️ Liste Blanche des Gestionnaires & Propriétaires")
-            st.info("💡 **Règle d'accès :** Seul l'administrateur principal (`cpnm@gmail.com`) a les privilèges exclusifs d'ajouter ou de révoquer des membres dans cette liste.")
+            st.info("💡 **Règle d'accès :** Seul l'administrateur principal (`cpnm2026`) a les privilèges exclusifs d'ajouter ou de révoquer des membres dans cette liste.")
 
             df_gp = st.session_state.gestionnaires_proprietaires_db
-            is_super_admin = (email_actuel.strip().lower() == "cpnm@gmail.com")
+            is_super_admin = (email_actuel.strip().lower() == "cpnm2026")
 
             st.markdown("#### Membres Actuels")
             for idx, row in df_gp.iterrows():
@@ -1255,7 +1255,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             st.success(f"Membre {row['Prénom']} {row['Nom']} révoqué avec succès !")
                             st.rerun()
                     else:
-                        st.caption("🔒 (Réservé à cpnm@gmail.com)")
+                        st.caption("🔒 (Réservé à cpnm2026)")
 
             st.markdown("---")
             if is_super_admin:
@@ -1282,7 +1282,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             else:
                                 st.warning("Veuillez remplir tous les champs obligatoires.")
             else:
-                st.warning("⚠️ Vous devez être connecté avec l'adresse `cpnm@gmail.com` pour pouvoir ajouter de nouveaux gestionnaires ou propriétaires.")
+                st.warning("⚠️ Vous devez être connecté avec l'identifiant `cpnm2026` pour pouvoir ajouter de nouveaux gestionnaires ou propriétaires.")
 
         elif adm_tab == "📊 Liste & Classement des Élèves (Par Classe & Niveau)":
             st.subheader("📊 Classement et Liste des Élèves par Classe et par Niveau (Cycle)")
