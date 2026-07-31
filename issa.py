@@ -718,31 +718,32 @@ def assistant_ia_repondre(question):
 st.markdown('<div class="header-ecole">🦁 Cours Privé Nelson Mandela</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Excellence, Discipline et Ancrage Culturel au Cœur du Sénégal</div>', unsafe_allow_html=True)
 
-# Barre de recherche globale intégrée
-st.markdown("---")
-terme_recherche = st.text_input("🔍 Recherche globale rapide (Élève, Professeur, Classe, Matière) :", "")
-if terme_recherche.strip():
-    st.markdown(f"### Résultats de la recherche pour : **{terme_recherche}**")
-    t = terme_recherche.lower()
-    
-    res_eleves = st.session_state.eleves_db[st.session_state.eleves_db.apply(lambda row: row.astype(str).str.lower().str.contains(t).any(), axis=1)]
-    res_classes = st.session_state.classes_db[st.session_state.classes_db.apply(lambda row: row.astype(str).str.lower().str.contains(t).any(), axis=1)]
-    res_notes = st.session_state.notes_db[st.session_state.notes_db.apply(lambda row: row.astype(str).str.lower().str.contains(t).any(), axis=1)]
-    
-    col_r1, col_r2, col_r3 = st.columns(3)
-    with col_r1:
-        st.write(f"**Élèves trouvés ({len(res_eleves)})**")
-        if not res_eleves.empty: st.dataframe(res_eleves, use_container_width=True)
-        else: st.info("Aucun élève.")
-    with col_r2:
-        st.write(f"**Classes trouvées ({len(res_classes)})**")
-        if not res_classes.empty: st.dataframe(res_classes, use_container_width=True)
-        else: st.info("Aucune classe.")
-    with col_r3:
-        st.write(f"**Notes trouvées ({len(res_notes)})**")
-        if not res_notes.empty: st.dataframe(res_notes, use_container_width=True)
-        else: st.info("Aucune note.")
+# Barre de recherche globale intégrée uniquement pour Administration et Professeurs
+if st.session_state.espace_actif in ["🔒 Espace Administration (Sécurisé)", "👨‍🏫 Espace Professeurs / Maîtres"]:
     st.markdown("---")
+    terme_recherche = st.text_input("🔍 Recherche globale rapide (Élève, Professeur, Classe, Matière) :", "")
+    if terme_recherche.strip():
+        st.markdown(f"### Résultats de la recherche pour : **{terme_recherche}**")
+        t = terme_recherche.lower()
+        
+        res_eleves = st.session_state.eleves_db[st.session_state.eleves_db.apply(lambda row: row.astype(str).str.lower().str.contains(t).any(), axis=1)]
+        res_classes = st.session_state.classes_db[st.session_state.classes_db.apply(lambda row: row.astype(str).str.lower().str.contains(t).any(), axis=1)]
+        res_notes = st.session_state.notes_db[st.session_state.notes_db.apply(lambda row: row.astype(str).str.lower().str.contains(t).any(), axis=1)]
+        
+        col_r1, col_r2, col_r3 = st.columns(3)
+        with col_r1:
+            st.write(f"**Élèves trouvés ({len(res_eleves)})**")
+            if not res_eleves.empty: st.dataframe(res_eleves, use_container_width=True)
+            else: st.info("Aucun élève.")
+        with col_r2:
+            st.write(f"**Classes trouvées ({len(res_classes)})**")
+            if not res_classes.empty: st.dataframe(res_classes, use_container_width=True)
+            else: st.info("Aucune classe.")
+        with col_r3:
+            st.write(f"**Notes trouvées ({len(res_notes)})**")
+            if not res_notes.empty: st.dataframe(res_notes, use_container_width=True)
+            else: st.info("Aucune note.")
+        st.markdown("---")
 
 if st.session_state.espace_actif != "🏠 Accueil":
     col_ret1, col_ret2 = st.columns([1, 5])
@@ -1624,22 +1625,36 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     st.warning("Veuillez saisir une question.")
 
         elif adm_tab == "📅 Emploi du Temps (Grille Jours x Heures)":
-            st.subheader("Édition de l'Emploi du Temps (Jours à gauche | Heures en haut)")
+            st.subheader("Édition de l'Emploi du Temps (Jours à gauche | Heures, Professeurs et Matières)")
+            
+            # Paramètres de personnalisation des heures et ajout de profs
+            with st.expander("⚙️ Configuration des Heures de Cours"):
+                nouveau_creneau = st.text_input("Ajouter un nouveau créneau horaire (ex: 12h-13h ou 17h-18h)", "")
+                if st.button("Ajouter le créneau"):
+                    if nouveau_creneau and nouveau_creneau not in HEURES_LIST:
+                        HEURES_LIST.append(nouveau_creneau)
+                        st.success(f"Créneau {nouveau_creneau} ajouté avec succès !")
+                        st.rerun()
+
             cls_selected = st.selectbox("Sélectionner la classe à configurer", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
             
-            st.info("Remplissez la grille d'emploi du temps ci-dessous. Chaque case représente la matière ou l'activité.")
+            st.info("Remplissez la grille d'emploi du temps ci-dessous. Indiquez la matière et le nom du professeur (ex: Mathématiques - M. Diallo).")
             
+            # S'assurer que le DataFrame utilise les heures actuelles (éventuellement modifiées)
             grid_edt = get_or_create_edt(cls_selected)
+            for h in HEURES_LIST:
+                if h not in grid_edt.columns:
+                    grid_edt[h] = ""
 
             edited_grid = st.data_editor(
-                grid_edt,
+                grid_edt[HEURES_LIST],
                 use_container_width=True,
                 key=f"edt_editor_{cls_selected}"
             )
 
             if st.button("💾 Enregistrer la Grille de l'Emploi du Temps"):
                 st.session_state.edt_grid_db[cls_selected] = edited_grid
-                st.success(f"Emploi du temps de la classe {cls_selected} mis à jour !")
+                st.success(f"Emploi du temps de la classe {cls_selected} mis à jour avec les nouveaux horaires et professeurs !")
 
         elif adm_tab == "👨‍🎓 Élèves (Export PDF, Modif, Suppr)":
             st.subheader("Gestion des Élèves & Suppression / Modification")
