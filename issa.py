@@ -1,4 +1,4 @@
-import base64
+[cite: 4]import base64
 from datetime import datetime
 import io
 import os
@@ -1324,32 +1324,28 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
 elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
     st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Administration Générale (Accès Restreint)</div>', unsafe_allow_html=True)
 
-    # Vérification si l'identifiant saisi appartient à la liste blanche globale des administrateurs
-    st.sidebar.title("Connexion Admin")
-    utilisateur_input = st.sidebar.text_input("Identifiant / Email Admin")
-    mot_de_passe_input = st.sidebar.text_input("Mot de passe", type="password")
-
-    est_admin_global = False
-    if utilisateur_input in ADMIN_WHITELIST:
-        est_admin_global = True
-        st.sidebar.success("Connecté en tant qu'Administrateur (Accès Global complet via Whitelist)")
-
-    if not st.session_state.authenticated_admin and not est_admin_global:
+    # CORRECTION : Vérification directe dans le formulaire principal si l'utilisateur n'est pas déjà authentifié
+    if not st.session_state.authenticated_admin:
         with st.form("form_adm_secu"):
-            em = st.text_input("Email Administrateur / Gestionnaire / Propriétaire")
+            st.info("Veuillez vous identifier avec vos accès administrateur, gestionnaire ou propriétaire.")
+            em = st.text_input("Email / Identifiant Administrateur")
             pw = st.text_input("Mot de passe", type="password")
             if st.form_submit_button("Connexion Admin"):
                 match_a = False
                 role_connecte = "Administrateur"
                 
+                # Vérification dans la liste blanche globale
                 if em in ADMIN_WHITELIST:
                     match_a = True
+                    role_connecte = "Administrateur Global (Whitelist)"
                 else:
+                    # Vérification dans la base des administrateurs
                     for _, row in st.session_state.admin_credentials.iterrows():
                         if row["Email"] == em and verifier_mot_de_passe(pw, str(row["Mot de passe"])):
                             match_a = True
                             break
                     
+                    # Vérification dans les gestionnaires / propriétaires
                     if not match_a:
                         for _, row in st.session_state.gestionnaires_proprietaires_db.iterrows():
                             if str(row["Email"]).strip().lower() == em.strip().lower() and verifier_mot_de_passe(pw, str(row["Mot de passe"])):
@@ -1367,7 +1363,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     st.error("Identifiants erronés.")
     else:
         role_actuel = st.session_state.get("admin_role_connecte", "Administrateur Global")
-        email_actuel = st.session_state.get("admin_email_connecte", utilisateur_input if est_admin_global else "")
+        email_actuel = st.session_state.get("admin_email_connecte", "")
         st.success(f"Mode {role_actuel} Activé — Gestion Centralisée Complète.")
         
         if st.button("Se déconnecter de l'admin"):
