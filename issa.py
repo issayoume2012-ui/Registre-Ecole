@@ -1120,7 +1120,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 role_connecte = "Administrateur"
                 
                 for _, row in st.session_state.admin_credentials.iterrows():
-                    if row["Email"] == em and row["Mot de passe"] == pw:
+                    if str(row["Email"]).strip().lower() == em.strip().lower() and str(row["Mot de passe"]) == pw:
                         match_a = True
                         break
                 
@@ -1138,7 +1138,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     st.success(f"Accès accordé en tant que **{role_connecte}** !")
                     st.rerun()
                 else:
-                    st.error("Identifiants erronés.")
+                    st.error("Identifiants erronés. Vérifiez votre email et votre mot de passe.")
     else:
         role_actuel = st.session_state.get("admin_role_connecte", "Administrateur")
         email_actuel = st.session_state.get("admin_email_connecte", "")
@@ -1182,7 +1182,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.markdown("#### 3. Liste des Élèves de cette Classe")
                 st.info("Saisissez les élèves ci-dessous (Nom complet et Date de naissance). Vous pouvez ajouter ou supprimer des lignes.")
                 
-                # Tableau éditable pour saisir les élèves en masse
                 df_saisie_eleves_init = pd.DataFrame([
                     {"Nom Complet": "Prénom Nom 1", "Date de Naissance": "2012-01-01"},
                     {"Nom Complet": "Prénom Nom 2", "Date de Naissance": "2012-05-15"}
@@ -1203,7 +1202,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     elif not p_nom.strip() or not p_prenom.strip():
                         st.error("Veuillez renseigner le nom et le prénom du professeur responsable.")
                     else:
-                        # 1. Enregistrement / Mise à jour de la classe dans classes_db
                         prof_resp_complet = f"{p_prenom} {p_nom}"
                         if c_nom_classe in st.session_state.classes_db["Classe"].values:
                             st.session_state.classes_db.loc[st.session_state.classes_db["Classe"] == c_nom_classe, "Cycle"] = c_cycle_classe
@@ -1212,7 +1210,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             new_cls_row = pd.DataFrame([{"Classe": c_nom_classe, "Cycle": c_cycle_classe, "Professeur Responsable": prof_resp_complet}])
                             st.session_state.classes_db = pd.concat([st.session_state.classes_db, new_cls_row], ignore_index=True)
 
-                        # 2. Enregistrement du professeur dans prof_credentials
                         if p_password:
                             new_prof_row = pd.DataFrame([{
                                 "Nom": p_nom, "Prénom": p_prenom, "Mot de passe": p_password, 
@@ -1220,7 +1217,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             }])
                             st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_prof_row], ignore_index=True)
 
-                        # 3. Enregistrement des élèves dans eleves_db
                         nouveaux_eleves_list = []
                         for _, row_el in eleves_saisies_edit.iterrows():
                             nom_eleve = str(row_el["Nom Complet"]).strip()
