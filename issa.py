@@ -91,6 +91,7 @@ def initialiser_base_de_donnees_externe():
             )
         ''')
 
+        # Correction de la table prof_credentials pour éviter les conflits d'insertion
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS prof_credentials (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,7 +104,7 @@ def initialiser_base_de_donnees_externe():
             )
         """)
 
-        # Insertion des données par défaut si les tables sont vides
+        # Insertion sécurisée des données par défaut si les tables sont vides
         cursor.execute("SELECT COUNT(*) FROM eleves")
         if cursor.fetchone()[0] == 0:
             cursor.executemany("INSERT INTO eleves (nom_complet, date_naissance, classe, photo) VALUES (?, ?, ?, ?)", [
@@ -130,11 +131,12 @@ def initialiser_base_de_donnees_externe():
                 ("Sow", "Aissatou", hacher_mot_de_passe("prof456"), "Français", "CP"),
                 ("Ndiaye", "Cheikh", hacher_mot_de_passe("prof789"), "Histoire-Géographie", "5ème A")
             ]
-            cursor.executemany("""
-                INSERT OR IGNORE INTO prof_credentials 
-                (nom, prenom, mot_de_passe, matiere_principale, classe_attribuee) 
-                VALUES (?, ?, ?, ?, ?)
-            """, professeurs)
+            for p in professeurs:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO prof_credentials 
+                    (nom, prenom, mot_de_passe, matiere_principale, classe_attribuee) 
+                    VALUES (?, ?, ?, ?, ?)
+                """, p)
 
         cursor.execute("SELECT COUNT(*) FROM notes")
         if cursor.fetchone()[0] == 0:
@@ -1281,7 +1283,6 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
             grid_edt = get_or_create_edt(classe)
             st.dataframe(grid_edt, use_container_width=True)
             
-            # Option pour télécharger l'emploi du temps en PDF
             pdf_edt_data = generer_edt_pdf(classe, grid_edt)
             st.download_button(
                 label="📄 Télécharger l'Emploi du Temps en PDF",
