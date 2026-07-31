@@ -4,166 +4,153 @@ import io
 import os
 import urllib.request
 import sqlite3
+import hashlib
 from fpdf import FPDF
 import pandas as pd
 import streamlit as st
 
 # ==========================================
-# 0. GESTION DU CHIFFREMENT DES MOTS DE PASSE (SÉCURITÉ PRODUCTION)
+# 0. CONFIGURATION DE LA BASE DE DONNÉES SQLite (MULTI-UTILISATEURS & THREAD-SAFE)
 # ==========================================
-try:
-    import bcrypt
-    HAS_BCRYPT = True
-except ImportError:
-    import hashlib
-    HAS_BCRYPT = False
+DB_FILE = "registre_ecole.db"
 
-def hacher_mot_de_passe(password: str) -> str:
-    """Hache un mot de passe avec bcrypt ou hashlib en fallback."""
-    if not password:
-        return ""
-    if HAS_BCRYPT:
-        salt = bcrypt.gensalt()
-        return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
-    else:
-        return hashlib.sha256(password.encode('utf-8')).hexdigest()
+def get_db_connection():
+    """
+    Établit une connexion sécurisée et gère la concurrence multi-utilisateurs.
+    - timeout=30 : attend 30 secondes si la base est occupée par un autre utilisateur.
+    - check_same_thread=False : autorise Streamlit à réutiliser la connexion entre threads.
+    - PRAGMA journal_mode=WAL : permet des lectures et écritures simultanées sans verrouiller la base.
+    """
+    connexion = sqlite3.connect(DB_FILE, timeout=30, check_same_thread=False)
+    connexion.execute("PRAGMA journal_mode=WAL;")
+    connexion.row_factory = sqlite3.Row
+    return connexion
 
-def verifier_mot_de_passe(password: str, hashed: str) -> bool:
-    """Vérifie un mot de passe par rapport à son hachage."""
-    if not password or not hashed:
-        return False
-    if HAS_BCRYPT:
-        try:
-            return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
-        except ValueError:
-            return password == hashed
-    else:
-        return hashlib.sha256(password.encode('utf-8')).hexdigest() == hashed or password == hashed
-
-# ==========================================
-# 0. BIS. GESTION DE LA BASE DE DONNÉES SQLITE EXTERNE
-# ==========================================
-DB_NAME = "ecole_nelson_mandela.db"
-
-def obtenir_connexion():
-    return sqlite3.connect(DB_NAME, check_same_thread=False)
+def hacher_mot_de_passe(mot_de_passe: str) -> str:
+    """Hache le mot de passe en SHA-256 pour la sécurité."""
+    return hashlib.sha256(mot_de_passe.encode('utf-8')).hexdigest()
 
 def initialiser_base_de_donnees_externe():
-    """Crée les tables SQL si elles n'existent pas et insère les données par défaut."""
-    conn = obtenir_connexion()
-    cursor = conn.cursor()
+    """Crée les tables SQL si elles n'existent pas et insère les données par défaut de manière thread-safe."""
+    with get_db_connection() as connexion:
+        cursor = connexion.cursor()
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS eleves (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nom_complet TEXT,
-            date_naissance TEXT,
-            classe TEXT,
-            photo TEXT
-        )
-    ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS eleves (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nom_complet TEXT,
+                date_naissance TEXT,
+                classe TEXT,
+                photo TEXT
+            )
+        ''')
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS classes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            classe TEXT UNIQUE,
-            cycle TEXT,
-            professeur_responsable TEXT
-        )
-    ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS classes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                classe TEXT UNIQUE,
+                cycle TEXT,
+                professeur_responsable TEXT
+            )
+        ''')
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            classe TEXT,
-            eleve TEXT,
-            matiere TEXT,
-            type_evaluation TEXT,
-            coefficient INTEGER,
-            note REAL,
-            bareme REAL,
-            trimestre TEXT,
-            appreciation TEXT
-        )
-    ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                classe TEXT,
+                eleve TEXT,
+                matiere TEXT,
+                type_evaluation TEXT,
+                coefficient INTEGER,
+                note REAL,
+                bareme REAL,
+                trimestre TEXT,
+                appreciation TEXT
+            )
+        ''')
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS base_globale (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT,
-            annee TEXT,
-            trimestre TEXT,
-            mois TEXT,
-            type_acteur TEXT,
-            nom_acteur TEXT,
-            classe TEXT,
-            type_entree TEXT,
-            detail TEXT,
-            appreciation TEXT
-        )
-    ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS base_globale (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT,
+                annee TEXT,
+                trimestre TEXT,
+                mois TEXT,
+                type_acteur TEXT,
+                nom_acteur TEXT,
+                classe TEXT,
+                type_entree TEXT,
+                detail TEXT,
+                appreciation TEXT
+            )
+        ''')
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS prof_credentials (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nom TEXT,
-            prenom TEXT,
-            mot_de_passe TEXT,
-            matiere_principale TEXT,
-            classe_attribuee TEXT
-        )
-    ''')
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS prof_credentials (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nom TEXT NOT NULL,
+                prenom TEXT NOT NULL,
+                mot_de_passe TEXT NOT NULL,
+                matiere_principale TEXT,
+                classe_attribuee TEXT,
+                UNIQUE(nom, prenom)
+            )
+        """)
 
-    # Insertion des données par défaut si les tables sont vides
-    cursor.execute("SELECT COUNT(*) FROM eleves")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("INSERT INTO eleves (nom_complet, date_naissance, classe, photo) VALUES (?, ?, ?, ?)", [
-            ("Mamadou Diallo", "2012-05-14", "6ème A", None),
-            ("Fatou Sow", "2015-08-20", "CP", None),
-            ("Aminata Ba", "2013-02-10", "6ème A", None),
-            ("Oumar Sy", "2011-11-03", "5ème A", None)
-        ])
+        # Insertion des données par défaut si les tables sont vides
+        cursor.execute("SELECT COUNT(*) FROM eleves")
+        if cursor.fetchone()[0] == 0:
+            cursor.executemany("INSERT INTO eleves (nom_complet, date_naissance, classe, photo) VALUES (?, ?, ?, ?)", [
+                ("Mamadou Diallo", "2012-05-14", "6ème A", None),
+                ("Fatou Sow", "2015-08-20", "CP", None),
+                ("Aminata Ba", "2013-02-10", "6ème A", None),
+                ("Oumar Sy", "2011-11-03", "5ème A", None)
+            ])
 
-    cursor.execute("SELECT COUNT(*) FROM classes")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("INSERT INTO classes (classe, cycle, professeur_responsable) VALUES (?, ?, ?)", [
-            ("6ème A", "Collège", "Ibrahima Diallo"),
-            ("5ème A", "Collège", "Cheikh Ndiaye"),
-            ("CP", "Élémentaire", "Aissatou Sow"),
-            ("Grande Section", "Préscolaire", "Marie Faye"),
-            ("CE1", "Élémentaire", "Ousmane Diop")
-        ])
-        
-    cursor.execute("SELECT COUNT(*) FROM prof_credentials")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("INSERT INTO prof_credentials (nom, prenom, mot_de_passe, matiere_principale, classe_attribuee) VALUES (?, ?, ?, ?, ?)", [
-            ("Diallo", "Ibrahima", hacher_mot_de_passe("prof123"), "Mathématiques", "6ème A"),
-            ("Sow", "Aissatou", hacher_mot_de_passe("prof456"), "Français", "CP"),
-            ("Ndiaye", "Cheikh", hacher_mot_de_passe("prof789"), "Histoire-Géographie", "5ème A")
-        ])
+        cursor.execute("SELECT COUNT(*) FROM classes")
+        if cursor.fetchone()[0] == 0:
+            cursor.executemany("INSERT INTO classes (classe, cycle, professeur_responsable) VALUES (?, ?, ?)", [
+                ("6ème A", "Collège", "Ibrahima Diallo"),
+                ("5ème A", "Collège", "Cheikh Ndiaye"),
+                ("CP", "Élémentaire", "Aissatou Sow"),
+                ("Grande Section", "Préscolaire", "Marie Faye"),
+                ("CE1", "Élémentaire", "Ousmane Diop")
+            ])
+            
+        cursor.execute("SELECT COUNT(*) FROM prof_credentials")
+        if cursor.fetchone()[0] == 0:
+            professeurs = [
+                ("Diallo", "Ibrahima", hacher_mot_de_passe("prof123"), "Mathématiques", "6ème A"),
+                ("Sow", "Aissatou", hacher_mot_de_passe("prof456"), "Français", "CP"),
+                ("Ndiaye", "Cheikh", hacher_mot_de_passe("prof789"), "Histoire-Géographie", "5ème A")
+            ]
+            cursor.executemany("""
+                INSERT OR IGNORE INTO prof_credentials 
+                (nom, prenom, mot_de_passe, matiere_principale, classe_attribuee) 
+                VALUES (?, ?, ?, ?, ?)
+            """, professeurs)
 
-    cursor.execute("SELECT COUNT(*) FROM notes")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("INSERT INTO notes (classe, eleve, matiere, type_evaluation, coefficient, note, bareme, trimestre, appreciation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
-            ("6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 1", 3, 15.5, 20, "1er Semestre", "Très bon travail."),
-            ("6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 2", 3, 14.0, 20, "1er Semestre", "Bon ensemble."),
-            ("6ème A", "Mamadou Diallo", "Mathématiques", "Composition", 3, 16.0, 20, "1er Semestre", "Excellent."),
-            ("6ème A", "Mamadou Diallo", "Français", "Devoir 1", 3, 13.0, 20, "1er Semestre", "Assez bon."),
-            ("6ème A", "Mamadou Diallo", "Français", "Devoir 2", 3, 14.5, 20, "1er Semestre", "Bon travail."),
-            ("6ème A", "Mamadou Diallo", "Français", "Composition", 3, 15.0, 20, "1er Semestre", "Très bien."),
-            ("CP", "Fatou Sow", "Graphisme / Écriture", "Composition", 1, 8.5, 10, "1er Trimestre", "Très bien.")
-        ])
+        cursor.execute("SELECT COUNT(*) FROM notes")
+        if cursor.fetchone()[0] == 0:
+            cursor.executemany("INSERT INTO notes (classe, eleve, matiere, type_evaluation, coefficient, note, bareme, trimestre, appreciation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+                ("6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 1", 3, 15.5, 20, "1er Semestre", "Très bon travail."),
+                ("6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 2", 3, 14.0, 20, "1er Semestre", "Bon ensemble."),
+                ("6ème A", "Mamadou Diallo", "Mathématiques", "Composition", 3, 16.0, 20, "1er Semestre", "Excellent."),
+                ("6ème A", "Mamadou Diallo", "Français", "Devoir 1", 3, 13.0, 20, "1er Semestre", "Assez bon."),
+                ("6ème A", "Mamadou Diallo", "Français", "Devoir 2", 3, 14.5, 20, "1er Semestre", "Bon travail."),
+                ("6ème A", "Mamadou Diallo", "Français", "Composition", 3, 15.0, 20, "1er Semestre", "Très bien."),
+                ("CP", "Fatou Sow", "Graphisme / Écriture", "Composition", 1, 8.5, 10, "1er Trimestre", "Très bien.")
+            ])
 
-    cursor.execute("SELECT COUNT(*) FROM base_globale")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("INSERT INTO base_globale (date, annee, trimestre, mois, type_acteur, nom_acteur, classe, type_entree, detail, appreciation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
-            ("2026-01-15", "2025-2026", "1er Semestre", "Janvier", "Élève", "Mamadou Diallo", "6ème A", "Note", "Mathématiques (Devoir 1): 15.5/20", "Très bon travail"),
-            ("2026-01-20", "2025-2026", "1er Semestre", "Janvier", "Élève", "Aminata Ba", "6ème A", "Absence", "Absent - Motif: Maladie", "Justifié"),
-            ("2026-02-05", "2025-2026", "2ème Semestre", "Février", "Professeur", "Ibrahima Diallo", "6ème A", "Rapport Cours", "Algèbre - Chapitre 3 terminé", "Excellente progression")
-        ])
+        cursor.execute("SELECT COUNT(*) FROM base_globale")
+        if cursor.fetchone()[0] == 0:
+            cursor.executemany("INSERT INTO base_globale (date, annee, trimestre, mois, type_acteur, nom_acteur, classe, type_entree, detail, appreciation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+                ("2026-01-15", "2025-2026", "1er Semestre", "Janvier", "Élève", "Mamadou Diallo", "6ème A", "Note", "Mathématiques (Devoir 1): 15.5/20", "Très bon travail"),
+                ("2026-01-20", "2025-2026", "1er Semestre", "Janvier", "Élève", "Aminata Ba", "6ème A", "Absence", "Absent - Motif: Maladie", "Justifié"),
+                ("2026-02-05", "2025-2026", "2ème Semestre", "Février", "Professeur", "Ibrahima Diallo", "6ème A", "Rapport Cours", "Algèbre - Chapitre 3 terminé", "Excellente progression")
+            ])
 
-    conn.commit()
-    conn.close()
+        connexion.commit()
 
 # Initialisation de la base externe
 initialiser_base_de_donnees_externe()
@@ -290,7 +277,7 @@ st.markdown(
 # ==========================================
 def charger_donnees_externes():
     """Charge les données de la base de données avec gestion des erreurs."""
-    conn = obtenir_connexion()
+    conn = get_db_connection()
     try:
         st.session_state.eleves_db = pd.read_sql_query("SELECT nom_complet AS 'Nom Complet', date_naissance AS 'Date de Naissance', classe AS 'Classe', photo AS 'Photo' FROM eleves", conn)
     except Exception:
@@ -871,9 +858,10 @@ if st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
                 match_prof = False
                 classe_trouvee = ""
                 for _, row in st.session_state.prof_credentials.iterrows():
+                    hashed_input = hacher_mot_de_passe(p_pass)
                     if (str(row["Nom"]).strip().lower() == p_nom.strip().lower() and 
                         str(row["Prénom"]).strip().lower() == p_prenom.strip().lower() and 
-                        verifier_mot_de_passe(p_pass, str(row["Mot de passe"]))):
+                        (str(row["Mot de passe"]) == p_pass or str(row["Mot de passe"]) == hashed_input)):
                         match_prof = True
                         classe_trouvee = str(row.get("Classe Attribuée", "6ème A"))
                         break
@@ -943,7 +931,7 @@ if st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
                                 st.session_state.absences_db = pd.concat([st.session_state.absences_db, pd.DataFrame(nouveaux_abs)], ignore_index=True)
                                 st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, pd.DataFrame(nouvelles_entrées_bg)], ignore_index=True)
                                 
-                                conn = obtenir_connexion()
+                                conn = get_db_connection()
                                 pd.DataFrame(nouvelles_entrées_bg).to_sql('base_globale', conn, if_exists='append', index=False)
                                 conn.close()
                                 
@@ -1077,7 +1065,7 @@ if st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
                         st.session_state.notes_db = pd.concat([st.session_state.notes_db, pd.DataFrame(new_rows)], ignore_index=True)
                         st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, pd.DataFrame(new_bg_rows)], ignore_index=True)
                         
-                        conn = obtenir_connexion()
+                        conn = get_db_connection()
                         st.session_state.notes_db.to_sql('notes', conn, if_exists='replace', index=False)
                         pd.DataFrame(new_bg_rows).to_sql('base_globale', conn, if_exists='append', index=False)
                         conn.close()
@@ -1118,7 +1106,7 @@ if st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
                         }])
                         st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, bg_entry], ignore_index=True)
                         
-                        conn = obtenir_connexion()
+                        conn = get_db_connection()
                         bg_entry.to_sql('base_globale', conn, if_exists='append', index=False)
                         conn.close()
 
@@ -1166,7 +1154,7 @@ if st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
                         }])
                         st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, bg_prof], ignore_index=True)
                         
-                        conn = obtenir_connexion()
+                        conn = get_db_connection()
                         bg_prof.to_sql('base_globale', conn, if_exists='append', index=False)
                         conn.close()
 
@@ -1413,7 +1401,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             df_nouveaux_eleves = pd.DataFrame(nouveaux_eleves_list)
                             st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, df_nouveaux_eleves], ignore_index=True)
 
-                        conn = obtenir_connexion()
+                        conn = get_db_connection()
                         st.session_state.classes_db.to_sql('classes', conn, if_exists='replace', index=False)
                         st.session_state.prof_credentials.to_sql('prof_credentials', conn, if_exists='replace', index=False)
                         st.session_state.eleves_db.to_sql('eleves', conn, if_exists='replace', index=False)
@@ -1606,7 +1594,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             }])
                             st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, new_entry], ignore_index=True)
                             
-                            conn = obtenir_connexion()
+                            conn = get_db_connection()
                             new_entry.to_sql('base_globale', conn, if_exists='append', index=False)
                             conn.close()
 
@@ -1669,7 +1657,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             new_el = pd.DataFrame([{"Nom Complet": c_nom, "Date de Naissance": str(c_date), "Classe": c_cls, "Photo": None}])
                             st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, new_el], ignore_index=True)
                             
-                            conn = obtenir_connexion()
+                            conn = get_db_connection()
                             st.session_state.eleves_db.to_sql('eleves', conn, if_exists='replace', index=False)
                             conn.close()
 
@@ -1682,7 +1670,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 if st.button("❌ Supprimer cet élève"):
                     st.session_state.eleves_db = st.session_state.eleves_db[st.session_state.eleves_db["Nom Complet"] != eleve_a_supprimer].reset_index(drop=True)
                     
-                    conn = obtenir_connexion()
+                    conn = get_db_connection()
                     st.session_state.eleves_db.to_sql('eleves', conn, if_exists='replace', index=False)
                     conn.close()
 
@@ -1697,7 +1685,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             if st.button("💾 Enregistrer les Modifications Élèves"):
                 st.session_state.eleves_db = edited_eleves
                 
-                conn = obtenir_connexion()
+                conn = get_db_connection()
                 st.session_state.eleves_db.to_sql('eleves', conn, if_exists='replace', index=False)
                 conn.close()
 
@@ -1727,7 +1715,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             new_p = pd.DataFrame([{"Nom": p_n, "Prénom": p_p, "Mot de passe": hacher_mot_de_passe(p_pwd), "Matière Principale": p_mat, "Classe Attribuée": p_cls_attrib}])
                             st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_p], ignore_index=True)
                             
-                            conn = obtenir_connexion()
+                            conn = get_db_connection()
                             st.session_state.prof_credentials.to_sql('prof_credentials', conn, if_exists='replace', index=False)
                             conn.close()
 
@@ -1747,7 +1735,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     if idx_to_drop is not None:
                         st.session_state.prof_credentials = st.session_state.prof_credentials.drop(idx_to_drop).reset_index(drop=True)
                         
-                        conn = obtenir_connexion()
+                        conn = get_db_connection()
                         st.session_state.prof_credentials.to_sql('prof_credentials', conn, if_exists='replace', index=False)
                         conn.close()
 
@@ -1762,7 +1750,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             if st.button("💾 Enregistrer les Modifications Professeurs"):
                 st.session_state.prof_credentials = edited_profs
                 
-                conn = obtenir_connexion()
+                conn = get_db_connection()
                 st.session_state.prof_credentials.to_sql('prof_credentials', conn, if_exists='replace', index=False)
                 conn.close()
 
@@ -1790,7 +1778,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             new_c = pd.DataFrame([{"Classe": cls_nom, "Cycle": cls_cyc, "Professeur Responsable": cls_prof}])
                             st.session_state.classes_db = pd.concat([st.session_state.classes_db, new_c], ignore_index=True)
                             
-                            conn = obtenir_connexion()
+                            conn = get_db_connection()
                             st.session_state.classes_db.to_sql('classes', conn, if_exists='replace', index=False)
                             conn.close()
 
@@ -1803,7 +1791,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 if st.button("❌ Supprimer cette classe"):
                     st.session_state.classes_db = st.session_state.classes_db[st.session_state.classes_db["Classe"] != classe_a_supprimer].reset_index(drop=True)
                     
-                    conn = obtenir_connexion()
+                    conn = get_db_connection()
                     st.session_state.classes_db.to_sql('classes', conn, if_exists='replace', index=False)
                     conn.close()
 
@@ -1818,7 +1806,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             if st.button("💾 Enregistrer les Modifications Classes"):
                 st.session_state.classes_db = edited_classes
                 
-                conn = obtenir_connexion()
+                conn = get_db_connection()
                 st.session_state.classes_db.to_sql('classes', conn, if_exists='replace', index=False)
                 conn.close()
 
