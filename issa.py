@@ -1773,7 +1773,13 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     p_pwd = st.text_input("Mot de passe", type="password")
                     if st.form_submit_button("Enregistrer le professeur"):
                         if p_n and p_p and p_pwd:
-                            new_p = pd.DataFrame([{"Nom": p_n, "Prénom": p_p, "Mot de passe": hacher_mot_de_passe(p_pwd), "Matière Principale": p_mat, "Classe Attribuée": p_cls_attrib}])
+                            new_p = pd.DataFrame([{
+                                "Nom": p_n, 
+                                "Prénom": p_p, 
+                                "Mot de passe": hacher_mot_de_passe(p_pwd), 
+                                "Matière Principale": p_mat, 
+                                "Classe Attribuée": p_cls_attrib
+                            }])
                             st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_p], ignore_index=True)
                             
                             conn = obtenir_connexion()
