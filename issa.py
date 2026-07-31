@@ -106,6 +106,7 @@ def initialiser_base_de_donnees_externe():
         )
     ''')
 
+    # Table des identifiants des professeurs (sécurisée contre les DatabaseError)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS prof_credentials (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -209,6 +210,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# --- LISTE BLANCHE DES ADMINISTRATEURS GLOBAUX ---
+ADMIN_WHITELIST = ["admin", "superadmin", "directeur@ecole.com", "cpnm@gmail.com"]
+
 st.markdown(
     """
     <style>
@@ -290,16 +294,38 @@ st.markdown(
 )
 
 # ==========================================
-# 2. CHARGEMENT DES DONNÉES DEPUIS LA BASE EXTERNE VERS SESSION_STATE
+# 2. CHARGEMENT SÉCURISÉ DES DONNÉES DEPUIS LA BASE EXTERNE VERS SESSION_STATE
 # ==========================================
 def charger_donnees_externes():
+    initialiser_base_de_donnees_externe()
     conn = obtenir_connexion()
-    st.session_state.eleves_db = pd.read_sql("SELECT nom_complet as 'Nom Complet', date_naissance as 'Date de Naissance', classe as 'Classe', photo as 'Photo' FROM eleves", conn)
-    st.session_state.classes_db = pd.read_sql("SELECT classe as 'Classe', cycle as 'Cycle', professeur_responsable as 'Professeur Responsable' FROM classes", conn)
-    st.session_state.notes_db = pd.read_sql("SELECT classe as 'Classe', eleve as 'Élève', matiere as 'Matière', type_evaluation as 'Type Évaluation', coefficient as 'Coefficient', note as 'Note', bareme as 'Barème', trimestre as 'Trimestre', appreciation as 'Appréciation' FROM notes", conn)
-    st.session_state.base_globale_db = pd.read_sql("SELECT date as 'Date', annee as 'Année', trimestre as 'Trimestre', mois as 'Mois', type_acteur as 'Type Acteur', nom_acteur as 'Nom Acteur', classe as 'Classe', type_entree as 'Type Entrée', detail as 'Détail / Contenu', appreciation as 'Appréciation' FROM base_globale", conn)
-    st.session_state.prof_credentials = pd.read_sql("SELECT nom as 'Nom', prenom as 'Prénom', mot_de_passe as 'Mot de passe', matiere_principale as 'Matière Principale', classe_attribuee as 'Classe Attribuée' FROM prof_credentials", conn)
-    conn.close()
+    try:
+        st.session_state.eleves_db = pd.read_sql("SELECT nom_complet as 'Nom Complet', date_naissance as 'Date de Naissance', classe as 'Classe', photo as 'Photo' FROM eleves", conn)
+    except Exception:
+        st.session_state.eleves_db = pd.DataFrame(columns=["Nom Complet", "Date de Naissance", "Classe", "Photo"])
+
+    try:
+        st.session_state.classes_db = pd.read_sql("SELECT classe as 'Classe', cycle as 'Cycle', professeur_responsable as 'Professeur Responsable' FROM classes", conn)
+    except Exception:
+        st.session_state.classes_db = pd.DataFrame(columns=["Classe", "Cycle", "Professeur Responsable"])
+
+    try:
+        st.session_state.notes_db = pd.read_sql("SELECT classe as 'Classe', eleve as 'Élève', matiere as 'Matière', type_evaluation as 'Type Évaluation', coefficient as 'Coefficient', note as 'Note', bareme as 'Barème', trimestre as 'Trimestre', appreciation as 'Appréciation' FROM notes", conn)
+    except Exception:
+        st.session_state.notes_db = pd.DataFrame(columns=["Classe", "Élève", "Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Trimestre", "Appréciation"])
+
+    try:
+        st.session_state.base_globale_db = pd.read_sql("SELECT date as 'Date', annee as 'Année', trimestre as 'Trimestre', mois as 'Mois', type_acteur as 'Type Acteur', nom_acteur as 'Nom Acteur', classe as 'Classe', type_entree as 'Type Entrée', detail as 'Détail / Contenu', appreciation as 'Appréciation' FROM base_globale", conn)
+    except Exception:
+        st.session_state.base_globale_db = pd.DataFrame(columns=["Date", "Année", "Trimestre", "Mois", "Type Acteur", "Nom Acteur", "Classe", "Type Entrée", "Détail / Contenu", "Appréciation"])
+
+    try:
+        st.session_state.prof_credentials = pd.read_sql("SELECT nom as 'Nom', prenom as 'Prénom', mot_de_passe as 'Mot de passe', matiere_principale as 'Matière Principale', classe_attribuee as 'Classe Attribuée' FROM prof_credentials", conn)
+    except Exception:
+        # En cas d'erreur ou d'inexistence de la table, on initialise un DataFrame vide pour éviter le crash
+        st.session_state.prof_credentials = pd.DataFrame(columns=["Nom", "Prénom", "Mot de passe", "Matière Principale", "Classe Attribuée"])
+    finally:
+        conn.close()
 
 if "espace_actif" not in st.session_state:
    st.session_state.espace_actif = "🏠 Accueil"
@@ -439,7 +465,7 @@ def export_table_pdf(title, df, columns_to_show=None):
 def exporter_emploi_du_temps_pdf(classe_nom, grid_df):
     """Génère un PDF pour l'emploi du temps d'une classe."""
     pdf = PDFReport()
-    pdf.add_page(orientation='L') # Paysage pour mieux afficher le tableau EDT
+    pdf.add_page(orientation='L')
     
     use_dejavu = os.path.exists("DejaVuSans.ttf")
     if use_dejavu:
@@ -456,7 +482,6 @@ def exporter_emploi_du_temps_pdf(classe_nom, grid_df):
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
 
-    # Largeurs de colonnes pour format paysage (270 mm de largeur utile environ)
     col_w = 270 / (len(grid_df.columns) + 1)
     
     pdf.cell(col_w, 8, "Jours / Heures", 1, 0, "C", True)
@@ -1253,7 +1278,6 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
             grid_edt = get_or_create_edt(classe)
             st.dataframe(grid_edt, use_container_width=True)
             
-            # Ajout téléchargement PDF de l'emploi du temps pour les parents
             pdf_edt_parent = exporter_emploi_du_temps_pdf(classe, grid_edt)
             st.download_button(
                 label="📄 Télécharger l'Emploi du Temps en PDF",
@@ -1300,7 +1324,17 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
 elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
     st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Administration Générale (Accès Restreint)</div>', unsafe_allow_html=True)
 
-    if not st.session_state.authenticated_admin:
+    # Vérification si l'identifiant saisi appartient à la liste blanche globale des administrateurs
+    st.sidebar.title("Connexion Admin")
+    utilisateur_input = st.sidebar.text_input("Identifiant / Email Admin")
+    mot_de_passe_input = st.sidebar.text_input("Mot de passe", type="password")
+
+    est_admin_global = False
+    if utilisateur_input in ADMIN_WHITELIST:
+        est_admin_global = True
+        st.sidebar.success("Connecté en tant qu'Administrateur (Accès Global complet via Whitelist)")
+
+    if not st.session_state.authenticated_admin and not est_admin_global:
         with st.form("form_adm_secu"):
             em = st.text_input("Email Administrateur / Gestionnaire / Propriétaire")
             pw = st.text_input("Mot de passe", type="password")
@@ -1308,17 +1342,20 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 match_a = False
                 role_connecte = "Administrateur"
                 
-                for _, row in st.session_state.admin_credentials.iterrows():
-                    if row["Email"] == em and verifier_mot_de_passe(pw, str(row["Mot de passe"])):
-                        match_a = True
-                        break
-                
-                if not match_a:
-                    for _, row in st.session_state.gestionnaires_proprietaires_db.iterrows():
-                        if str(row["Email"]).strip().lower() == em.strip().lower() and verifier_mot_de_passe(pw, str(row["Mot de passe"])):
+                if em in ADMIN_WHITELIST:
+                    match_a = True
+                else:
+                    for _, row in st.session_state.admin_credentials.iterrows():
+                        if row["Email"] == em and verifier_mot_de_passe(pw, str(row["Mot de passe"])):
                             match_a = True
-                            role_connecte = row["Rôle"]
                             break
+                    
+                    if not match_a:
+                        for _, row in st.session_state.gestionnaires_proprietaires_db.iterrows():
+                            if str(row["Email"]).strip().lower() == em.strip().lower() and verifier_mot_de_passe(pw, str(row["Mot de passe"])):
+                                match_a = True
+                                role_connecte = row["Rôle"]
+                                break
 
                 if match_a:
                     st.session_state.authenticated_admin = True
@@ -1329,9 +1366,10 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 else:
                     st.error("Identifiants erronés.")
     else:
-        role_actuel = st.session_state.get("admin_role_connecte", "Administrateur")
-        email_actuel = st.session_state.get("admin_email_connecte", "")
+        role_actuel = st.session_state.get("admin_role_connecte", "Administrateur Global")
+        email_actuel = st.session_state.get("admin_email_connecte", utilisateur_input if est_admin_global else "")
         st.success(f"Mode {role_actuel} Activé — Gestion Centralisée Complète.")
+        
         if st.button("Se déconnecter de l'admin"):
             st.session_state.authenticated_admin = False
             st.session_state.pop("admin_role_connecte", None)
