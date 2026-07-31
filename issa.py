@@ -1878,4 +1878,4 @@ elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
     if not st.session_state.base_globale_db.empty:
         st.dataframe(st.session_state.base_globale_db, use_container_width=True)
     else:
-        st.info("Aucune donnée enregistrée dans la base globale.")s
+        st.info("Aucune donnée enregistrée dans la base globale.")
