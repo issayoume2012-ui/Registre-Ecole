@@ -39,8 +39,6 @@ def verifier_mot_de_passe(password: str, hashed: str) -> bool:
             return password == hashed
     else:
         return hashlib.sha256(password.encode('utf-8')).hexdigest() == hashed or password == hashed
-    if "classes_db" not in st.session_state:
-    st.session_state.classes_db = pd.DataFrame() # ou [] selon ton code
 
 # ==========================================
 # 0. BIS. GESTION DE LA BASE DE DONNÉES SQLITE EXTERNE
@@ -170,7 +168,6 @@ def initialiser_base_de_donnees_externe():
 # Initialisation de la base externe
 initialiser_base_de_donnees_externe()
 
-
 # ==========================================
 # 0. TER. GESTION DES POLICES UNICODE (OPTIMISÉE POUR MOBILE)
 # ==========================================
@@ -289,29 +286,37 @@ st.markdown(
 )
 
 # ==========================================
-# 2. CHARGEMENT DES DONNÉES DEPUIS LA BASE EXTERNE VERS SESSION_STATE (CORRIGÉ ICI)
+# 2. CHARGEMENT DES DONNÉES DEPUIS LA BASE EXTERNE VERS SESSION_STATE
 # ==========================================
 def charger_donnees_externes():
     """Charge les données de la base de données avec gestion des erreurs."""
+    conn = obtenir_connexion()
     try:
-        # S'assure que la connexion est active (conn doit être défini globalement ou dans la fonction)
-        global conn
-        
-        # Vérification et lecture sécurisée de la table eleves
-        query = """
-            SELECT nom_complet AS "Nom Complet", 
-                   date_naissance AS "Date de Naissance", 
-                   classe AS "Classe", 
-                   photo AS "Photo" 
-            FROM eleves
-        """
-        st.session_state.eleves_db = pd.read_sql_query(query, conn)
-        
-    except Exception as e:
-        # En cas d'erreur (ex: table absente), on initialise un DataFrame vide pour éviter le crash
+        st.session_state.eleves_db = pd.read_sql_query("SELECT nom_complet AS 'Nom Complet', date_naissance AS 'Date de Naissance', classe AS 'Classe', photo AS 'Photo' FROM eleves", conn)
+    except Exception:
         st.session_state.eleves_db = pd.DataFrame(columns=["Nom Complet", "Date de Naissance", "Classe", "Photo"])
-        # Optionnel: afficher un avertissement discret dans l'app
-        # st.warning(annees_ou_msg_erreur_si_besoin)
+
+    try:
+        st.session_state.classes_db = pd.read_sql_query("SELECT classe AS 'Classe', cycle AS 'Cycle', professeur_responsable AS 'Professeur Responsable' FROM classes", conn)
+    except Exception:
+        st.session_state.classes_db = pd.DataFrame(columns=["Classe", "Cycle", "Professeur Responsable"])
+
+    try:
+        st.session_state.notes_db = pd.read_sql_query("SELECT classe AS 'Classe', eleve AS 'Élève', matiere AS 'Matière', type_evaluation AS 'Type Évaluation', coefficient AS 'Coefficient', note AS 'Note', bareme AS 'Barème', trimestre AS 'Trimestre', appreciation AS 'Appréciation' FROM notes", conn)
+    except Exception:
+        st.session_state.notes_db = pd.DataFrame(columns=["Classe", "Élève", "Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Trimestre", "Appréciation"])
+
+    try:
+        st.session_state.base_globale_db = pd.read_sql_query("SELECT date AS 'Date', annee AS 'Année', trimestre AS 'Trimestre', mois AS 'Mois', type_acteur AS 'Type Acteur', nom_acteur AS 'Nom Acteur', classe AS 'Classe', type_entree AS 'Type Entrée', detail AS 'Détail / Contenu', appreciation AS 'Appréciation' FROM base_globale", conn)
+    except Exception:
+        st.session_state.base_globale_db = pd.DataFrame(columns=["Date", "Année", "Trimestre", "Mois", "Type Acteur", "Nom Acteur", "Classe", "Type Entrée", "Détail / Contenu", "Appréciation"])
+
+    try:
+        st.session_state.prof_credentials = pd.read_sql_query("SELECT nom AS 'Nom', prenom AS 'Prénom', mot_de_passe AS 'Mot de passe', matiere_principale AS 'Matière Principale', classe_attribuee AS 'Classe Attribuée' FROM prof_credentials", conn)
+    except Exception:
+        st.session_state.prof_credentials = pd.DataFrame(columns=["Nom", "Prénom", "Mot de passe", "Matière Principale", "Classe Attribuée"])
+    
+    conn.close()
 
 if "espace_actif" not in st.session_state:
    st.session_state.espace_actif = "🏠 Accueil"
@@ -713,6 +718,32 @@ def assistant_ia_repondre(question):
 st.markdown('<div class="header-ecole">🦁 Cours Privé Nelson Mandela</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Excellence, Discipline et Ancrage Culturel au Cœur du Sénégal</div>', unsafe_allow_html=True)
 
+# Barre de recherche globale intégrée
+st.markdown("---")
+terme_recherche = st.text_input("🔍 Recherche globale rapide (Élève, Professeur, Classe, Matière) :", "")
+if terme_recherche.strip():
+    st.markdown(f"### Résultats de la recherche pour : **{terme_recherche}**")
+    t = terme_recherche.lower()
+    
+    res_eleves = st.session_state.eleves_db[st.session_state.eleves_db.apply(lambda row: row.astype(str).str.lower().str.contains(t).any(), axis=1)]
+    res_classes = st.session_state.classes_db[st.session_state.classes_db.apply(lambda row: row.astype(str).str.lower().str.contains(t).any(), axis=1)]
+    res_notes = st.session_state.notes_db[st.session_state.notes_db.apply(lambda row: row.astype(str).str.lower().str.contains(t).any(), axis=1)]
+    
+    col_r1, col_r2, col_r3 = st.columns(3)
+    with col_r1:
+        st.write(f"**Élèves trouvés ({len(res_eleves)})**")
+        if not res_eleves.empty: st.dataframe(res_eleves, use_container_width=True)
+        else: st.info("Aucun élève.")
+    with col_r2:
+        st.write(f"**Classes trouvées ({len(res_classes)})**")
+        if not res_classes.empty: st.dataframe(res_classes, use_container_width=True)
+        else: st.info("Aucune classe.")
+    with col_r3:
+        st.write(f"**Notes trouvées ({len(res_notes)})**")
+        if not res_notes.empty: st.dataframe(res_notes, use_container_width=True)
+        else: st.info("Aucune note.")
+    st.markdown("---")
+
 if st.session_state.espace_actif != "🏠 Accueil":
     col_ret1, col_ret2 = st.columns([1, 5])
     with col_ret1:
@@ -806,7 +837,6 @@ if st.session_state.espace_actif == "🏠 Accueil":
         st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Élèves Inscrits</h4><h2 style="margin:0;color:#1E3A8A;">{len(st.session_state.eleves_db)}</h2></div>', unsafe_allow_html=True)
     with s2:
         classes_count = len(st.session_state.classes_db) if "classes_db" in st.session_state and st.session_state.classes_db is not None else 0
-
         st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Classes Actives</h4><h2 style="margin:0;color:#1E3A8A;">{classes_count}</h2></div>', unsafe_allow_html=True)
     with s3:
         st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Professeurs</h4><h2 style="margin:0;color:#1E3A8A;">{len(st.session_state.prof_credentials)}</h2></div>', unsafe_allow_html=True)
@@ -1744,3 +1774,93 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                         if c_nom_cls:
                             new_cls = pd.DataFrame([{"Classe": c_nom_cls, "Cycle": c_cyc, "Professeur Responsable": c_prof_resp}])
                             st.session_state.classes_db = pd.concat([st.session_state.classes_db, new_cls], ignore_index=True)
+                            
+                            conn = obtenir_connexion()
+                            st.session_state.classes_db.to_sql('classes', conn, if_exists='replace', index=False)
+                            conn.close()
+
+                            st.success("Classe ajoutée.")
+                            st.rerun()
+
+            st.markdown("#### 🗑️ Supprimer une Classe")
+            if not st.session_state.classes_db.empty:
+                classe_a_suppr = st.selectbox("Sélectionner la classe à supprimer", st.session_state.classes_db["Classe"].tolist())
+                if st.button("❌ Supprimer cette classe"):
+                    st.session_state.classes_db = st.session_state.classes_db[st.session_state.classes_db["Classe"] != classe_a_suppr].reset_index(drop=True)
+                    
+                    conn = obtenir_connexion()
+                    st.session_state.classes_db.to_sql('classes', conn, if_exists='replace', index=False)
+                    conn.close()
+
+                    st.success(f"Classe **{classe_a_suppr}** supprimée.")
+                    st.rerun()
+            else:
+                st.info("Aucune classe enregistrée.")
+
+            st.markdown("---")
+            st.markdown("#### Liste des Classes (Modifiable)")
+            edited_classes = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True, key="editor_classes")
+            if st.button("💾 Enregistrer les Modifications Classes"):
+                st.session_state.classes_db = edited_classes
+                
+                conn = obtenir_connexion()
+                st.session_state.classes_db.to_sql('classes', conn, if_exists='replace', index=False)
+                conn.close()
+
+                st.success("Base des classes mise à jour !")
+
+        elif adm_tab == "📋 Listes Blanches Parents":
+            st.subheader("Gestion de la Liste Blanche des Parents (Accès Portail)")
+            st.dataframe(st.session_state.parents_white_list, use_container_width=True)
+
+            with st.form("form_add_pw"):
+                p_tel = st.text_input("Téléphone (ex: +221771234567)")
+                p_prenom_el = st.text_input("Prénom Élève")
+                p_nom_el = st.text_input("Nom Élève")
+                p_an_el = st.number_input("Année Naissance", 2005, 2024, 2012)
+                p_cls_el = st.text_input("Classe")
+                if st.form_submit_button("Ajouter à la liste blanche"):
+                    if p_tel and p_prenom_el and p_nom_el:
+                        new_pw = pd.DataFrame([{"Téléphone": p_tel, "Prénom Élève": p_prenom_el, "Nom Élève": p_nom_el, "Année Naissance": p_an_el, "Classe": p_cls_el}])
+                        st.session_state.parents_white_list = pd.concat([st.session_state.parents_white_list, new_pw], ignore_index=True)
+                        st.success("Parent autorisé ajouté.")
+                        st.rerun()
+
+        elif adm_tab == "📑 Rapports Journaliers Réceptionnés":
+            st.subheader("Rapports Journaliers des Professeurs")
+            if not st.session_state.rapports_journaliers_prof.empty:
+                st.dataframe(st.session_state.rapports_journaliers_prof, use_container_width=True)
+            else:
+                st.info("Aucun rapport journalier pour le moment.")
+
+# ESPACE RAPPORTS GLOBAUX
+elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
+    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Rapports Globaux et Tableaux de Bord</div>', unsafe_allow_html=True)
+    st.markdown("Consultez et téléchargez la synthèse consolidée de l'établissement sous format officiel PDF.")
+    
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+        pdf_general = generer_rapport_general_pdf()
+        st.download_button(
+            label="📥 Télécharger le Rapport Général Global (PDF)",
+            data=pdf_general,
+            file_name="rapport_general_nelson_mandela.pdf",
+            mime="application/pdf",
+            type="primary"
+        )
+    with col_d2:
+        if not st.session_state.base_globale_db.empty:
+            excel_bg = export_table_excel(st.session_state.base_globale_db)
+            st.download_button(
+                label="📊 Télécharger la Base Globale complète (Excel)",
+                data=excel_bg,
+                file_name="base_globale_nelson_mandela.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+    st.markdown("---")
+    st.markdown("### 📈 Aperçu de la Base Globale en Direct")
+    if not st.session_state.base_globale_db.empty:
+        st.dataframe(st.session_state.base_globale_db, use_container_width=True)
+    else:
+        st.info("Aucune donnée enregistrée dans la base globale.")
