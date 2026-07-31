@@ -712,7 +712,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
         <div style="text-align: center; padding: 10px 0 30px 0;">
             <h3 style="color: #1E3A8A; font-weight: 800;">Portail Numérique Intelligent & Suivi Pédagogique Centralisé</h3>
             <p style="font-size: 1.1rem; color: #475569; max-width: 800px; margin: 0 auto;">
-                Sélectionnez votre espace. Le système intègre désormais une Base Globale centralisant tout l'historique annuel des élèves et professeurs avec persistance externe sécurisée.
+                Sélectionnez votre espace. Le système intègre une Base Globale centralisant tout l'historique annuel des élèves et professeurs avec persistance externe sécurisée (JSON).
             </p>
         </div>
         """,
