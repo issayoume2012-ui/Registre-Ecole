@@ -180,7 +180,20 @@ def initialiser_base_de_donnees_externe():
         connexion.commit()
 
 # Initialisation de la base externe
-initialiser_base_de_donnees_externe()
+def initialiser_base_de_donnees_externe():
+    # ... (votre connexion et curseur existants)
+    
+    for col, type_col in colonnes_a_verifier:
+        try:
+            # Tentative d'ajout de la colonne
+            cursor.execute(f"ALTER TABLE prof_credentials ADD COLUMN {col} {type_col}")
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            # Si l'erreur indique que la colonne existe déjà, on l'ignore proprement
+            if "duplicate column name" in str(e).lower() or "no such column" in str(e).lower():
+                pass 
+            else:
+                raise e # Remonte l'erreur si c'est un autre type de problème
 
 # ==========================================
 # 0. TER. GESTION DES POLICES UNICODE (OPTIMISÉE POUR MOBILE)
