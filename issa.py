@@ -4,184 +4,171 @@ import io
 import os
 import urllib.request
 import sqlite3
-import hashlib
 from fpdf import FPDF
 import pandas as pd
 import streamlit as st
 
 # ==========================================
-# 0. CONFIGURATION DE LA BASE DE DONNÉES SQLite (MULTI-UTILISATEURS & THREAD-SAFE)
+# 0. GESTION DU CHIFFREMENT DES MOTS DE PASSE (SÉCURITÉ PRODUCTION)
 # ==========================================
-DB_FILE = "registre_ecole.db"
+try:
+    import bcrypt
+    HAS_BCRYPT = True
+except ImportError:
+    import hashlib
+    HAS_BCRYPT = False
 
-def get_db_connection():
-    """
-    Établit une connexion sécurisée et gère la concurrence multi-utilisateurs.
-    - timeout=30 : attend 30 secondes si la base est occupée par un autre utilisateur.
-    - check_same_thread=False : autorise Streamlit à réutiliser la connexion entre threads.
-    - PRAGMA journal_mode=WAL : permet des lectures et écritures simultanées sans verrouiller la base.
-    """
-    connexion = sqlite3.connect(DB_FILE, timeout=30, check_same_thread=False)
-    connexion.execute("PRAGMA journal_mode=WAL;")
-    connexion.row_factory = sqlite3.Row
-    return connexion
+def hacher_mot_de_passe(password: str) -> str:
+    """Hache un mot de passe avec bcrypt ou hashlib en fallback."""
+    if not password:
+        return ""
+    if HAS_BCRYPT:
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+    else:
+        return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
-def hacher_mot_de_passe(mot_de_passe: str) -> str:
-    """Hache le mot de passe en SHA-256 pour la sécurité."""
-    return hashlib.sha256(mot_de_passe.encode('utf-8')).hexdigest()
-
-def verifier_mot_de_passe(mot_de_passe_clair: str, mot_de_passe_hache: str) -> bool:
-    """Vérifie si le mot de passe en clair correspond au hachage (ou gère l'ancien format si nécessaire)."""
-    if not mot_de_passe_hache:
+def verifier_mot_de_passe(password: str, hashed: str) -> bool:
+    """Vérifie un mot de passe par rapport à son hachage."""
+    if not password or not hashed:
         return False
-    return hacher_mot_de_passe(mot_de_passe_clair) == mot_de_passe_hache or mot_de_passe_clair == mot_de_passe_hache
+    if HAS_BCRYPT:
+        try:
+            return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+        except ValueError:
+            return password == hashed
+    else:
+        return hashlib.sha256(password.encode('utf-8')).hexdigest() == hashed or password == hashed
+
+
+# ==========================================
+# 0. BIS. GESTION DE LA BASE DE DONNÉES SQLITE EXTERNE
+# ==========================================
+DB_NAME = "ecole_nelson_mandela.db"
+
+def obtenir_connexion():
+    return sqlite3.connect(DB_NAME, check_same_thread=False)
 
 def initialiser_base_de_donnees_externe():
-    """Crée les tables SQL si elles n'existent pas et insère les données par défaut de manière thread-safe."""
-    with get_db_connection() as connexion:
-        cursor = connexion.cursor()
+    """Crée les tables SQL si elles n'existent pas et insère les données par défaut."""
+    conn = obtenir_connexion()
+    cursor = conn.cursor()
 
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS eleves (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nom_complet TEXT,
-                date_naissance TEXT,
-                classe TEXT,
-                photo TEXT
-            )
-        ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS eleves (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nom_complet TEXT,
+            date_naissance TEXT,
+            classe TEXT,
+            photo TEXT
+        )
+    ''')
 
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS classes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                classe TEXT UNIQUE,
-                cycle TEXT,
-                professeur_responsable TEXT
-            )
-        ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS classes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            classe TEXT UNIQUE,
+            cycle TEXT,
+            professeur_responsable TEXT
+        )
+    ''')
 
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS notes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                classe TEXT,
-                eleve TEXT,
-                matiere TEXT,
-                type_evaluation TEXT,
-                coefficient INTEGER,
-                note REAL,
-                bareme REAL,
-                trimestre TEXT,
-                appreciation TEXT
-            )
-        ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            classe TEXT,
+            eleve TEXT,
+            matiere TEXT,
+            type_evaluation TEXT,
+            coefficient INTEGER,
+            note REAL,
+            bareme REAL,
+            trimestre TEXT,
+            appreciation TEXT
+        )
+    ''')
 
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS base_globale (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                date TEXT,
-                annee TEXT,
-                trimestre TEXT,
-                mois TEXT,
-                type_acteur TEXT,
-                nom_acteur TEXT,
-                classe TEXT,
-                type_entree TEXT,
-                detail TEXT,
-                appreciation TEXT
-            )
-        ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS base_globale (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT,
+            annee TEXT,
+            trimestre TEXT,
+            mois TEXT,
+            type_acteur TEXT,
+            nom_acteur TEXT,
+            classe TEXT,
+            type_entree TEXT,
+            detail TEXT,
+            appreciation TEXT
+        )
+    ''')
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS prof_credentials (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nom TEXT,
-                prenom TEXT,
-                mot_de_passe TEXT,
-                matiere_principale TEXT,
-                classe_attribuee TEXT
-            )
-        """)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS prof_credentials (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nom TEXT,
+            prenom TEXT,
+            mot_de_passe TEXT,
+            matiere_principale TEXT,
+            classe_attribuee TEXT
+        )
+    ''')
 
-        # Vérification sécurisée des colonnes pour prof_credentials
-        cursor.execute("PRAGMA table_info(prof_credentials)")
-        colonnes_existantes = [col[1] for col in cursor.fetchall()]
+    # Insertion des données par défaut si les tables sont vides
+    cursor.execute("SELECT COUNT(*) FROM eleves")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany("INSERT INTO eleves (nom_complet, date_naissance, classe, photo) VALUES (?, ?, ?, ?)", [
+            ("Mamadou Diallo", "2012-05-14", "6ème A", None),
+            ("Fatou Sow", "2015-08-20", "CP", None),
+            ("Aminata Ba", "2013-02-10", "6ème A", None),
+            ("Oumar Sy", "2011-11-03", "5ème A", None)
+        ])
 
-        colonnes_requises = {
-            "nom": "TEXT",
-            "prenom": "TEXT",
-            "mot_de_passe": "TEXT",
-            "matiere_principale": "TEXT",
-            "classe_attribuee": "TEXT",
-        }
+    cursor.execute("SELECT COUNT(*) FROM classes")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany("INSERT INTO classes (classe, cycle, professeur_responsable) VALUES (?, ?, ?)", [
+            ("6ème A", "Collège", "Ibrahima Diallo"),
+            ("5ème A", "Collège", "Cheikh Ndiaye"),
+            ("CP", "Élémentaire", "Aissatou Sow"),
+            ("Grande Section", "Préscolaire", "Marie Faye"),
+            ("CE1", "Élémentaire", "Ousmane Diop")
+        ])
+        
+    cursor.execute("SELECT COUNT(*) FROM prof_credentials")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany("INSERT INTO prof_credentials (nom, prenom, mot_de_passe, matiere_principale, classe_attribuee) VALUES (?, ?, ?, ?, ?)", [
+            ("Diallo", "Ibrahima", hacher_mot_de_passe("prof123"), "Mathématiques", "6ème A"),
+            ("Sow", "Aissatou", hacher_mot_de_passe("prof456"), "Français", "CP"),
+            ("Ndiaye", "Cheikh", hacher_mot_de_passe("prof789"), "Histoire-Géographie", "5ème A")
+        ])
 
-        for col, type_col in colonnes_requises.items():
-            if col not in colonnes_existantes:
-                try:
-                    cursor.execute(f"ALTER TABLE prof_credentials ADD COLUMN {col} {type_col}")
-                except sqlite3.OperationalError:
-                    pass
+    cursor.execute("SELECT COUNT(*) FROM notes")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany("INSERT INTO notes (classe, eleve, matiere, type_evaluation, coefficient, note, bareme, trimestre, appreciation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+            ("6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 1", 3, 15.5, 20, "1er Semestre", "Très bon travail."),
+            ("6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 2", 3, 14.0, 20, "1er Semestre", "Bon ensemble."),
+            ("6ème A", "Mamadou Diallo", "Mathématiques", "Composition", 3, 16.0, 20, "1er Semestre", "Excellent."),
+            ("6ème A", "Mamadou Diallo", "Français", "Devoir 1", 3, 13.0, 20, "1er Semestre", "Assez bon."),
+            ("6ème A", "Mamadou Diallo", "Français", "Devoir 2", 3, 14.5, 20, "1er Semestre", "Bon travail."),
+            ("6ème A", "Mamadou Diallo", "Français", "Composition", 3, 15.0, 20, "1er Semestre", "Très bien."),
+            ("CP", "Fatou Sow", "Graphisme / Écriture", "Composition", 1, 8.5, 10, "1er Trimestre", "Très bien.")
+        ])
 
-        # Insertion des données par défaut si les tables sont vides
-        cursor.execute("SELECT COUNT(*) FROM eleves")
-        if cursor.fetchone()[0] == 0:
-            cursor.executemany("INSERT INTO eleves (nom_complet, date_naissance, classe, photo) VALUES (?, ?, ?, ?)", [
-                ("Mamadou Diallo", "2012-05-14", "6ème A", None),
-                ("Fatou Sow", "2015-08-20", "CP", None),
-                ("Aminata Ba", "2013-02-10", "6ème A", None),
-                ("Oumar Sy", "2011-11-03", "5ème A", None)
-            ])
+    cursor.execute("SELECT COUNT(*) FROM base_globale")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany("INSERT INTO base_globale (date, annee, trimestre, mois, type_acteur, nom_acteur, classe, type_entree, detail, appreciation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+            ("2026-01-15", "2025-2026", "1er Semestre", "Janvier", "Élève", "Mamadou Diallo", "6ème A", "Note", "Mathématiques (Devoir 1): 15.5/20", "Très bon travail"),
+            ("2026-01-20", "2025-2026", "1er Semestre", "Janvier", "Élève", "Aminata Ba", "6ème A", "Absence", "Absent - Motif: Maladie", "Justifié"),
+            ("2026-02-05", "2025-2026", "2ème Semestre", "Février", "Professeur", "Ibrahima Diallo", "6ème A", "Rapport Cours", "Algèbre - Chapitre 3 terminé", "Excellente progression")
+        ])
 
-        cursor.execute("SELECT COUNT(*) FROM classes")
-        if cursor.fetchone()[0] == 0:
-            cursor.executemany("INSERT INTO classes (classe, cycle, professeur_responsable) VALUES (?, ?, ?)", [
-                ("6ème A", "Collège", "Ibrahima Diallo"),
-                ("5ème A", "Collège", "Cheikh Ndiaye"),
-                ("CP", "Élémentaire", "Aissatou Sow"),
-                ("Grande Section", "Préscolaire", "Marie Faye"),
-                ("CE1", "Élémentaire", "Ousmane Diop")
-            ])
-            
-        cursor.execute("SELECT COUNT(*) FROM prof_credentials")
-        if cursor.fetchone()[0] == 0:
-            professeurs = [
-                ("Diallo", "Ibrahima", hacher_mot_de_passe("prof123"), "Mathématiques", "6ème A"),
-                ("Sow", "Aissatou", hacher_mot_de_passe("prof456"), "Français", "CP"),
-                ("Ndiaye", "Cheikh", hacher_mot_de_passe("prof789"), "Histoire-Géographie", "5ème A")
-            ]
-            for p in professeurs:
-                try:
-                    cursor.execute("""
-                        INSERT OR IGNORE INTO prof_credentials 
-                        (nom, prenom, mot_de_passe, matiere_principale, classe_attribuee) 
-                        VALUES (?, ?, ?, ?, ?)
-                    """, p)
-                except Exception as e:
-                    print(f"Erreur lors de l'insertion : {e}")
+    conn.commit()
+    conn.close()
 
-        cursor.execute("SELECT COUNT(*) FROM notes")
-        if cursor.fetchone()[0] == 0:
-            cursor.executemany("INSERT INTO notes (classe, eleve, matiere, type_evaluation, coefficient, note, bareme, trimestre, appreciation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
-                ("6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 1", 3, 15.5, 20, "1er Semestre", "Très bon travail."),
-                ("6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 2", 3, 14.0, 20, "1er Semestre", "Bon ensemble."),
-                ("6ème A", "Mamadou Diallo", "Mathématiques", "Composition", 3, 16.0, 20, "1er Semestre", "Excellent."),
-                ("6ème A", "Mamadou Diallo", "Français", "Devoir 1", 3, 13.0, 20, "1er Semestre", "Assez bon."),
-                ("6ème A", "Mamadou Diallo", "Français", "Devoir 2", 3, 14.5, 20, "1er Semestre", "Bon travail."),
-                ("6ème A", "Mamadou Diallo", "Français", "Composition", 3, 15.0, 20, "1er Semestre", "Très bien."),
-                ("CP", "Fatou Sow", "Graphisme / Écriture", "Composition", 1, 8.5, 10, "1er Trimestre", "Très bien.")
-            ])
-
-        cursor.execute("SELECT COUNT(*) FROM base_globale")
-        if cursor.fetchone()[0] == 0:
-            cursor.executemany("INSERT INTO base_globale (date, annee, trimestre, mois, type_acteur, nom_acteur, classe, type_entree, detail, appreciation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
-                ("2026-01-15", "2025-2026", "1er Semestre", "Janvier", "Élève", "Mamadou Diallo", "6ème A", "Note", "Mathématiques (Devoir 1): 15.5/20", "Très bon travail"),
-                ("2026-01-20", "2025-2026", "1er Semestre", "Janvier", "Élève", "Aminata Ba", "6ème A", "Absence", "Absent - Motif: Maladie", "Justifié"),
-                ("2026-02-05", "2025-2026", "2ème Semestre", "Février", "Professeur", "Ibrahima Diallo", "6ème A", "Rapport Cours", "Algèbre - Chapitre 3 terminé", "Excellente progression")
-            ])
-
-        connexion.commit()
-
-# Lancer l'initialisation de la base
+# Initialisation de la base externe
 initialiser_base_de_donnees_externe()
+
 
 # ==========================================
 # 0. TER. GESTION DES POLICES UNICODE (OPTIMISÉE POUR MOBILE)
@@ -211,7 +198,7 @@ def telecharger_polices():
 telecharger_polices()
 
 # ==========================================
-# 1. CONFIGURATION DE LA PAGE & DESIGN XXL
+# 1. CONFIGURATION DE LA PAGE & DESIGN XXL RESPONSIVE FAST-LOAD
 # ==========================================
 st.set_page_config(
     page_title="Portail Pédagogique - Cours Privé Nelson Mandela | Sénégal",
@@ -224,6 +211,7 @@ st.markdown(
     """
     <style>
     .main { background-color: #F8FAFC; }
+    
     .header-ecole { 
         color: #1E3A8A; 
         font-size: clamp(1.8rem, 4vw, 2.8rem); 
@@ -234,6 +222,7 @@ st.markdown(
         letter-spacing: 1px;
         padding: 0 10px;
     }
+    
     .sub-header { 
         color: #047857; 
         font-size: clamp(0.9rem, 2vw, 1.2rem); 
@@ -242,6 +231,7 @@ st.markdown(
         margin-bottom: 25px; 
         padding: 0 10px;
     }
+
     .animated-card {
         border: 2px solid #E2E8F0;
         padding: clamp(15px, 3vw, 25px);
@@ -254,11 +244,13 @@ st.markdown(
         margin-bottom: 15px;
         height: 100%;
     }
+    
     .animated-card:hover {
         transform: translateY(-3px);
         box-shadow: 0 15px 30px rgba(30, 58, 138, 0.12);
         border-color: #2563EB;
     }
+
     .kpi-card-animated {
         border-left: 5px solid #2563EB;
         background: #FFFFFF;
@@ -267,6 +259,7 @@ st.markdown(
         box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         text-align: center;
     }
+
     .stButton>button { 
         background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%); 
         color: white; 
@@ -279,7 +272,16 @@ st.markdown(
         min-height: 44px;
         font-size: 1rem;
     }
-    .stButton>button:active { transform: scale(0.98); }
+    
+    .stButton>button:active {
+        transform: scale(0.98);
+    }
+
+    @media screen and (max-width: 768px) {
+        .header-ecole { font-size: 1.6rem; }
+        .sub-header { font-size: 0.95rem; }
+        .animated-card { padding: 15px; margin-bottom: 12px; }
+    }
     </style>
 """,
     unsafe_allow_html=True,
@@ -289,33 +291,12 @@ st.markdown(
 # 2. CHARGEMENT DES DONNÉES DEPUIS LA BASE EXTERNE VERS SESSION_STATE
 # ==========================================
 def charger_donnees_externes():
-    """Charge les données de la base de données avec gestion des erreurs."""
-    conn = get_db_connection()
-    try:
-        st.session_state.eleves_db = pd.read_sql_query("SELECT nom_complet AS 'Nom Complet', date_naissance AS 'Date de Naissance', classe AS 'Classe', photo AS 'Photo' FROM eleves", conn)
-    except Exception:
-        st.session_state.eleves_db = pd.DataFrame(columns=["Nom Complet", "Date de Naissance", "Classe", "Photo"])
-
-    try:
-        st.session_state.classes_db = pd.read_sql_query("SELECT classe AS 'Classe', cycle AS 'Cycle', professeur_responsable AS 'Professeur Responsable' FROM classes", conn)
-    except Exception:
-        st.session_state.classes_db = pd.DataFrame(columns=["Classe", "Cycle", "Professeur Responsable"])
-
-    try:
-        st.session_state.notes_db = pd.read_sql_query("SELECT classe AS 'Classe', eleve AS 'Élève', matiere AS 'Matière', type_evaluation AS 'Type Évaluation', coefficient AS 'Coefficient', note AS 'Note', bareme AS 'Barème', trimestre AS 'Trimestre', appreciation AS 'Appréciation' FROM notes", conn)
-    except Exception:
-        st.session_state.notes_db = pd.DataFrame(columns=["Classe", "Élève", "Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Trimestre", "Appréciation"])
-
-    try:
-        st.session_state.base_globale_db = pd.read_sql_query("SELECT date AS 'Date', annee AS 'Année', trimestre AS 'Trimestre', mois AS 'Mois', type_acteur AS 'Type Acteur', nom_acteur AS 'Nom Acteur', classe AS 'Classe', type_entree AS 'Type Entrée', detail AS 'Détail / Contenu', appreciation AS 'Appréciation' FROM base_globale", conn)
-    except Exception:
-        st.session_state.base_globale_db = pd.DataFrame(columns=["Date", "Année", "Trimestre", "Mois", "Type Acteur", "Nom Acteur", "Classe", "Type Entrée", "Détail / Contenu", "Appréciation"])
-
-    try:
-        st.session_state.prof_credentials = pd.read_sql_query("SELECT nom AS 'Nom', prenom AS 'Prénom', mot_de_passe AS 'Mot de passe', matiere_principale AS 'Matière Principale', classe_attribuee AS 'Classe Attribuée' FROM prof_credentials", conn)
-    except Exception:
-        st.session_state.prof_credentials = pd.DataFrame(columns=["Nom", "Prénom", "Mot de passe", "Matière Principale", "Classe Attribuée"])
-    
+    conn = obtenir_connexion()
+    st.session_state.eleves_db = pd.read_sql("SELECT nom_complet as 'Nom Complet', date_naissance as 'Date de Naissance', classe as 'Classe', photo as 'Photo' FROM eleves", conn)
+    st.session_state.classes_db = pd.read_sql("SELECT classe as 'Classe', cycle as 'Cycle', professeur_responsable as 'Professeur Responsable' FROM classes", conn)
+    st.session_state.notes_db = pd.read_sql("SELECT classe as 'Classe', eleve as 'Élève', matiere as 'Matière', type_evaluation as 'Type Évaluation', coefficient as 'Coefficient', note as 'Note', bareme as 'Barème', trimestre as 'Trimestre', appreciation as 'Appréciation' FROM notes", conn)
+    st.session_state.base_globale_db = pd.read_sql("SELECT date as 'Date', annee as 'Année', trimestre as 'Trimestre', mois as 'Mois', type_acteur as 'Type Acteur', nom_acteur as 'Nom Acteur', classe as 'Classe', type_entree as 'Type Entrée', detail as 'Détail / Contenu', appreciation as 'Appréciation' FROM base_globale", conn)
+    st.session_state.prof_credentials = pd.read_sql("SELECT nom as 'Nom', prenom as 'Prénom', mot_de_passe as 'Mot de passe', matiere_principale as 'Matière Principale', classe_attribuee as 'Classe Attribuée' FROM prof_credentials", conn)
     conn.close()
 
 if "espace_actif" not in st.session_state:
@@ -606,41 +587,6 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
 
     return bytes(pdf.output())
 
-def generer_edt_pdf(classe_nom, df_edt):
-    """Génère un PDF propre pour l'emploi du temps d'une classe."""
-    pdf = PDFReport()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 13)
-    pdf.cell(0, 8, f"EMPLOI DU TEMPS - CLASSE DE {classe_nom.upper()}", 0, 1, "C")
-    pdf.ln(4)
-
-    pdf.set_font("Arial", "B", 9)
-    pdf.set_fill_color(30, 58, 138)
-    pdf.set_text_color(255, 255, 255)
-
-    cols = list(df_edt.columns)
-    col_width = 190 / (len(cols) + 1)
-    
-    pdf.cell(col_width, 8, "Jours", 1, 0, "C", True)
-    for col in cols:
-        pdf.cell(col_width, 8, str(col)[:10], 1, 0, "C", True)
-    pdf.ln()
-
-    pdf.set_font("Arial", "", 8)
-    pdf.set_text_color(0, 0, 0)
-    fill = False
-    pdf.set_fill_color(240, 244, 248)
-
-    for jour, row in df_edt.iterrows():
-        pdf.cell(col_width, 7, str(jour), 1, 0, "C", fill)
-        for col in cols:
-            val = str(row[col]) if pd.notnull(row[col]) else ""
-            pdf.cell(col_width, 7, val[:12], 1, 0, "C", fill)
-        pdf.ln()
-        fill = not fill
-
-    return bytes(pdf.output())
-
 def generer_rapport_general_pdf():
     pdf = PDFReport()
     pdf.add_page()
@@ -753,32 +699,6 @@ def assistant_ia_repondre(question):
 st.markdown('<div class="header-ecole">🦁 Cours Privé Nelson Mandela</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Excellence, Discipline et Ancrage Culturel au Cœur du Sénégal</div>', unsafe_allow_html=True)
 
-if st.session_state.espace_actif in ["🔒 Espace Administration (Sécurisé)", "👨‍🏫 Espace Professeurs / Maîtres"]:
-    st.markdown("---")
-    terme_recherche = st.text_input("🔍 Recherche globale rapide (Élève, Professeur, Classe, Matière) :", "")
-    if terme_recherche.strip():
-        st.markdown(f"### Résultats de la recherche pour : **{terme_recherche}**")
-        t = terme_recherche.lower()
-        
-        res_eleves = st.session_state.eleves_db[st.session_state.eleves_db.apply(lambda row: row.astype(str).str.lower().str.contains(t).any(), axis=1)]
-        res_classes = st.session_state.classes_db[st.session_state.classes_db.apply(lambda row: row.astype(str).str.lower().str.contains(t).any(), axis=1)]
-        res_notes = st.session_state.notes_db[st.session_state.notes_db.apply(lambda row: row.astype(str).str.lower().str.contains(t).any(), axis=1)]
-        
-        col_r1, col_r2, col_r3 = st.columns(3)
-        with col_r1:
-            st.write(f"**Élèves trouvés ({len(res_eleves)})**")
-            if not res_eleves.empty: st.dataframe(res_eleves, use_container_width=True)
-            else: st.info("Aucun élève.")
-        with col_r2:
-            st.write(f"**Classes trouvées ({len(res_classes)})**")
-            if not res_classes.empty: st.dataframe(res_classes, use_container_width=True)
-            else: st.info("Aucune classe.")
-        with col_r3:
-            st.write(f"**Notes trouvées ({len(res_notes)})**")
-            if not res_notes.empty: st.dataframe(res_notes, use_container_width=True)
-            else: st.info("Aucune note.")
-        st.markdown("---")
-
 if st.session_state.espace_actif != "🏠 Accueil":
     col_ret1, col_ret2 = st.columns([1, 5])
     with col_ret1:
@@ -871,8 +791,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
     with s1:
         st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Élèves Inscrits</h4><h2 style="margin:0;color:#1E3A8A;">{len(st.session_state.eleves_db)}</h2></div>', unsafe_allow_html=True)
     with s2:
-        classes_count = len(st.session_state.classes_db) if "classes_db" in st.session_state and st.session_state.classes_db is not None else 0
-        st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Classes Actives</h4><h2 style="margin:0;color:#1E3A8A;">{classes_count}</h2></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Classes Actives</h4><h2 style="margin:0;color:#1E3A8A;">{len(st.session_state.classes_db)}</h2></div>', unsafe_allow_html=True)
     with s3:
         st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Professeurs</h4><h2 style="margin:0;color:#1E3A8A;">{len(st.session_state.prof_credentials)}</h2></div>', unsafe_allow_html=True)
     with s4:
@@ -922,7 +841,7 @@ if st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
     else:
         prof_connecte = st.session_state.prof_nom_connecte
         classe_autorisee = st.session_state.prof_classe_autorisee
-        st.success(f"Connecté en tant que : **{prof_connecte}** | Accès limité à la classe assignée : **{classe_autorisee}**")
+        st.success(f"Connecté en tant que : **{prof_connecte}** | Classe autorisée : **{classe_autorisee}**")
         if st.button("Se déconnecter"):
             st.session_state.prof_logged = False
             st.session_state.prof_nom_connecte = ""
@@ -977,7 +896,7 @@ if st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
                                 st.session_state.absences_db = pd.concat([st.session_state.absences_db, pd.DataFrame(nouveaux_abs)], ignore_index=True)
                                 st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, pd.DataFrame(nouvelles_entrées_bg)], ignore_index=True)
                                 
-                                conn = get_db_connection()
+                                conn = obtenir_connexion()
                                 pd.DataFrame(nouvelles_entrées_bg).to_sql('base_globale', conn, if_exists='append', index=False)
                                 conn.close()
                                 
@@ -1111,7 +1030,7 @@ if st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
                         st.session_state.notes_db = pd.concat([st.session_state.notes_db, pd.DataFrame(new_rows)], ignore_index=True)
                         st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, pd.DataFrame(new_bg_rows)], ignore_index=True)
                         
-                        conn = get_db_connection()
+                        conn = obtenir_connexion()
                         st.session_state.notes_db.to_sql('notes', conn, if_exists='replace', index=False)
                         pd.DataFrame(new_bg_rows).to_sql('base_globale', conn, if_exists='append', index=False)
                         conn.close()
@@ -1152,7 +1071,7 @@ if st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
                         }])
                         st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, bg_entry], ignore_index=True)
                         
-                        conn = get_db_connection()
+                        conn = obtenir_connexion()
                         bg_entry.to_sql('base_globale', conn, if_exists='append', index=False)
                         conn.close()
 
@@ -1200,7 +1119,7 @@ if st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
                         }])
                         st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, bg_prof], ignore_index=True)
                         
-                        conn = get_db_connection()
+                        conn = obtenir_connexion()
                         bg_prof.to_sql('base_globale', conn, if_exists='append', index=False)
                         conn.close()
 
@@ -1286,14 +1205,6 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
             st.subheader("Emploi du Temps de la Classe")
             grid_edt = get_or_create_edt(classe)
             st.dataframe(grid_edt, use_container_width=True)
-            
-            pdf_edt_data = generer_edt_pdf(classe, grid_edt)
-            st.download_button(
-                label="📄 Télécharger l'Emploi du Temps en PDF",
-                data=pdf_edt_data,
-                file_name=f"emploi_du_temps_{classe.replace(' ', '_')}.pdf",
-                mime="application/pdf"
-            )
 
         with t3:
             st.subheader("Absences (Historique Base Globale)")
@@ -1388,6 +1299,8 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
         if adm_tab == "🏫 Insertion d'une Classe Entière (Prof, Élèves & Dates)":
             st.subheader("🏫 Insertion Complète d'une Classe Entière")
+            st.caption("Permet d'ajouter simultanément la classe, son professeur responsable, et la liste des élèves avec leurs dates de naissance.")
+
             with st.form("form_inserer_classe_entiere"):
                 st.markdown("#### 1. Informations de la Classe")
                 c_nom_classe = st.text_input("Nom de la Classe (ex: 4ème B ou CM2 A)")
@@ -1400,11 +1313,19 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 p_password = st.text_input("Mot de passe provisoire du Professeur", type="password")
 
                 st.markdown("#### 3. Liste des Élèves de cette Classe")
+                st.info("Saisissez les élèves ci-dessous (Nom complet et Date de naissance). Vous pouvez ajouter ou supprimer des lignes.")
+                
                 df_saisie_eleves_init = pd.DataFrame([
                     {"Nom Complet": "Prénom Nom 1", "Date de Naissance": "2012-01-01"},
                     {"Nom Complet": "Prénom Nom 2", "Date de Naissance": "2012-05-15"}
                 ])
-                eleves_saisies_edit = st.data_editor(df_saisie_eleves_init, num_rows="dynamic", use_container_width=True, key="table_saisie_eleves_masse")
+                
+                eleves_saisies_edit = st.data_editor(
+                    df_saisie_eleves_init, 
+                    num_rows="dynamic", 
+                    use_container_width=True,
+                    key="table_saisie_eleves_masse"
+                )
 
                 btn_valider_classe = st.form_submit_button("🚀 Enregistrer toute la Classe, le Prof et les Élèves")
 
@@ -1445,16 +1366,18 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             df_nouveaux_eleves = pd.DataFrame(nouveaux_eleves_list)
                             st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, df_nouveaux_eleves], ignore_index=True)
 
-                        conn = get_db_connection()
+                        conn = obtenir_connexion()
                         st.session_state.classes_db.to_sql('classes', conn, if_exists='replace', index=False)
                         st.session_state.prof_credentials.to_sql('prof_credentials', conn, if_exists='replace', index=False)
                         st.session_state.eleves_db.to_sql('eleves', conn, if_exists='replace', index=False)
                         conn.close()
 
-                        st.success(f"🎉 La classe **{c_nom_classe}**, le professeur **{prof_resp_complet}** et **{len(nouveaux_eleves_list)} élève(s)** ont été insérés avec succès !")
+                        st.success(f"🎉 La classe **{c_nom_classe}**, le professeur **{prof_resp_complet}** et **{len(nouveaux_eleves_list)} élève(s)** ont été insérés avec succès dans le système !")
 
         elif adm_tab == "🛡️ Gestionnaires & Propriétaires (Liste Blanche)":
             st.subheader("🛡️ Liste Blanche des Gestionnaires & Propriétaires")
+            st.info("💡 **Règle d'accès :** Seul l'administrateur principal (`cpnm@gmail.com`) a les privilèges exclusifs d'ajouter ou de révoquer des membres dans cette liste.")
+
             df_gp = st.session_state.gestionnaires_proprietaires_db
             is_super_admin = (email_actuel.strip().lower() == "cpnm@gmail.com")
 
@@ -1473,107 +1396,384 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     else:
                         st.caption("🔒 (Réservé à cpnm@gmail.com)")
 
+            st.markdown("---")
+            if is_super_admin:
+                with st.expander("➕ Ajouter un Gestionnaire ou Propriétaire"):
+                    with st.form("form_add_gp"):
+                        gp_nom = st.text_input("Nom")
+                        gp_prenom = st.text_input("Prénom")
+                        gp_email = st.text_input("Email professionnel")
+                        gp_pass = st.text_input("Mot de passe temporaire", type="password")
+                        gp_role = st.selectbox("Rôle", ["Gestionnaire", "Propriétaire"])
+                        
+                        if st.form_submit_button("Ajouter à la liste blanche"):
+                            if gp_nom and gp_email and gp_pass:
+                                if gp_email in df_gp["Email"].values:
+                                    st.warning("Cet email est déjà enregistré.")
+                                else:
+                                    new_member = pd.DataFrame([{
+                                        "Nom": gp_nom, "Prénom": gp_prenom, "Email": gp_email, 
+                                        "Mot de passe": hacher_mot_de_passe(gp_pass), "Rôle": gp_role
+                                    }])
+                                    st.session_state.gestionnaires_proprietaires_db = pd.concat([df_gp, new_member], ignore_index=True)
+                                    st.success("Nouveau membre ajouté avec succès à la liste blanche !")
+                                    st.rerun()
+                            else:
+                                st.warning("Veuillez remplir tous les champs obligatoires.")
+            else:
+                st.warning("⚠️ Vous devez être connecté avec l'adresse `cpnm@gmail.com` pour pouvoir ajouter de nouveaux gestionnaires ou propriétaires.")
+
         elif adm_tab == "📊 Liste & Classement des Élèves (Par Classe & Niveau)":
             st.subheader("📊 Classement et Liste des Élèves par Classe et par Niveau (Cycle)")
+
             df_merged = pd.merge(st.session_state.eleves_db, st.session_state.classes_db[["Classe", "Cycle"]], on="Classe", how="left")
+
             t_niv, t_cls = st.tabs(["🏛️ Par Niveau (Cycle)", "🏫 Par Classe"])
 
             with t_niv:
-                for cyc in ["Préscolaire", "Élémentaire", "Collège"]:
+                st.markdown("### 🏛️ Répartition des Élèves par Niveau (Cycle)")
+                cycles_existants = ["Préscolaire", "Élémentaire", "Collège"]
+                for cyc in cycles_existants:
                     df_c = df_merged[df_merged["Cycle"] == cyc]
                     if not df_c.empty:
                         with st.expander(f"📌 Cycle {cyc.upper()} ({len(df_c)} Élèves)", expanded=True):
                             df_export_niv = df_c[["Nom Complet", "Classe", "Date de Naissance"]].sort_values(by=["Classe", "Nom Complet"])
                             st.dataframe(df_export_niv, use_container_width=True)
+                            
+                            c_exp_pdf, c_exp_excel = st.columns(2)
+                            with c_exp_pdf:
+                                pdf_niv = export_table_pdf(f"LISTE DES ÉLÈVES - CYCLE {cyc.upper()}", df_export_niv)
+                                st.download_button(
+                                    label=f"📄 Télécharger PDF ({cyc})",
+                                    data=pdf_niv,
+                                    file_name=f"eleves_cycle_{cyc.lower()}.pdf",
+                                    mime="application/pdf",
+                                    key=f"btn_pdf_cycle_{cyc}"
+                                )
+                            with c_exp_excel:
+                                excel_niv = export_table_excel(df_export_niv)
+                                st.download_button(
+                                    label=f"📊 Télécharger Excel ({cyc})",
+                                    data=excel_niv,
+                                    file_name=f"eleves_cycle_{cyc.lower()}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    key=f"btn_excel_cycle_{cyc}"
+                                )
 
             with t_cls:
-                for cl in st.session_state.classes_db["Classe"].tolist():
+                st.markdown("### 🏫 Répartition des Élèves par Classe")
+                classes_existantes = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else []
+                for cl in classes_existantes:
                     df_cl = df_merged[df_merged["Classe"] == cl]
                     if not df_cl.empty:
                         with st.expander(f"🏫 Classe : {cl} ({len(df_cl)} Élèves)", expanded=True):
                             df_export_cls = df_cl[["Nom Complet", "Date de Naissance"]].sort_values(by="Nom Complet")
                             st.dataframe(df_export_cls, use_container_width=True)
+                            
+                            c_exp_pdf_cls, c_exp_excel_cls = st.columns(2)
+                            clean_cl_name = cl.replace(" ", "_").lower()
+                            with c_exp_pdf_cls:
+                                pdf_cls = export_table_pdf(f"LISTE DES ÉLÈVES - CLASSE {cl.upper()}", df_export_cls)
+                                st.download_button(
+                                    label=f"📄 Télécharger PDF ({cl})",
+                                    data=pdf_cls,
+                                    file_name=f"eleves_classe_{clean_cl_name}.pdf",
+                                    mime="application/pdf",
+                                    key=f"btn_pdf_classe_{clean_cl_name}"
+                                )
+                            with c_exp_excel_cls:
+                                excel_cls = export_table_excel(df_export_cls)
+                                st.download_button(
+                                    label=f"📊 Télécharger Excel ({cl})",
+                                    data=excel_cls,
+                                    file_name=f"eleves_classe_{clean_cl_name}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    key=f"btn_excel_classe_{clean_cl_name}"
+                                )
 
         elif adm_tab == "🗄️ Base Globale & Suivi Annuel/Trimestriel/Mensuel":
             st.subheader("🗄️ Base Globale de Suivi des Élèves et Professeurs")
-            st.dataframe(st.session_state.base_globale_db, use_container_width=True)
-            
-            if st.button("📊 Télécharger le RAPPORT GÉNÉRAL OFFICIEL (PDF)"):
-                pdf_rap_gen = generer_rapport_general_pdf()
+            st.caption("Consultation, segmentation par type d'entrée (Notes, Présences/Absences, Rapports) et impression globale.")
+
+            f1, f2, f3, f4, f5 = st.columns(5)
+            with f1:
+                filtre_acteur = st.selectbox("Type d'Acteur", ["Tous", "Élève", "Professeur"])
+            with f2:
+                filtre_entree = st.selectbox("Catégorie d'Entrée", ["Toutes", "Note", "Absence", "Présence/Retard", "Rapport", "Conduite", "Appréciation"])
+            with f3:
+                filtre_annee = st.selectbox("Année Scolaire", ["Toutes", "2025-2026", "2024-2025"])
+            with f4:
+                filtre_tri = st.selectbox("Période / Trimestre / Semestre", ["Tous", "1er Semestre", "2ème Semestre", "1er Trimestre", "2ème Trimestre", "3ème Trimestre"])
+            with f5:
+                filtre_mois = st.selectbox("Mois", ["Tous", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"])
+
+            df_bg = st.session_state.base_globale_db.copy()
+
+            if filtre_acteur != "Tous": df_bg = df_bg[df_bg["Type Acteur"] == filtre_acteur]
+            if filtre_entree != "Toutes": df_bg = df_bg[df_bg["Type Entrée"] == filtre_entree]
+            if filtre_annee != "Toutes": df_bg = df_bg[df_bg["Année"] == filtre_annee]
+            if filtre_tri != "Tous": df_bg = df_bg[df_bg["Trimestre"] == filtre_tri]
+            if filtre_mois != "Tous": df_bg = df_bg[df_bg["Mois"] == filtre_mois]
+
+            st.dataframe(df_bg, use_container_width=True)
+
+            col_pdf1, col_pdf2 = st.columns(2)
+            with col_pdf1:
+                pdf_base_g = export_table_pdf("EXTRAIT BASE GLOBALE DE SUIVI", df_bg)
                 st.download_button(
-                    label="📥 Cliquer ici pour télécharger",
-                    data=pdf_rap_gen,
-                    file_name="rapport_general_nelson_mandela.pdf",
+                    label="📄 Télécharger la vue filtrée en PDF",
+                    data=pdf_base_g,
+                    file_name="extrait_base_globale.pdf",
                     mime="application/pdf"
                 )
+            with col_pdf2:
+                pdf_rap_gen = generer_rapport_general_pdf()
+                st.download_button(
+                    label="📊 Télécharger le RAPPORT GÉNÉRAL OFFICIEL (PDF)",
+                    data=pdf_rap_gen,
+                    file_name="rapport_general_nelson_mandela.pdf",
+                    mime="application/pdf",
+                    type="primary"
+                )
+
+            st.markdown("---")
+            with st.expander("➕ Inserer une nouvelle entrée administrative dans la Base Globale"):
+                with st.form("form_add_bg"):
+                    c_date = st.date_input("Date", value=datetime.today())
+                    c_annee = st.selectbox("Année Scolaire", ["2025-2026", "2026-2027"])
+                    c_tri = st.selectbox("Période / Trimestre / Semestre", ["1er Semestre", "2ème Semestre", "1er Trimestre", "2ème Trimestre", "3ème Trimestre"])
+                    c_mois = st.selectbox("Mois", ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"])
+                    c_type_act = st.selectbox("Type d'Acteur", ["Élève", "Professeur"])
+                    c_nom_act = st.text_input("Nom de l'Élève ou Enseignant")
+                    c_cls = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
+                    c_type_ent = st.selectbox("Type d'Entrée", ["Note", "Absence", "Présence/Retard", "Rapport", "Conduite", "Appréciation", "Sanction", "Félicitation"])
+                    c_det = st.text_area("Détail / Contenu")
+                    c_app = st.text_input("Appréciation Générale")
+
+                    if st.form_submit_button("Enregistrer dans la Base Globale"):
+                        if c_nom_act and c_det:
+                            new_entry = pd.DataFrame([{
+                                "Date": str(c_date), "Année": c_annee, "Trimestre": c_tri, "Mois": c_mois,
+                                "Type Acteur": c_type_act, "Nom Acteur": c_nom_act, "Classe": c_cls,
+                                "Type Entrée": c_type_ent, "Détail / Contenu": c_det, "Appréciation": c_app
+                            }])
+                            st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, new_entry], ignore_index=True)
+                            
+                            conn = obtenir_connexion()
+                            new_entry.to_sql('base_globale', conn, if_exists='append', index=False)
+                            conn.close()
+
+                            st.success("Entrée ajoutée à la Base Globale !")
+                            st.rerun()
 
         elif adm_tab == "🤖 Assistant IA Administration":
-            st.subheader("🤖 Assistant virtuel IA")
-            q_ia = st.text_input("Posez votre question à l'IA :")
-            if st.button("Consulter l'IA") and q_ia:
-                st.markdown(f"> {assistant_ia_repondre(q_ia)}")
+            st.subheader("🤖 Assistant virtuel IA - Administration Nelson Mandela")
+            st.caption("Posez une question ou demandez une analyse de situation de l'établissement.")
+            q_ia = st.text_input("Posez votre question à l'IA :", placeholder="ex: Quel est l'effectif ou quel est le bilan de la base globale ?")
+            if st.button("Consulter l'IA"):
+                if q_ia:
+                    rep = assistant_ia_repondre(q_ia)
+                    st.markdown(f"> {rep}")
+                else:
+                    st.warning("Veuillez saisir une question.")
 
         elif adm_tab == "📅 Emploi du Temps (Grille Jours x Heures)":
-            st.subheader("📅 Gestion de l'Emploi du Temps")
-            classes_dispo = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"]
-            classe_edt_sel = st.selectbox("Sélectionner la classe :", classes_dispo)
-            if classe_edt_sel:
-                current_edt = get_or_create_edt(classe_edt_sel)
-                edt_modifie = st.data_editor(current_edt, num_rows="dynamic", use_container_width=True, key=f"editeur_edt_{classe_edt_sel}")
-                if st.button("💾 Enregistrer l'Emploi du Temps"):
-                    st.session_state.edt_grid_db[classe_edt_sel] = edt_modifie
-                    st.success("Emploi du temps mis à jour avec succès !")
+            st.subheader("Édition de l'Emploi du Temps (Jours à gauche | Heures en haut)")
+            cls_selected = st.selectbox("Sélectionner la classe à configurer", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
+            
+            st.info("Remplissez la grille d'emploi du temps ci-dessous. Chaque case représente la matière ou l'activité.")
+            
+            grid_edt = get_or_create_edt(cls_selected)
+
+            edited_grid = st.data_editor(
+                grid_edt,
+                use_container_width=True,
+                key=f"edt_editor_{cls_selected}"
+            )
+
+            if st.button("💾 Enregistrer la Grille de l'Emploi du Temps"):
+                st.session_state.edt_grid_db[cls_selected] = edited_grid
+                st.success(f"Emploi du temps de la classe {cls_selected} mis à jour !")
 
         elif adm_tab == "👨‍🎓 Élèves (Export PDF, Modif, Suppr)":
-            st.subheader("Gestion des Élèves")
+            st.subheader("Gestion des Élèves & Suppression / Modification")
+            
+            pdf_eleves = export_table_pdf("LISTE OFFICIELLE DES ÉLÈVES", st.session_state.eleves_db, ["Nom Complet", "Date de Naissance", "Classe"])
+            st.download_button(
+                label="🖨️ Imprimer / Télécharger la Liste des Élèves (PDF)",
+                data=pdf_eleves,
+                file_name="liste_eleves_nelson_mandela.pdf",
+                mime="application/pdf"
+            )
+
+            st.markdown("---")
+            with st.expander("➕ Ajouter un nouvel élève"):
+                with st.form("form_add_eleve"):
+                    c_nom = st.text_input("Nom complet de l'élève")
+                    c_date = st.date_input("Date de naissance", value=datetime(2012, 1, 1))
+                    c_cls = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
+                    if st.form_submit_button("Ajouter l'élève"):
+                        if c_nom:
+                            new_el = pd.DataFrame([{"Nom Complet": c_nom, "Date de Naissance": str(c_date), "Classe": c_cls, "Photo": None}])
+                            st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, new_el], ignore_index=True)
+                            
+                            conn = obtenir_connexion()
+                            st.session_state.eleves_db.to_sql('eleves', conn, if_exists='replace', index=False)
+                            conn.close()
+
+                            st.success("Élève ajouté avec succès.")
+                            st.rerun()
+
+            st.markdown("#### 🗑️ Supprimer un Élève Spécifique")
+            if not st.session_state.eleves_db.empty:
+                eleve_a_supprimer = st.selectbox("Sélectionner l'élève à supprimer", st.session_state.eleves_db["Nom Complet"].tolist())
+                if st.button("❌ Supprimer cet élève"):
+                    st.session_state.eleves_db = st.session_state.eleves_db[st.session_state.eleves_db["Nom Complet"] != eleve_a_supprimer].reset_index(drop=True)
+                    
+                    conn = obtenir_connexion()
+                    st.session_state.eleves_db.to_sql('eleves', conn, if_exists='replace', index=False)
+                    conn.close()
+
+                    st.success(f"L'élève **{eleve_a_supprimer}** a été supprimé de la base avec succès !")
+                    st.rerun()
+            else:
+                st.info("Aucun élève enregistré.")
+
+            st.markdown("---")
+            st.markdown("#### Liste des Élèves (Modifiable directement)")
             edited_eleves = st.data_editor(st.session_state.eleves_db, num_rows="dynamic", use_container_width=True, key="editor_eleves")
             if st.button("💾 Enregistrer les Modifications Élèves"):
                 st.session_state.eleves_db = edited_eleves
-                conn = get_db_connection()
+                
+                conn = obtenir_connexion()
                 st.session_state.eleves_db.to_sql('eleves', conn, if_exists='replace', index=False)
                 conn.close()
+
                 st.success("Base des élèves mise à jour !")
 
         elif adm_tab == "👨‍🏫 Professeurs (Export PDF, Modif, Suppr)":
-            st.subheader("Gestion des Professeurs")
+            st.subheader("Gestion des Professeurs & Suppression / Modification")
+            
+            pdf_profs = export_table_pdf("LISTE DU CORPS ENSEIGNANT", st.session_state.prof_credentials, ["Nom", "Prénom", "Matière Principale", "Classe Attribuée"])
+            st.download_button(
+                label="🖨️ Imprimer / Télécharger la Liste des Professeurs (PDF)",
+                data=pdf_profs,
+                file_name="liste_professeurs_nelson_mandela.pdf",
+                mime="application/pdf"
+            )
+
+            st.markdown("---")
+            with st.expander("➕ Enregistrer un professeur"):
+                with st.form("form_add_prof"):
+                    p_n = st.text_input("Nom")
+                    p_p = st.text_input("Prénom")
+                    p_mat = st.text_input("Matière principale")
+                    p_cls_attrib = st.selectbox("Classe Attribuée", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
+                    p_pwd = st.text_input("Mot de passe", type="password")
+                    if st.form_submit_button("Enregistrer le professeur"):
+                        if p_n and p_p and p_pwd:
+                            new_p = pd.DataFrame([{"Nom": p_n, "Prénom": p_p, "Mot de passe": hacher_mot_de_passe(p_pwd), "Matière Principale": p_mat, "Classe Attribuée": p_cls_attrib}])
+                            st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_p], ignore_index=True)
+                            
+                            conn = obtenir_connexion()
+                            st.session_state.prof_credentials.to_sql('prof_credentials', conn, if_exists='replace', index=False)
+                            conn.close()
+
+                            st.success("Professeur enregistré.")
+                            st.rerun()
+
+            st.markdown("#### 🗑️ Supprimer un Professeur Spécifique")
+            if not st.session_state.prof_credentials.empty:
+                liste_profs_combo = [f"{row['Prénom']} {row['Nom']} ({row['Matière Principale']})" for _, row in st.session_state.prof_credentials.iterrows()]
+                prof_choisi_del = st.selectbox("Sélectionner le professeur à supprimer", liste_profs_combo)
+                if st.button("❌ Supprimer ce professeur"):
+                    idx_to_drop = None
+                    for idx, row in st.session_state.prof_credentials.iterrows():
+                        if f"{row['Prénom']} {row['Nom']} ({row['Matière Principale']})" == prof_choisi_del:
+                            idx_to_drop = idx
+                            break
+                    if idx_to_drop is not None:
+                        st.session_state.prof_credentials = st.session_state.prof_credentials.drop(idx_to_drop).reset_index(drop=True)
+                        
+                        conn = obtenir_connexion()
+                        st.session_state.prof_credentials.to_sql('prof_credentials', conn, if_exists='replace', index=False)
+                        conn.close()
+
+                        st.success(f"Le professeur **{prof_choisi_del}** a été supprimé avec succès !")
+                        st.rerun()
+            else:
+                st.info("Aucun professeur enregistré.")
+
+            st.markdown("---")
+            st.markdown("#### Liste des Professeurs (Modifiable directement)")
             edited_profs = st.data_editor(st.session_state.prof_credentials, num_rows="dynamic", use_container_width=True, key="editor_profs")
             if st.button("💾 Enregistrer les Modifications Professeurs"):
                 st.session_state.prof_credentials = edited_profs
-                conn = get_db_connection()
+                
+                conn = obtenir_connexion()
                 st.session_state.prof_credentials.to_sql('prof_credentials', conn, if_exists='replace', index=False)
                 conn.close()
-                st.success("Base des professeurs mise à jour !")
+
+                st.success("Base professeurs mise à jour !")
 
         elif adm_tab == "🏫 Classes (Ajouter, Modifier, Supprimer)":
             st.subheader("Gestion des Classes")
+            
+            with st.expander("➕ Créer une classe"):
+                with st.form("form_add_classe"):
+                    nom_c = st.text_input("Nom de la classe (ex: 4ème A)")
+                    cycle = st.selectbox("Cycle", ["Préscolaire", "Élémentaire", "Collège"])
+                    if st.form_submit_button("Créer la classe"):
+                        if nom_c:
+                            new_cl = pd.DataFrame([{"Classe": nom_c, "Cycle": cycle, "Professeur Responsable": "Non assigné"}])
+                            st.session_state.classes_db = pd.concat([st.session_state.classes_db, new_cl], ignore_index=True)
+                            
+                            conn = obtenir_connexion()
+                            st.session_state.classes_db.to_sql('classes', conn, if_exists='replace', index=False)
+                            conn.close()
+
+                            st.success("Classe créée.")
+                            st.rerun()
+
+            st.markdown("#### Liste des Classes (Modifiable)")
             edited_classes = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True, key="editor_classes")
             if st.button("💾 Enregistrer les Modifications Classes"):
                 st.session_state.classes_db = edited_classes
-                conn = get_db_connection()
+                
+                conn = obtenir_connexion()
                 st.session_state.classes_db.to_sql('classes', conn, if_exists='replace', index=False)
                 conn.close()
+
                 st.success("Base des classes mise à jour !")
 
         elif adm_tab == "📋 Listes Blanches Parents":
-            st.subheader("Gestion des Accès Parents (Liste Blanche)")
-            edited_lw = st.data_editor(st.session_state.parents_white_list, num_rows="dynamic", use_container_width=True, key="editor_lw")
-            if st.button("Enregistrer la liste blanche"):
-                st.session_state.parents_white_list = edited_lw
-                st.success("Liste blanche mise à jour.")
+            st.subheader("Gestion de la Liste Blanche des Parents")
+            st.caption("Consultez, modifiez ou mettez à jour les numéros de téléphone et élèves autorisés à se connecter sur l'espace parents.")
+            
+            edited_parents = st.data_editor(
+                st.session_state.parents_white_list, 
+                num_rows="dynamic", 
+                use_container_width=True, 
+                key="editor_parents_white_list"
+            )
+            
+            if st.button("💾 Enregistrer les modifications de la Liste Blanche"):
+                st.session_state.parents_white_list = edited_parents
+                st.success("La liste blanche des parents a été mise à jour avec succès !")
 
         elif adm_tab == "📑 Rapports Journaliers Réceptionnés":
-            st.subheader("Rapports Journaliers des Professeurs")
+            st.subheader("Rapports Journaliers Transmis par les Enseignants")
+            st.caption("Consultez l'ensemble des bilans et remarques de séance envoyés par le corps enseignant.")
+            
             if not st.session_state.rapports_journaliers_prof.empty:
                 st.dataframe(st.session_state.rapports_journaliers_prof, use_container_width=True)
-
-# ESPACE RAPPORTS GLOBAUX & ADMINISTRATION XXL
-elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
-    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Rapports Globaux et Consolidation Annuelle</div>', unsafe_allow_html=True)
-    if st.button("📄 Générer et Télécharger le Rapport Global Officiel (PDF)", use_container_width=True):
-        pdf_gen = generer_rapport_general_pdf()
-        st.download_button(
-            label="📥 Cliquer ici pour télécharger le PDF",
-            data=pdf_gen,
-            file_name="rapport_general_nelson_mandela.pdf",
-            mime="application/pdf"
-        )
+                
+                pdf_rapports = export_table_pdf("RAPPORTS JOURNALIERS DES ENSEIGNANTS", st.session_state.rapports_journaliers_prof)
+                st.download_button(
+                    label="📄 Télécharger les Rapports Journaliers (PDF)",
+                    data=pdf_rapports,
+                    file_name="rapports_journaliers_professeurs.pdf",
+                    mime="application/pdf"
+                )
+            else:
+                st.info("Aucun rapport journalier n'a été soumis pour le moment.")
