@@ -599,6 +599,41 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
 
     return bytes(pdf.output())
 
+def generer_edt_pdf(classe_nom, df_edt):
+    """Génère un PDF propre pour l'emploi du temps d'une classe."""
+    pdf = PDFReport()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 13)
+    pdf.cell(0, 8, f"EMPLOI DU TEMPS - CLASSE DE {classe_nom.upper()}", 0, 1, "C")
+    pdf.ln(4)
+
+    pdf.set_font("Arial", "B", 9)
+    pdf.set_fill_color(30, 58, 138)
+    pdf.set_text_color(255, 255, 255)
+
+    cols = list(df_edt.columns)
+    col_width = 190 / (len(cols) + 1)
+    
+    pdf.cell(col_width, 8, "Jours", 1, 0, "C", True)
+    for col in cols:
+        pdf.cell(col_width, 8, str(col)[:10], 1, 0, "C", True)
+    pdf.ln()
+
+    pdf.set_font("Arial", "", 8)
+    pdf.set_text_color(0, 0, 0)
+    fill = False
+    pdf.set_fill_color(240, 244, 248)
+
+    for jour, row in df_edt.iterrows():
+        pdf.cell(col_width, 7, str(jour), 1, 0, "C", fill)
+        for col in cols:
+            val = str(row[col]) if pd.notnull(row[col]) else ""
+            pdf.cell(col_width, 7, val[:12], 1, 0, "C", fill)
+        pdf.ln()
+        fill = not fill
+
+    return bytes(pdf.output())
+
 def generer_rapport_general_pdf():
     pdf = PDFReport()
     pdf.add_page()
@@ -1245,6 +1280,15 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
             st.subheader("Emploi du Temps de la Classe")
             grid_edt = get_or_create_edt(classe)
             st.dataframe(grid_edt, use_container_width=True)
+            
+            # Option pour télécharger l'emploi du temps en PDF
+            pdf_edt_data = generer_edt_pdf(classe, grid_edt)
+            st.download_button(
+                label="📄 Télécharger l'Emploi du Temps en PDF",
+                data=pdf_edt_data,
+                file_name=f"emploi_du_temps_{classe.replace(' ', '_')}.pdf",
+                mime="application/pdf"
+            )
 
         with t3:
             st.subheader("Absences (Historique Base Globale)")
@@ -1636,9 +1680,19 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     key=f"editeur_edt_complet_{classe_edt_sel}"
                 )
 
-                if st.button("💾 Enregistrer l'Emploi du Temps"):
-                    st.session_state.edt_grid_db[classe_edt_sel] = edt_modifie
-                    st.success(f"L'emploi du temps de la classe **{classe_edt_sel}** a été mis à jour avec succès (jours et créneaux modifiés) !")
+                col_edt1, col_edt2 = st.columns(2)
+                with col_edt1:
+                    if st.button("💾 Enregistrer l'Emploi du Temps"):
+                        st.session_state.edt_grid_db[classe_edt_sel] = edt_modifie
+                        st.success(f"L'emploi du temps de la classe **{classe_edt_sel}** a été mis à jour avec succès (jours et créneaux modifiés) !")
+                with col_edt2:
+                    pdf_edt_admin = generer_edt_pdf(classe_edt_sel, edt_modifie)
+                    st.download_button(
+                        label="📄 Télécharger cet Emploi du Temps en PDF",
+                        data=pdf_edt_admin,
+                        file_name=f"emploi_du_temps_{classe_edt_sel.replace(' ', '_')}.pdf",
+                        mime="application/pdf"
+                    )
 
         elif adm_tab == "👨‍🎓 Élèves (Export PDF, Modif, Suppr)":
             st.subheader("Gestion des Élèves & Suppression / Modification")
