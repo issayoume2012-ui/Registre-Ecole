@@ -1,6 +1,7 @@
 import base64
 from datetime import datetime
 import io
+import json
 import os
 import urllib.request
 from fpdf import FPDF
@@ -8,7 +9,48 @@ import pandas as pd
 import streamlit as st
 
 # ==========================================
-# 0. GESTION DES POLICES UNICODE (OPTIMISÉE POUR MOBILE)
+# 0. GESTION DE LA PERSISTANCE EXTERNE (JSON)
+# ==========================================
+DB_FILE = "cpnm_database.json"
+
+def charger_donnees_externes():
+    """Charge les données depuis le fichier JSON externe s'il existe."""
+    if os.path.exists(DB_FILE):
+        try:
+            with open(DB_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def sauvegarder_donnees_externes():
+    """Sauvegarde toutes les bases de données de session dans le fichier JSON externe."""
+    data_to_save = {
+        "admin_credentials": st.session_state.admin_credentials.to_dict(orient="split"),
+        "gestionnaires_proprietaires_db": st.session_state.gestionnaires_proprietaires_db.to_dict(orient="split"),
+        "prof_credentials": st.session_state.prof_credentials.to_dict(orient="split"),
+        "parents_white_list": st.session_state.parents_white_list.to_dict(orient="split"),
+        "classes_db": st.session_state.classes_db.to_dict(orient="split"),
+        "eleves_db": st.session_state.eleves_db.to_dict(orient="split"),
+        "base_globale_db": st.session_state.base_globale_db.to_dict(orient="split"),
+        "cahier_textes": st.session_state.cahier_textes.to_dict(orient="split"),
+        "rapports_journaliers_prof": st.session_state.rapports_journaliers_prof.to_dict(orient="split"),
+        "absences_db": st.session_state.absences_db.to_dict(orient="split"),
+        "notes_db": st.session_state.notes_db.to_dict(orient="split"),
+        "matieres_def": st.session_state.matieres_def.to_dict(orient="split"),
+        "conduite_db": st.session_state.conduite_db.to_dict(orient="split"),
+        "edt_grid_db": {k: v.to_dict(orient="split") for k, v in st.session_state.edt_grid_db.items()}
+    }
+    try:
+        with open(DB_FILE, "w", encoding="utf-8") as f:
+            json.dump(data_to_save, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        st.error(f"Erreur lors de la sauvegarde externe : {e}")
+
+saved_data = charger_donnees_externes()
+
+# ==========================================
+# 0. BIS. GESTION DES POLICES UNICODE (OPTIMISÉE POUR MOBILE)
 # ==========================================
 FONT_PATH = "DejaVuSans.ttf"
 
@@ -130,7 +172,7 @@ st.markdown(
 )
 
 # ==========================================
-# 2. INITIALISATION EXHAUSTIVE DES DONNÉES
+# 2. INITIALISATION EXHAUSTIVE DES DONNÉES (AVEC RESTAURATION EXTERNE)
 # ==========================================
 if "espace_actif" not in st.session_state:
     st.session_state.espace_actif = "🏠 Accueil"
@@ -138,68 +180,93 @@ if "espace_actif" not in st.session_state:
 if "authenticated_admin" not in st.session_state:
     st.session_state.authenticated_admin = False
 
+# Chargement sécurisé depuis le fichier JSON externe ou valeurs par défaut
 if "admin_credentials" not in st.session_state:
-    st.session_state.admin_credentials = pd.DataFrame([
-        {"Nom": "Admin", "Prénom": "Principal", "Email": "cpnm@gmail.com", "Mot de passe": "cpnm2026"}
-    ])
+    if "admin_credentials" in saved_data:
+        st.session_state.admin_credentials = pd.DataFrame(**saved_data["admin_credentials"])
+    else:
+        st.session_state.admin_credentials = pd.DataFrame([
+            {"Nom": "Admin", "Prénom": "Principal", "Email": "cpnm@gmail.com", "Mot de passe": "cpnm2026"}
+        ])
 
 if "gestionnaires_proprietaires_db" not in st.session_state:
-    st.session_state.gestionnaires_proprietaires_db = pd.DataFrame([
-        {"Nom": "Mandela", "Prénom": "Propriétaire", "Email": "proprio@cpnm.sn", "Mot de passe": "proprio2026", "Rôle": "Propriétaire"},
-        {"Nom": "Diop", "Prénom": "Gestionnaire", "Email": "gestion@cpnm.sn", "Mot de passe": "gestion2026", "Rôle": "Gestionnaire"}
-    ])
+    if "gestionnaires_proprietaires_db" in saved_data:
+        st.session_state.gestionnaires_proprietaires_db = pd.DataFrame(**saved_data["gestionnaires_proprietaires_db"])
+    else:
+        st.session_state.gestionnaires_proprietaires_db = pd.DataFrame([
+            {"Nom": "Mandela", "Prénom": "Propriétaire", "Email": "proprio@cpnm.sn", "Mot de passe": "proprio2026", "Rôle": "Propriétaire"},
+            {"Nom": "Diop", "Prénom": "Gestionnaire", "Email": "gestion@cpnm.sn", "Mot de passe": "gestion2026", "Rôle": "Gestionnaire"}
+        ])
 
 if "prof_credentials" not in st.session_state:
-    st.session_state.prof_credentials = pd.DataFrame([
-        {"Nom": "Diallo", "Prénom": "Ibrahima", "Mot de passe": "prof123", "Matière Principale": "Mathématiques", "Classe Attribuée": "6ème A"},
-        {"Nom": "Sow", "Prénom": "Aissatou", "Mot de passe": "prof456", "Matière Principale": "Français", "Classe Attribuée": "CP"},
-        {"Nom": "Ndiaye", "Prénom": "Cheikh", "Mot de passe": "prof789", "Matière Principale": "Histoire-Géographie", "Classe Attribuée": "5ème A"}
-    ])
+    if "prof_credentials" in saved_data:
+        st.session_state.prof_credentials = pd.DataFrame(**saved_data["prof_credentials"])
+    else:
+        st.session_state.prof_credentials = pd.DataFrame([
+            {"Nom": "Diallo", "Prénom": "Ibrahima", "Mot de passe": "prof123", "Matière Principale": "Mathématiques", "Classe Attribuée": "6ème A"},
+            {"Nom": "Sow", "Prénom": "Aissatou", "Mot de passe": "prof456", "Matière Principale": "Français", "Classe Attribuée": "CP"},
+            {"Nom": "Ndiaye", "Prénom": "Cheikh", "Mot de passe": "prof789", "Matière Principale": "Histoire-Géographie", "Classe Attribuée": "5ème A"}
+        ])
 
 if "parents_white_list" not in st.session_state:
-    st.session_state.parents_white_list = pd.DataFrame([
-        {"Téléphone": "+221771234567", "Prénom Élève": "Mamadou", "Nom Élève": "Diallo", "Année Naissance": 2012, "Classe": "6ème A"},
-        {"Téléphone": "+221769876543", "Prénom Élève": "Fatou", "Nom Élève": "Sow", "Année Naissance": 2015, "Classe": "CP"},
-    ])
+    if "parents_white_list" in saved_data:
+        st.session_state.parents_white_list = pd.DataFrame(**saved_data["parents_white_list"])
+    else:
+        st.session_state.parents_white_list = pd.DataFrame([
+            {"Téléphone": "+221771234567", "Prénom Élève": "Mamadou", "Nom Élève": "Diallo", "Année Naissance": 2012, "Classe": "6ème A"},
+            {"Téléphone": "+221769876543", "Prénom Élève": "Fatou", "Nom Élève": "Sow", "Année Naissance": 2015, "Classe": "CP"},
+        ])
 
 if "classes_db" not in st.session_state:
-    st.session_state.classes_db = pd.DataFrame(
-        columns=["Classe", "Cycle", "Professeur Responsable"],
-        data=[
-            ["6ème A", "Collège", "Ibrahima Diallo"],
-            ["5ème A", "Collège", "Cheikh Ndiaye"],
-            ["CP", "Élémentaire", "Aissatou Sow"],
-            ["Grande Section", "Préscolaire", "Marie Faye"],
-            ["CE1", "Élémentaire", "Ousmane Diop"]
-        ]
-    )
+    if "classes_db" in saved_data:
+        st.session_state.classes_db = pd.DataFrame(**saved_data["classes_db"])
+    else:
+        st.session_state.classes_db = pd.DataFrame(
+            columns=["Classe", "Cycle", "Professeur Responsable"],
+            data=[
+                ["6ème A", "Collège", "Ibrahima Diallo"],
+                ["5ème A", "Collège", "Cheikh Ndiaye"],
+                ["CP", "Élémentaire", "Aissatou Sow"],
+                ["Grande Section", "Préscolaire", "Marie Faye"],
+                ["CE1", "Élémentaire", "Ousmane Diop"]
+            ]
+        )
 
 if "eleves_db" not in st.session_state:
-    st.session_state.eleves_db = pd.DataFrame(
-        columns=["Nom Complet", "Date de Naissance", "Classe", "Photo"],
-        data=[
-            ["Mamadou Diallo", "2012-05-14", "6ème A", None],
-            ["Fatou Sow", "2015-08-20", "CP", None],
-            ["Aminata Ba", "2013-02-10", "6ème A", None],
-            ["Oumar Sy", "2011-11-03", "5ème A", None]
-        ]
-    )
+    if "eleves_db" in saved_data:
+        st.session_state.eleves_db = pd.DataFrame(**saved_data["eleves_db"])
+    else:
+        st.session_state.eleves_db = pd.DataFrame(
+            columns=["Nom Complet", "Date de Naissance", "Classe", "Photo"],
+            data=[
+                ["Mamadou Diallo", "2012-05-14", "6ème A", None],
+                ["Fatou Sow", "2015-08-20", "CP", None],
+                ["Aminata Ba", "2013-02-10", "6ème A", None],
+                ["Oumar Sy", "2011-11-03", "5ème A", None]
+            ]
+        )
 
 if "base_globale_db" not in st.session_state:
-    st.session_state.base_globale_db = pd.DataFrame(
-        columns=["Date", "Année", "Trimestre", "Mois", "Type Acteur", "Nom Acteur", "Classe", "Type Entrée", "Détail / Contenu", "Appréciation"],
-        data=[
-            {"Date": "2026-01-15", "Année": "2025-2026", "Trimestre": "1er Semestre", "Mois": "Janvier", "Type Acteur": "Élève", "Nom Acteur": "Mamadou Diallo", "Classe": "6ème A", "Type Entrée": "Note", "Détail / Contenu": "Mathématiques (Devoir 1): 15.5/20", "Appréciation": "Très bon travail"},
-            {"Date": "2026-01-20", "Année": "2025-2026", "Trimestre": "1er Semestre", "Mois": "Janvier", "Type Acteur": "Élève", "Nom Acteur": "Aminata Ba", "Classe": "6ème A", "Type Entrée": "Absence", "Détail / Contenu": "Absent - Motif: Maladie", "Appréciation": "Justifié"},
-            {"Date": "2026-02-05", "Année": "2025-2026", "Trimestre": "2ème Semestre", "Mois": "Février", "Type Acteur": "Professeur", "Nom Acteur": "Ibrahima Diallo", "Classe": "6ème A", "Type Entrée": "Rapport Cours", "Détail / Contenu": "Algèbre - Chapitre 3 terminé", "Appréciation": "Excellente progression"}
-        ]
-    )
+    if "base_globale_db" in saved_data:
+        st.session_state.base_globale_db = pd.DataFrame(**saved_data["base_globale_db"])
+    else:
+        st.session_state.base_globale_db = pd.DataFrame(
+            columns=["Date", "Année", "Trimestre", "Mois", "Type Acteur", "Nom Acteur", "Classe", "Type Entrée", "Détail / Contenu", "Appréciation"],
+            data=[
+                {"Date": "2026-01-15", "Année": "2025-2026", "Trimestre": "1er Semestre", "Mois": "Janvier", "Type Acteur": "Élève", "Nom Acteur": "Mamadou Diallo", "Classe": "6ème A", "Type Entrée": "Note", "Détail / Contenu": "Mathématiques (Devoir 1): 15.5/20", "Appréciation": "Très bon travail"},
+                {"Date": "2026-01-20", "Année": "2025-2026", "Trimestre": "1er Semestre", "Mois": "Janvier", "Type Acteur": "Élève", "Nom Acteur": "Aminata Ba", "Classe": "6ème A", "Type Entrée": "Absence", "Détail / Contenu": "Absent - Motif: Maladie", "Appréciation": "Justifié"},
+                {"Date": "2026-02-05", "Année": "2025-2026", "Trimestre": "2ème Semestre", "Mois": "Février", "Type Acteur": "Professeur", "Nom Acteur": "Ibrahima Diallo", "Classe": "6ème A", "Type Entrée": "Rapport Cours", "Détail / Contenu": "Algèbre - Chapitre 3 terminé", "Appréciation": "Excellente progression"}
+            ]
+        )
 
 JOURS_LIST = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"]
-HEURES_LIST = ["08h-09h", "09h-10h", "10h-11h", "11h-12h", "15h-16h", "16h-17h", "17h-18h", "18h-19h", "17h-19h"]
+HEURES_LIST = ["08h-09h", "09h-10h", "10h-11h", "11h-12h", "15h-16h", "16h-17h", "17h-18h", "18h-19h"]
 
 if "edt_grid_db" not in st.session_state:
-    st.session_state.edt_grid_db = {}
+    if "edt_grid_db" in saved_data:
+        st.session_state.edt_grid_db = {k: pd.DataFrame(**v) for k, v in saved_data["edt_grid_db"].items()}
+    else:
+        st.session_state.edt_grid_db = {}
 
 def get_or_create_edt(classe):
     if classe not in st.session_state.edt_grid_db:
@@ -209,64 +276,82 @@ def get_or_create_edt(classe):
     return st.session_state.edt_grid_db[classe]
 
 if "cahier_textes" not in st.session_state:
-    st.session_state.cahier_textes = pd.DataFrame(
-        columns=["Professeur", "Date", "Classe", "Matière", "Contenu", "Travail à faire"],
-        data=[
-            ["Ibrahima Diallo", "2026-06-01", "6ème A", "Mathématiques", "Introduction aux nombres relatifs.", "Exercices 1 et 2 page 45."]
-        ]
-    )
+    if "cahier_textes" in saved_data:
+        st.session_state.cahier_textes = pd.DataFrame(**saved_data["cahier_textes"])
+    else:
+        st.session_state.cahier_textes = pd.DataFrame(
+            columns=["Professeur", "Date", "Classe", "Matière", "Contenu", "Travail à faire"],
+            data=[
+                ["Ibrahima Diallo", "2026-06-01", "6ème A", "Mathématiques", "Introduction aux nombres relatifs.", "Exercices 1 et 2 page 45."]
+            ]
+        )
 
 if "rapports_journaliers_prof" not in st.session_state:
-    st.session_state.rapports_journaliers_prof = pd.DataFrame(
-        columns=["Professeur", "Date", "Classe", "Matière", "Bilan du Cours", "Difficultés / Remarques"],
-        data=[
-            ["Ibrahima Diallo", "2026-06-01", "6ème A", "Mathématiques", "Bonne participation globale des élèves.", "Quelques difficultés sur les soustractions de négatifs."]
-        ]
-    )
+    if "rapports_journaliers_prof" in saved_data:
+        st.session_state.rapports_journaliers_prof = pd.DataFrame(**saved_data["rapports_journaliers_prof"])
+    else:
+        st.session_state.rapports_journaliers_prof = pd.DataFrame(
+            columns=["Professeur", "Date", "Classe", "Matière", "Bilan du Cours", "Difficultés / Remarques"],
+            data=[
+                ["Ibrahima Diallo", "2026-06-01", "6ème A", "Mathématiques", "Bonne participation globale des élèves.", "Quelques difficultés sur les soustractions de négatifs."]
+            ]
+        )
 
 if "absences_db" not in st.session_state:
-    st.session_state.absences_db = pd.DataFrame(
-        columns=["Date", "Classe", "Élève", "Statut", "Motif"],
-        data=[
-            ["2026-06-01", "6ème A", "Aminata Ba", "Absent", "Maladie"]
-        ]
-    )
+    if "absences_db" in saved_data:
+        st.session_state.absences_db = pd.DataFrame(**saved_data["absences_db"])
+    else:
+        st.session_state.absences_db = pd.DataFrame(
+            columns=["Date", "Classe", "Élève", "Statut", "Motif"],
+            data=[
+                ["2026-06-01", "6ème A", "Aminata Ba", "Absent", "Maladie"]
+            ]
+        )
 
 if "notes_db" not in st.session_state:
-    st.session_state.notes_db = pd.DataFrame(
-        columns=["Classe", "Élève", "Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Trimestre", "Appréciation"],
-        data=[
-            ["6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 1", 3, 15.5, 20, "1er Semestre", "Très bon travail."],
-            ["6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 2", 3, 14.0, 20, "1er Semestre", "Bon ensemble."],
-            ["6ème A", "Mamadou Diallo", "Mathématiques", "Composition", 3, 16.0, 20, "1er Semestre", "Excellent."],
-            ["6ème A", "Mamadou Diallo", "Français", "Devoir 1", 3, 13.0, 20, "1er Semestre", "Assez bon."],
-            ["6ème A", "Mamadou Diallo", "Français", "Devoir 2", 3, 14.5, 20, "1er Semestre", "Bon travail."],
-            ["6ème A", "Mamadou Diallo", "Français", "Composition", 3, 15.0, 20, "1er Semestre", "Très bien."],
-            ["CP", "Fatou Sow", "Graphisme / Écriture", "Composition", 1, 8.5, 10, "1er Trimestre", "Très bien."]
-        ]
-    )
+    if "notes_db" in saved_data:
+        st.session_state.notes_db = pd.DataFrame(**saved_data["notes_db"])
+    else:
+        st.session_state.notes_db = pd.DataFrame(
+            columns=["Classe", "Élève", "Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Trimestre", "Appréciation"],
+            data=[
+                ["6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 1", 3, 15.5, 20, "1er Semestre", "Très bon travail."],
+                ["6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 2", 3, 14.0, 20, "1er Semestre", "Bon ensemble."],
+                ["6ème A", "Mamadou Diallo", "Mathématiques", "Composition", 3, 16.0, 20, "1er Semestre", "Excellent."],
+                ["6ème A", "Mamadou Diallo", "Français", "Devoir 1", 3, 13.0, 20, "1er Semestre", "Assez bon."],
+                ["6ème A", "Mamadou Diallo", "Français", "Devoir 2", 3, 14.5, 20, "1er Semestre", "Bon travail."],
+                ["6ème A", "Mamadou Diallo", "Français", "Composition", 3, 15.0, 20, "1er Semestre", "Très bien."],
+                ["CP", "Fatou Sow", "Graphisme / Écriture", "Composition", 1, 8.5, 10, "1er Trimestre", "Très bien."]
+            ]
+        )
 
 if "matieres_def" not in st.session_state:
-    st.session_state.matieres_def = pd.DataFrame([
-        {"Matière": "Mathématiques", "Coefficient": 3, "Cycle": "Collège"},
-        {"Matière": "Français", "Coefficient": 3, "Cycle": "Collège"},
-        {"Matière": "Histoire-Géographie", "Coefficient": 2, "Cycle": "Collège"},
-        {"Matière": "SVT", "Coefficient": 2, "Cycle": "Collège"},
-        {"Matière": "Anglais", "Coefficient": 2, "Cycle": "Collège"},
-        {"Matière": "Lecture / Langage", "Coefficient": 2, "Cycle": "Élémentaire"},
-        {"Matière": "Calcul / Mathématiques", "Coefficient": 2, "Cycle": "Élémentaire"},
-        {"Matière": "Éveil / Science", "Coefficient": 1, "Cycle": "Élémentaire"},
-        {"Matière": "Activités Sensorielles", "Coefficient": 1, "Cycle": "Préscolaire"},
-        {"Matière": "Graphisme / Dessin", "Coefficient": 1, "Cycle": "Préscolaire"}
-    ])
+    if "matieres_def" in saved_data:
+        st.session_state.matieres_def = pd.DataFrame(**saved_data["matieres_def"])
+    else:
+        st.session_state.matieres_def = pd.DataFrame([
+            {"Matière": "Mathématiques", "Coefficient": 3, "Cycle": "Collège"},
+            {"Matière": "Français", "Coefficient": 3, "Cycle": "Collège"},
+            {"Matière": "Histoire-Géographie", "Coefficient": 2, "Cycle": "Collège"},
+            {"Matière": "SVT", "Coefficient": 2, "Cycle": "Collège"},
+            {"Matière": "Anglais", "Coefficient": 2, "Cycle": "Collège"},
+            {"Matière": "Lecture / Langage", "Coefficient": 2, "Cycle": "Élémentaire"},
+            {"Matière": "Calcul / Mathématiques", "Coefficient": 2, "Cycle": "Élémentaire"},
+            {"Matière": "Éveil / Science", "Coefficient": 1, "Cycle": "Élémentaire"},
+            {"Matière": "Activités Sensorielles", "Coefficient": 1, "Cycle": "Préscolaire"},
+            {"Matière": "Graphisme / Dessin", "Coefficient": 1, "Cycle": "Préscolaire"}
+        ])
 
 if "conduite_db" not in st.session_state:
-    st.session_state.conduite_db = pd.DataFrame(
-        columns=["Classe", "Élève", "Date", "Type", "Description"],
-        data=[
-            ["6ème A", "Mamadou Diallo", "2026-06-02", "Encouragement", "Participation active en classe."]
-        ]
-    )
+    if "conduite_db" in saved_data:
+        st.session_state.conduite_db = pd.DataFrame(**saved_data["conduite_db"])
+    else:
+        st.session_state.conduite_db = pd.DataFrame(
+            columns=["Classe", "Élève", "Date", "Type", "Description"],
+            data=[
+                ["6ème A", "Mamadou Diallo", "2026-06-02", "Encouragement", "Participation active en classe."]
+            ]
+        )
 
 # ==========================================
 # 3. FONCTIONS UTILITAIRES & GÉNÉRATION PDF/EXCEL
@@ -639,7 +724,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
         <div style="text-align: center; padding: 10px 0 30px 0;">
             <h3 style="color: #1E3A8A; font-weight: 800;">Portail Numérique Intelligent & Suivi Pédagogique Centralisé</h3>
             <p style="font-size: 1.1rem; color: #475569; max-width: 800px; margin: 0 auto;">
-                Sélectionnez votre espace. Le système intègre désormais une Base Globale centralisant tout l'historique annuel des élèves et professeurs.
+                Sélectionnez votre espace. Le système intègre désormais une Base Globale centralisant tout l'historique annuel des élèves et professeurs avec persistance externe sécurisée.
             </p>
         </div>
         """,
@@ -818,6 +903,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             if nouveaux_abs:
                                 st.session_state.absences_db = pd.concat([st.session_state.absences_db, pd.DataFrame(nouveaux_abs)], ignore_index=True)
                                 st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, pd.DataFrame(nouvelles_entrées_bg)], ignore_index=True)
+                                sauvegarder_donnees_externes()
                             st.success("Appel enregistré et synchronisé dans la Base Globale !")
                 else:
                     st.info("Aucun élève dans cette classe.")
@@ -947,6 +1033,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         
                         st.session_state.notes_db = pd.concat([st.session_state.notes_db, pd.DataFrame(new_rows)], ignore_index=True)
                         st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, pd.DataFrame(new_bg_rows)], ignore_index=True)
+                        sauvegarder_donnees_externes()
                         st.success(f"Fiche de {matiere_sel} ({type_eval_sel} - Coef {coef_val}) enregistrée et synchronisée !")
 
                 editeur_notes_fragment()
@@ -982,6 +1069,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             "Type Entrée": "Conduite", "Détail / Contenu": f"{type_s}: {desc}", "Appréciation": type_s
                         }])
                         st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, bg_entry], ignore_index=True)
+                        sauvegarder_donnees_externes()
                         st.success("Remarque enregistrée et synchronisée.")
 
         elif menu_prof == "📖 Cahier de Textes":
@@ -997,6 +1085,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                     if mat_ct and contenu:
                         new_ct = pd.DataFrame([{"Professeur": prof_connecte, "Date": str(datetime.today().date()), "Classe": cls_ct, "Matière": mat_ct, "Contenu": contenu, "Travail à faire": travail}])
                         st.session_state.cahier_textes = pd.concat([st.session_state.cahier_textes, new_ct], ignore_index=True)
+                        sauvegarder_donnees_externes()
                         st.success("Leçon publiée.")
 
         elif menu_prof == "📊 Rapport Journalier":
@@ -1025,6 +1114,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             "Type Entrée": "Rapport", "Détail / Contenu": f"{mat_r} - {bilan}", "Appréciation": diff if diff else "RAS"
                         }])
                         st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, bg_prof], ignore_index=True)
+                        sauvegarder_donnees_externes()
                         st.success("Rapport transmis et centralisé dans la Base Globale !")
 
 # ESPACE PARENTS
@@ -1108,7 +1198,6 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
             grid_edt = get_or_create_edt(classe)
             st.dataframe(grid_edt, use_container_width=True)
             
-            # Option de téléchargement de l'emploi du temps en PDF
             pdf_edt_data = export_edt_pdf(classe, grid_edt)
             st.download_button(
                 label="📄 Télécharger l'Emploi du Temps en PDF",
@@ -1224,6 +1313,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     if is_super_admin:
                         if st.button(f"🗑️ Révoquer", key=f"rev_{idx}"):
                             st.session_state.gestionnaires_proprietaires_db = df_gp.drop(idx).reset_index(drop=True)
+                            sauvegarder_donnees_externes()
                             st.success(f"Membre {row['Prénom']} {row['Nom']} révoqué avec succès !")
                             st.rerun()
                     else:
@@ -1249,6 +1339,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                                         "Mot de passe": gp_pass, "Rôle": gp_role
                                     }])
                                     st.session_state.gestionnaires_proprietaires_db = pd.concat([df_gp, new_member], ignore_index=True)
+                                    sauvegarder_donnees_externes()
                                     st.success("Nouveau membre ajouté avec succès à la liste blanche !")
                                     st.rerun()
                             else:
@@ -1391,6 +1482,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                                 "Type Entrée": c_type_ent, "Détail / Contenu": c_det, "Appréciation": c_app
                             }])
                             st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, new_entry], ignore_index=True)
+                            sauvegarder_donnees_externes()
                             st.success("Entrée ajoutée à la Base Globale !")
                             st.rerun()
 
@@ -1423,6 +1515,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             with col_edt_save:
                 if st.button("💾 Enregistrer la Grille de l'Emploi du Temps"):
                     st.session_state.edt_grid_db[cls_selected] = edited_grid
+                    sauvegarder_donnees_externes()
                     st.success(f"Emploi du temps de la classe {cls_selected} mis à jour !")
             with col_edt_dl:
                 pdf_edt_admin = export_edt_pdf(cls_selected, edited_grid)
@@ -1454,6 +1547,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                         if c_nom:
                             new_el = pd.DataFrame([{"Nom Complet": c_nom, "Date de Naissance": str(c_date), "Classe": c_cls, "Photo": None}])
                             st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, new_el], ignore_index=True)
+                            sauvegarder_donnees_externes()
                             st.success("Élève ajouté avec succès.")
                             st.rerun()
 
@@ -1461,6 +1555,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             edited_eleves = st.data_editor(st.session_state.eleves_db, num_rows="dynamic", use_container_width=True, key="editor_eleves")
             if st.button("💾 Enregistrer les Modifications Élèves"):
                 st.session_state.eleves_db = edited_eleves
+                sauvegarder_donnees_externes()
                 st.success("Base des élèves mise à jour !")
 
         elif adm_tab == "👨‍🏫 Professeurs (Export PDF, Modif, Suppr)":
@@ -1486,6 +1581,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                         if p_n and p_p and p_pwd:
                             new_p = pd.DataFrame([{"Nom": p_n, "Prénom": p_p, "Mot de passe": p_pwd, "Matière Principale": p_mat, "Classe Attribuée": p_cls_attrib}])
                             st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_p], ignore_index=True)
+                            sauvegarder_donnees_externes()
                             st.success("Professeur enregistré.")
                             st.rerun()
 
@@ -1493,6 +1589,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             edited_profs = st.data_editor(st.session_state.prof_credentials, num_rows="dynamic", use_container_width=True, key="editor_profs")
             if st.button("💾 Enregistrer les Modifications Professeurs"):
                 st.session_state.prof_credentials = edited_profs
+                sauvegarder_donnees_externes()
                 st.success("Base professeurs mise à jour !")
 
         elif adm_tab == "🏫 Classes (Définir classe entière & Gestion)":
@@ -1506,6 +1603,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                         if nom_c:
                             new_cl = pd.DataFrame([{"Classe": nom_c, "Cycle": cycle, "Professeur Responsable": "Non assigné"}])
                             st.session_state.classes_db = pd.concat([st.session_state.classes_db, new_cl], ignore_index=True)
+                            sauvegarder_donnees_externes()
                             st.success("Classe créée.")
                             st.rerun()
 
@@ -1532,6 +1630,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                         if nouveaux_eleves:
                             df_ajout = pd.DataFrame(nouveaux_eleves)
                             st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, df_ajout], ignore_index=True)
+                            sauvegarder_donnees_externes()
                             st.success(f"Classe entière définie avec succès ! {len(nouveaux_eleves)} élèves ajoutés à la classe {cls_cible_def}.")
                     else:
                         st.warning("Veuillez saisir ou coller au moins un nom d'élève.")
@@ -1541,6 +1640,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             edited_classes = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True, key="editor_classes")
             if st.button("💾 Enregistrer les Modifications Classes"):
                 st.session_state.classes_db = edited_classes
+                sauvegarder_donnees_externes()
                 st.success("Classes mises à jour !")
 
         elif adm_tab == "📋 Listes Blanches Parents":
@@ -1555,6 +1655,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     if t_p and pr_e:
                         new_w = pd.DataFrame([{"Téléphone": t_p, "Prénom Élève": pr_e, "Nom Élève": no_e, "Année Naissance": int(an_n), "Classe": cl_s}])
                         st.session_state.parents_white_list = pd.concat([st.session_state.parents_white_list, new_w], ignore_index=True)
+                        sauvegarder_donnees_externes()
                         st.success("Autorisation enregistrée.")
             st.dataframe(st.session_state.parents_white_list, use_container_width=True)
 
