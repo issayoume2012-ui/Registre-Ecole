@@ -30,6 +30,12 @@ def hacher_mot_de_passe(mot_de_passe: str) -> str:
     """Hache le mot de passe en SHA-256 pour la sécurité."""
     return hashlib.sha256(mot_de_passe.encode('utf-8')).hexdigest()
 
+def verifier_mot_de_passe(mot_de_passe_clair: str, mot_de_passe_hache: str) -> bool:
+    """Vérifie si le mot de passe en clair correspond au hachage (ou gère l'ancien format si nécessaire)."""
+    if not mot_de_passe_hache:
+        return False
+    return hacher_mot_de_passe(mot_de_passe_clair) == mot_de_passe_hache or mot_de_passe_clair == mot_de_passe_hache
+
 def initialiser_base_de_donnees_externe():
     """Crée les tables SQL si elles n'existent pas et insère les données par défaut de manière thread-safe."""
     with get_db_connection() as connexion:
@@ -858,10 +864,9 @@ if st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
                 match_prof = False
                 classe_trouvee = ""
                 for _, row in st.session_state.prof_credentials.iterrows():
-                    hashed_input = hacher_mot_de_passe(p_pass)
                     if (str(row["Nom"]).strip().lower() == p_nom.strip().lower() and 
                         str(row["Prénom"]).strip().lower() == p_prenom.strip().lower() and 
-                        (str(row["Mot de passe"]) == p_pass or str(row["Mot de passe"]) == hashed_input)):
+                        verifier_mot_de_passe(p_pass, str(row["Mot de passe"]))):
                         match_prof = True
                         classe_trouvee = str(row.get("Classe Attribuée", "6ème A"))
                         break
