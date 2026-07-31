@@ -196,7 +196,7 @@ if "base_globale_db" not in st.session_state:
     )
 
 JOURS_LIST = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"]
-HEURES_LIST = ["08h-09h", "09h-10h", "10h-11h", "11h-12h", "15h-16h", "16h-17h"]
+HEURES_LIST = ["08h-09h", "09h-10h", "10h-11h", "11h-12h", "15h-16h", "16h-17h", "17h-18h", "18h-19h"]
 
 if "edt_grid_db" not in st.session_state:
     st.session_state.edt_grid_db = {}
@@ -313,6 +313,41 @@ def export_table_pdf(title, df, columns_to_show=None):
         for i, col in enumerate(df_sub.columns):
             val = str(row[col]) if pd.notnull(row[col]) else ""
             pdf.cell(col_widths[i], 7, val[:25], 1, 0, "C", fill)
+        pdf.ln()
+        fill = not fill
+
+    return bytes(pdf.output())
+
+def export_edt_pdf(classe_nom, df_edt):
+    """Génère un PDF spécifique pour l'emploi du temps d'une classe."""
+    pdf = PDFReport()
+    pdf.add_page(orientation='L') # Paysage pour mieux loger les heures
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 8, f"EMPLOI DU TEMPS OFFICIEL - CLASSE DE {classe_nom.upper()}", 0, 1, "C")
+    pdf.ln(6)
+
+    cols = ["Jour"] + list(df_edt.columns)
+    col_widths = [35] + [255 / len(df_edt.columns)] * len(df_edt.columns)
+
+    pdf.set_font("Arial", "B", 10)
+    pdf.set_fill_color(30, 58, 138)
+    pdf.set_text_color(255, 255, 255)
+
+    pdf.cell(col_widths[0], 8, "Jours", 1, 0, "C", True)
+    for i, col_h in enumerate(df_edt.columns):
+        pdf.cell(col_widths[i+1], 8, str(col_h), 1, 0, "C", True)
+    pdf.ln()
+
+    pdf.set_font("Arial", "", 9)
+    pdf.set_text_color(0, 0, 0)
+    fill = False
+    pdf.set_fill_color(240, 244, 248)
+
+    for jour, row in df_edt.iterrows():
+        pdf.cell(col_widths[0], 8, str(jour), 1, 0, "C", fill)
+        for i, col_h in enumerate(df_edt.columns):
+            val = str(row[col_h]) if pd.notnull(row[col_h]) else ""
+            pdf.cell(col_widths[i+1], 8, val[:15], 1, 0, "C", fill)
         pdf.ln()
         fill = not fill
 
@@ -1072,6 +1107,15 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
             st.subheader("Emploi du Temps de la Classe")
             grid_edt = get_or_create_edt(classe)
             st.dataframe(grid_edt, use_container_width=True)
+            
+            # Option de téléchargement de l'emploi du temps en PDF
+            pdf_edt_data = export_edt_pdf(classe, grid_edt)
+            st.download_button(
+                label="📄 Télécharger l'Emploi du Temps en PDF",
+                data=pdf_edt_data,
+                file_name=f"emploi_du_temps_{classe.replace(' ', '_')}.pdf",
+                mime="application/pdf"
+            )
 
         with t3:
             st.subheader("Absences (Historique Base Globale)")
@@ -1158,7 +1202,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             "📅 Emploi du Temps (Grille Jours x Heures)",
             "👨‍🎓 Élèves (Export PDF, Modif, Suppr)", 
             "👨‍🏫 Professeurs (Export PDF, Modif, Suppr)", 
-            "🏫 Classes (Ajouter, Modifier, Supprimer)", 
+            "🏫 Classes (Définir classe entière & Gestion)", 
             "📋 Listes Blanches Parents", 
             "📑 Rapports Journaliers Réceptionnés"
         ])
@@ -1362,10 +1406,10 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     st.warning("Veuillez saisir une question.")
 
         elif adm_tab == "📅 Emploi du Temps (Grille Jours x Heures)":
-            st.subheader("Édition de l'Emploi du Temps (Jours à gauche | Heures en haut)")
+            st.subheader("Édition & Téléchargement de l'Emploi du Temps (Jours à gauche | Heures en haut)")
             cls_selected = st.selectbox("Sélectionner la classe à configurer", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
             
-            st.info("Remplissez la grille d'emploi du temps ci-dessous. Chaque case représente la matière ou l'activité.")
+            st.info("Remplissez la grille d'emploi du temps ci-dessous (incluant les créneaux 17h-19h). Chaque case représente la matière ou l'activité.")
             
             grid_edt = get_or_create_edt(cls_selected)
 
@@ -1375,9 +1419,19 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 key=f"edt_editor_{cls_selected}"
             )
 
-            if st.button("💾 Enregistrer la Grille de l'Emploi du Temps"):
-                st.session_state.edt_grid_db[cls_selected] = edited_grid
-                st.success(f"Emploi du temps de la classe {cls_selected} mis à jour !")
+            col_edt_save, col_edt_dl = st.columns(2)
+            with col_edt_save:
+                if st.button("💾 Enregistrer la Grille de l'Emploi du Temps"):
+                    st.session_state.edt_grid_db[cls_selected] = edited_grid
+                    st.success(f"Emploi du temps de la classe {cls_selected} mis à jour !")
+            with col_edt_dl:
+                pdf_edt_admin = export_edt_pdf(cls_selected, edited_grid)
+                st.download_button(
+                    label="📄 Télécharger l'Emploi du Temps en PDF",
+                    data=pdf_edt_admin,
+                    file_name=f"emploi_du_temps_{cls_selected.replace(' ', '_')}.pdf",
+                    mime="application/pdf"
+                )
 
         elif adm_tab == "👨‍🎓 Élèves (Export PDF, Modif, Suppr)":
             st.subheader("Gestion des Élèves & Impression PDF")
@@ -1441,8 +1495,8 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.session_state.prof_credentials = edited_profs
                 st.success("Base professeurs mise à jour !")
 
-        elif adm_tab == "🏫 Classes (Ajouter, Modifier, Supprimer)":
-            st.subheader("Gestion des Classes")
+        elif adm_tab == "🏫 Classes (Définir classe entière & Gestion)":
+            st.subheader("Gestion des Classes & Définition de Classe Entière")
             
             with st.expander("➕ Créer une classe"):
                 with st.form("form_add_classe"):
@@ -1455,6 +1509,34 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             st.success("Classe créée.")
                             st.rerun()
 
+            st.markdown("---")
+            st.markdown("### 🏛️ Définir une Classe Entière d'un Seul Coup (Import groupé d'élèves)")
+            st.info("Permet de définir rapidement une liste complète d'élèves pour une classe entière par simple copier-coller de noms.")
+            
+            with st.form("form_classe_entiere"):
+                cls_cible_def = st.selectbox("Sélectionner la classe cible", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
+                liste_noms_brut = st.text_area("Coller la liste des noms complets (un nom par ligne)", placeholder="Ex:\nMamadou Ba\nFatou Diop\nAminata Ndiaye")
+                date_naiss_def = st.date_input("Date de naissance par défaut pour ce groupe", value=datetime(2012, 1, 1))
+                
+                if st.form_submit_button("Enregistrer la classe entière"):
+                    if liste_noms_brut.strip():
+                        lignes = [l.strip() for l in liste_noms_brut.split("\n") if l.strip()]
+                        nouveaux_eleves = []
+                        for nom_complet in lignes:
+                            nouveaux_eleves.append({
+                                "Nom Complet": nom_complet,
+                                "Date de Naissance": str(date_naiss_def),
+                                "Classe": cls_cible_def,
+                                "Photo": None
+                            })
+                        if nouveaux_eleves:
+                            df_ajout = pd.DataFrame(nouveaux_eleves)
+                            st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, df_ajout], ignore_index=True)
+                            st.success(f"Classe entière définie avec succès ! {len(nouveaux_eleves)} élèves ajoutés à la classe {cls_cible_def}.")
+                    else:
+                        st.warning("Veuillez saisir ou coller au moins un nom d'élève.")
+
+            st.markdown("---")
             st.markdown("#### Liste des Classes (Modifiable)")
             edited_classes = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True, key="editor_classes")
             if st.button("💾 Enregistrer les Modifications Classes"):
