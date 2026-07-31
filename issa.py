@@ -74,7 +74,6 @@ def telecharger_polices():
             except Exception:
                 pass
 
-# Téléchargement au premier lancement (mis en cache)
 telecharger_polices()
 
 # ==========================================
@@ -90,7 +89,6 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Global Styles & Mobile Reset Optimisé */
     .main { background-color: #F8FAFC; }
     
     .header-ecole { 
@@ -113,7 +111,6 @@ st.markdown(
         padding: 0 10px;
     }
 
-    /* Cartes adaptatives légères */
     .animated-card {
         border: 2px solid #E2E8F0;
         padding: clamp(15px, 3vw, 25px);
@@ -133,7 +130,6 @@ st.markdown(
         border-color: #2563EB;
     }
 
-    /* Key Performance Indicators */
     .kpi-card-animated {
         border-left: 5px solid #2563EB;
         background: #FFFFFF;
@@ -143,7 +139,6 @@ st.markdown(
         text-align: center;
     }
 
-    /* Boutons tactiles optimisés mobile */
     .stButton>button { 
         background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%); 
         color: white; 
@@ -172,7 +167,7 @@ st.markdown(
 )
 
 # ==========================================
-# 2. INITIALISATION EXHAUSTIVE DES DONNÉES (AVEC RESTAURATION EXTERNE)
+# 2. INITIALISATION EXHAUSTIVE DES DONNÉES
 # ==========================================
 if "espace_actif" not in st.session_state:
     st.session_state.espace_actif = "🏠 Accueil"
@@ -180,7 +175,6 @@ if "espace_actif" not in st.session_state:
 if "authenticated_admin" not in st.session_state:
     st.session_state.authenticated_admin = False
 
-# Chargement sécurisé depuis le fichier JSON externe ou valeurs par défaut
 if "admin_credentials" not in st.session_state:
     if "admin_credentials" in saved_data:
         st.session_state.admin_credentials = pd.DataFrame(**saved_data["admin_credentials"])
@@ -404,14 +398,12 @@ def export_table_pdf(title, df, columns_to_show=None):
     return bytes(pdf.output())
 
 def export_edt_pdf(classe_nom, df_edt):
-    """Génère un PDF spécifique pour l'emploi du temps d'une classe."""
     pdf = PDFReport()
-    pdf.add_page(orientation='L') # Paysage pour mieux loger les heures
+    pdf.add_page(orientation='L')
     pdf.set_font("Arial", "B", 14)
     pdf.cell(0, 8, f"EMPLOI DU TEMPS OFFICIEL - CLASSE DE {classe_nom.upper()}", 0, 1, "C")
     pdf.ln(6)
 
-    cols = ["Jour"] + list(df_edt.columns)
     col_widths = [35] + [255 / len(df_edt.columns)] * len(df_edt.columns)
 
     pdf.set_font("Arial", "B", 10)
@@ -439,7 +431,6 @@ def export_edt_pdf(classe_nom, df_edt):
     return bytes(pdf.output())
 
 def export_table_excel(df, columns_to_show=None):
-    """Génère un tableau Excel binaire bien délimité pour le téléchargement."""
     df_sub = df[columns_to_show] if columns_to_show else df
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -612,7 +603,6 @@ def generer_rapport_general_pdf():
     pdf.cell(0, 5, "Synthèse Globale des Évaluations, Renseignements, Absences et Activités", 0, 1, "C")
     pdf.ln(6)
 
-    # 1. STATISTIQUES GÉNÉRALES
     pdf.set_font(font_main, "B", 11)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
@@ -626,7 +616,6 @@ def generer_rapport_general_pdf():
     pdf.cell(95, 6, f"Total Entrées Base Globale : {len(st.session_state.base_globale_db)}", 1, 1, "L")
     pdf.ln(5)
 
-    # 2. SUIVI DES ENSEIGNANTS
     pdf.set_font(font_main, "B", 11)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
@@ -644,7 +633,6 @@ def generer_rapport_general_pdf():
         pdf.cell(190, 6, "Aucun rapport déposé.", 1, 1, "L")
     pdf.ln(5)
 
-    # 3. EXTRAIT RENSEIGNEMENTS BASE GLOBALE
     pdf.set_font(font_main, "B", 11)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
@@ -809,7 +797,6 @@ if st.session_state.espace_actif == "🏠 Accueil":
 # 6. MODULES MÉTIERS DÉDIÉS ET FILTRÉS
 # ==========================================
 
-# ESPACE PROFESSEURS
 elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
     st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Espace Enseignants & Maîtres</div>', unsafe_allow_html=True)
 
@@ -1117,7 +1104,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         sauvegarder_donnees_externes()
                         st.success("Rapport transmis et centralisé dans la Base Globale !")
 
-# ESPACE PARENTS
 elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élèves":
     st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Portail Parent & Élève</div>', unsafe_allow_html=True)
 
@@ -1240,7 +1226,6 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
                 unsafe_allow_html=True
             )
 
-# ESPACE ADMINISTRATION SÉCURISÉ
 elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
     st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Administration Générale (Accès Restreint)</div>', unsafe_allow_html=True)
 
@@ -1666,7 +1651,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             else:
                 st.info("Aucun rapport journalier reçu pour l'instant.")
 
-# ESPACE RAPPORTS GLOBAUX
 elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
     if not st.session_state.authenticated_admin and not st.session_state.get("prof_logged", False):
         st.error("Accès restreint. Veuillez vous connecter en tant qu'administrateur ou professeur pour consulter les rapports globaux.")
