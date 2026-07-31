@@ -1625,24 +1625,24 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     st.warning("Veuillez saisir une question.")
 
         elif adm_tab == "📅 Emploi du Temps (Grille Jours x Heures)":
-            if "emploi_du_temps" not in st.session_state:
-                st.session_state.emploi_du_temps = pd.DataFrame({
-                    "Créneau": ["08:00 - 09:00", "09:00 - 10:00", "10:15 - 11:15"],
-                    "Lundi": ["Maths", "Français", "Histoire"],
-                    "Mardi": ["Physique", "Anglais", "SVT"],
-                })
-
             st.subheader("📅 Gestion et Modification de l'Emploi du Temps")
+            
+            # Sélection de la classe pour charger/modifier l'emploi du temps correspondant
+            classes_dispo = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"]
+            classe_edt_sel = st.selectbox("Sélectionner la classe pour l'Emploi du Temps", classes_dispo)
+            
+            grid_edt = get_or_create_edt(classe_edt_sel)
 
             emploi_modifie = st.data_editor(
-                st.session_state.emploi_du_temps,
-                num_rows="dynamic", 
-                key="editeur_emploi_du_temps"
+                grid_edt,
+                num_rows="fixed", 
+                use_container_width=True,
+                key=f"editeur_emploi_du_temps_{classe_edt_sel}"
             )
 
-            if st.button("Enregistrer les modifications"):
-                st.session_state.emploi_du_temps = emploi_modifie
-                st.success("L'emploi du temps a été mis à jour avec succès !")
+            if st.button("Enregistrer les modifications de l'Emploi du Temps"):
+                st.session_state.edt_grid_db[classe_edt_sel] = emploi_modifie
+                st.success(f"L'emploi du temps de la classe **{classe_edt_sel}** a été mis à jour avec succès pour tous les jours de la semaine !")
 
         elif adm_tab == "👨‍🎓 Élèves (Export PDF, Modif, Suppr)":
             st.subheader("Gestion des Élèves & Suppression / Modification")
