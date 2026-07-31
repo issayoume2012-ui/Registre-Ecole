@@ -849,20 +849,21 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 match_prof = False
                 classe_trouvee = ""
                 for _, row in st.session_state.prof_credentials.iterrows():
+                    # Sécurisation robuste contre les espaces et la casse
                     if (str(row["Nom"]).strip().lower() == p_nom.strip().lower() and 
                         str(row["Prénom"]).strip().lower() == p_prenom.strip().lower() and 
-                        str(row["Mot de passe"]) == p_pass):
+                        str(row["Mot de passe"]).strip() == p_pass.strip()):
                         match_prof = True
                         classe_trouvee = str(row.get("Classe Attribuée", "6ème A"))
                         break
                 if match_prof:
                     st.session_state.prof_logged = True
-                    st.session_state.prof_nom_connecte = f"{p_prenom} {p_nom}"
+                    st.session_state.prof_nom_connecte = f"{p_prenom.strip()} {p_nom.strip()}"
                     st.session_state.prof_classe_autorisee = classe_trouvee
                     st.success("Connexion réussie !")
                     st.rerun()
                 else:
-                    st.error("Identifiants incorrects.")
+                    st.error("Identifiants incorrects. Veuillez vérifier votre nom, prénom et mot de passe.")
     else:
         prof_connecte = st.session_state.prof_nom_connecte
         classe_autorisee = st.session_state.prof_classe_autorisee
@@ -1151,7 +1152,12 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
                 clean_tel = tel_p.replace(" ", "").replace("+", "")
                 match = False
                 for _, row in st.session_state.parents_white_list.iterrows():
-                    if clean_tel in str(row["Téléphone"]) and str(row["Prénom Élève"]).lower() == prenom_e.lower() and str(row["Nom Élève"]).lower() == nom_e.lower() and int(row["Année Naissance"]) == int(an_e):
+                    db_tel = str(row["Téléphone"]).replace(" ", "").replace("+", "")
+                    # Normalisation stricte pour éviter les échecs de correspondance
+                    if (clean_tel in db_tel and 
+                        str(row["Prénom Élève"]).strip().lower() == prenom_e.strip().lower() and 
+                        str(row["Nom Élève"]).strip().lower() == nom_e.strip().lower() and 
+                        int(row["Année Naissance"]) == int(an_e)):
                         match = True
                         st.session_state["parent_logged_eleve"] = f"{row['Prénom Élève']} {row['Nom Élève']}"
                         st.session_state["parent_logged_classe"] = row["Classe"]
@@ -1160,7 +1166,7 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
                     st.success("Connexion réussie !")
                     st.rerun()
                 else:
-                    st.error("Informations incorrectes.")
+                    st.error("Informations incorrectes. Veuillez vérifier vos données d'accès.")
     else:
         eleve = st.session_state["parent_logged_eleve"]
         classe = st.session_state["parent_logged_classe"]
@@ -1267,14 +1273,18 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 match_a = False
                 role_connecte = "Administrateur"
                 
+                # Normalisation stricte de l'email et du mot de passe
+                clean_em = em.strip().lower()
+                clean_pw = pw.strip()
+
                 for _, row in st.session_state.admin_credentials.iterrows():
-                    if row["Email"] == em and row["Mot de passe"] == pw:
+                    if str(row["Email"]).strip().lower() == clean_em and str(row["Mot de passe"]).strip() == clean_pw:
                         match_a = True
                         break
                 
                 if not match_a:
                     for _, row in st.session_state.gestionnaires_proprietaires_db.iterrows():
-                        if str(row["Email"]).strip().lower() == em.strip().lower() and str(row["Mot de passe"]) == pw:
+                        if str(row["Email"]).strip().lower() == clean_em and str(row["Mot de passe"]).strip() == clean_pw:
                             match_a = True
                             role_connecte = row["Rôle"]
                             break
@@ -1282,11 +1292,11 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 if match_a:
                     st.session_state.authenticated_admin = True
                     st.session_state.admin_role_connecte = role_connecte
-                    st.session_state.admin_email_connecte = em
+                    st.session_state.admin_email_connecte = clean_em
                     st.success(f"Accès accordé en tant que **{role_connecte}** !")
                     st.rerun()
                 else:
-                    st.error("Identifiants erronés.")
+                    st.error("Identifiants erronés. Veuillez vérifier votre email et mot de passe.")
     else:
         role_actuel = st.session_state.get("admin_role_connecte", "Administrateur")
         email_actuel = st.session_state.get("admin_email_connecte", "")
