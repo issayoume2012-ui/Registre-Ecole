@@ -538,7 +538,6 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 d2_str = f"{d2_val:.2f}" if len(note_d2) > 0 else "-"
                 comp_str = f"{comp_val:.2f}" if len(note_comp) > 0 else "-"
 
-                # Formule demandée : ((devoir 1 + devoir 2) / 2 + composition) * coef
                 moy_mat = ((d1_val + d2_val) / 2.0) + comp_val
                 tot = moy_mat * coef
                 total_points += tot
@@ -1194,10 +1193,11 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
                     "Sélectionner la Période",
                     ["1er Trimestre", "2ème Trimestre", "3ème Trimestre"],
                 )
-        notes_el = st.session_state.notes_db[
-        (st.session_state.notes_db["Élève"] == eleve)
-        & (st.session_state.notes_db["Trimestre"] == tri_p)
-        ]
+            
+            notes_el = st.session_state.notes_db[
+                (st.session_state.notes_db["Élève"] == eleve) & 
+                (st.session_state.notes_db["Trimestre"] == tri_p)
+            ]
 
             if not notes_el.empty:
                 st.dataframe(notes_el[["Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Appréciation"]], use_container_width=True)
@@ -1416,7 +1416,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                         st.markdown("#### Aperçu du fichier importé :")
                         st.dataframe(df_imported.head(), use_container_width=True)
 
-                        # Détection intelligente des colonnes
                         cols_lower = [str(c).strip().lower() for c in df_imported.columns]
                         col_prenom = next((df_imported.columns[i] for i, c in enumerate(cols_lower) if "prenom" in c or "prénom" in c), None)
                         col_nom = next((df_imported.columns[i] for i, c in enumerate(cols_lower) if c == "nom" or "nom" in c), None)
@@ -1446,7 +1445,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                         st.markdown("#### Texte extrait du document Word :")
                         st.text_area("Aperçu texte", texte_complet, height=150)
                         
-                        # Extraction par lignes simples (ex: Prénom Nom Date)
                         lignes = texte_complet.split("\n")
                         for ligne in lignes:
                             parts = ligne.strip().split()
@@ -1470,7 +1468,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                         if st.button("🔄 Synchroniser et enregistrer dans la base des élèves"):
                             st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, df_nouveaux], ignore_index=True)
                             
-                            # Ajout dans la base globale également
                             new_bg_imports = []
                             d_today = str(datetime.today().date())
                             for _, r in df_nouveaux.iterrows():
@@ -1877,7 +1874,7 @@ elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
         st.markdown(f"- **Entrées Base Globale :** {len(st.session_state.base_globale_db)}")
     with col_r2:
         st.markdown("### 📄 Export Officiel")
-        pdf_rap_ XXL = generer_rapport_general_pdf()
+        pdf_rap_XXL = generer_rapport_general_pdf()
         st.download_button(
             label="📥 Télécharger le Rapport Général Consolidé (PDF)",
             data=pdf_rap_XXL,
