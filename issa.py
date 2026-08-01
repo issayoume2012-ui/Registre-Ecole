@@ -1190,11 +1190,15 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
             if cycle_eleve == "Collège":
                 tri_p = st.selectbox("Sélectionner la Période", ["1er Semestre", "2ème Semestre"])
             else:
-                tri_p = st.selectbox("Sélectionner la Période", ["1er Trimestre", "2ème Trimestre", "3ème Trimestre"])
-            
-            notes_el = st.session_state.notes_db[
-                (st.session_state.notes_db["Élève"] == eleve) & 
-                (st.session_state.notes_db["Trimestre"] == tri_p]
+                tri_p = st.selectbox(
+    "Sélectionner la Période",
+    ["1er Trimestre", "2ème Trimestre", "3ème Trimestre"],
+)
+
+notes_el = st.session_state.notes_db[
+    (st.session_state.notes_db["Élève"] == eleve)
+    & (st.session_state.notes_db["Trimestre"] == tri_p)
+]
 
             if not notes_el.empty:
                 st.dataframe(notes_el[["Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Appréciation"]], use_container_width=True)
