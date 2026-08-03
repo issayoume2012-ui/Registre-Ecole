@@ -606,7 +606,6 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 d2_str = f"{d2_val:.2f}" if len(note_d2) > 0 else "-"
                 comp_str = f"{comp_val:.2f}" if len(note_comp) > 0 else "-"
 
-                # CORRECTION APPLIQUÉE ICI : Moyenne de la matière sur 20 correcte (Devoirs + Composition / 2)
                 notes_dispo_mat = []
                 if len(note_d1) > 0 and pd.notnull(note_d1[0]): notes_dispo_mat.append(d1_val)
                 if len(note_d2) > 0 and pd.notnull(note_d2[0]): notes_dispo_mat.append(d2_val)
@@ -640,7 +639,6 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 pdf.cell(w_moy, 6, f"{note_sur_10:.2f}/10", 1, 0, "C")
                 pdf.cell(w_app, 6, str(appr_str)[:30], 1, 1, "L")
 
-    # Calcul de la moyenne générale selon le cycle (somme des notes pondérées divisée par la somme des coefficients)
     if cycle == "Collège":
         moyenne = (total_points_sur_20 / total_coefs) if total_coefs > 0 else 0.0
         libelle_moy = f"MOYENNE GÉNÉRALE : {moyenne:.2f} / 20"
@@ -701,94 +699,6 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
 
     return bytes(pdf.output())
 
-def generer_rapport_general_pdf():
-    pdf = PDFReport()
-    pdf.add_page()
-    
-    use_dejavu = os.path.exists("DejaVuSans.ttf")
-    
-    if use_dejavu:
-        pdf.add_font("DejaVu", "", "DejaVuSans.ttf", uni=True)
-        font_main = "DejaVu"
-        bullet = "• "
-    else:
-        font_main = "Arial"
-        bullet = "- "
-    
-    pdf.set_font(font_main, "B", 14)
-    pdf.cell(0, 8, "RAPPORT GÉNÉRAL & CONSOLIDATION ANNUELLE", 0, 1, "C")
-    pdf.set_font(font_main, "I", 10)
-    pdf.cell(0, 5, "Synthèse Globale des Évaluations, Renseignements, Absences et Activités", 0, 1, "C")
-    pdf.ln(6)
-
-    pdf.set_font(font_main, "B", 11)
-    pdf.set_fill_color(30, 58, 138)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 7, "1. STATISTIQUES GÉNÉRALES DE L'ÉTABLISSEMENT", 1, 1, "L", True)
-    
-    pdf.set_font(font_main, "", 10)
-    pdf.set_text_color(0, 0, 0)
-    pdf.cell(95, 6, f"Total Élèves Inscrits : {len(st.session_state.eleves_db)}", 1, 0, "L")
-    pdf.cell(95, 6, f"Total Classes Actives : {len(st.session_state.classes_db)}", 1, 1, "L")
-    pdf.cell(95, 6, f"Corps Enseignant : {len(st.session_state.prof_credentials)} professeurs", 1, 0, "L")
-    pdf.cell(95, 6, f"Total Entrées Base Globale : {len(st.session_state.base_globale_db)}", 1, 1, "L")
-    pdf.ln(5)
-
-    pdf.set_font(font_main, "B", 11)
-    pdf.set_fill_color(30, 58, 138)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 7, "2. SUIVI DES ENSEIGNANTS ET RAPPORTS DE SÉANCE", 1, 1, "L", True)
-    
-    pdf.set_font(font_main, "", 9)
-    pdf.set_text_color(0, 0, 0)
-    if not st.session_state.rapports_journaliers_prof.empty:
-        for _, r in st.session_state.rapports_journaliers_prof.iterrows():
-            txt = f"{bullet}[{r['Date']}] {r['Professeur']} ({r['Classe']} - {r['Matière']}) : {r['Bilan du Cours'][:60]}"
-            if not use_dejavu:
-                txt = txt.encode('latin-1', 'replace').decode('latin-1')
-            pdf.cell(190, 6, txt, 1, 1, "L")
-    else:
-        pdf.cell(190, 6, "Aucun rapport déposé.", 1, 1, "L")
-    pdf.ln(5)
-
-    pdf.set_font(font_main, "B", 11)
-    pdf.set_fill_color(30, 58, 138)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 7, "3. EXTRAIT RENSEIGNEMENTS BASE GLOBALE", 1, 1, "L", True)
-
-    pdf.set_font(font_main, "B", 8)
-    pdf.set_fill_color(220, 230, 242)
-    pdf.set_text_color(0, 0, 0)
-    pdf.cell(25, 6, "Date", 1, 0, "C", True)
-    pdf.cell(30, 6, "Période", 1, 0, "C", True)
-    pdf.cell(45, 6, "Acteur / Classe", 1, 0, "C", True)
-    pdf.cell(30, 6, "Type", 1, 0, "C", True)
-    pdf.cell(60, 6, "Détail", 1, 1, "C", True)
-
-    pdf.set_font(font_main, "", 8)
-    if not st.session_state.base_globale_db.empty:
-        for _, row in st.session_state.base_globale_db.head(15).iterrows():
-            d_str = str(row["Date"])
-            per_str = f"{row['Mois']}/{str(row['Trimestre'])[:3]}"
-            act_str = f"{str(row['Nom Acteur'])[:18]} ({row['Classe']})"
-            typ_str = str(row["Type Entrée"])[:15]
-            det_str = str(row["Détail / Contenu"])[:35]
-            
-            if not use_dejavu:
-                d_str = d_str.encode('latin-1', 'replace').decode('latin-1')
-                per_str = per_str.encode('latin-1', 'replace').decode('latin-1')
-                act_str = act_str.encode('latin-1', 'replace').decode('latin-1')
-                typ_str = typ_str.encode('latin-1', 'replace').decode('latin-1')
-                det_str = det_str.encode('latin-1', 'replace').decode('latin-1')
-
-            pdf.cell(25, 6, d_str, 1, 0, "C")
-            pdf.cell(30, 6, per_str, 1, 0, "C")
-            pdf.cell(45, 6, act_str, 1, 0, "L")
-            pdf.cell(30, 6, typ_str, 1, 0, "C")
-            pdf.cell(60, 6, det_str, 1, 1, "L")
-
-    return bytes(pdf.output())
-
 def assistant_ia_repondre(question):
     q = question.lower()
     if "élève" in q or "effectif" in q or "nombre" in q:
@@ -845,7 +755,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
             <div class="animated-card">
                 <h1 style="font-size: 3rem; margin: 0;">👨‍🏫</h1>
                 <h3 style="color: #1E3A8A; margin: 10px 0;">Espace Professeurs</h3>
-                <p style="font-size: 0.85rem; color: #64748B;">Notes, fiches d'appel, rapports & alimentation de la base globale.</p>
+                <p style="font-size: 0.85rem; color: #64748B;">Notes, fiches d'appel, travail fait et à faire & alimentation de la base globale.</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -966,8 +876,8 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             "📋 Fiche d'Appel", 
             "📝 Saisie des Notes par Fiche Matière", 
             "⚠️ Conduite", 
-            "📖 Cahier de Textes", 
-            "📊 Rapport Journalier"
+            "📖 Travail fait et à faire", 
+            "📑 Cahier de texte"
         ], horizontal=True)
 
         if menu_prof == "📋 Fiche d'Appel":
@@ -1174,8 +1084,8 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         sauvegarder_donnees_externes()
                         st.success("Remarque enregistrée et synchronisée.")
 
-        elif menu_prof == "📖 Cahier de Textes":
-            st.markdown("### Cahier de Textes Numérique")
+        elif menu_prof == "📖 Travail fait et à faire":
+            st.markdown("### Travail fait et à faire")
             st.info(f"📌 Accès restreint à votre classe assignée : **{classe_autorisee}**")
             with st.form("form_cahier"):
                 cls_ct = classe_autorisee
@@ -1190,8 +1100,8 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         sauvegarder_donnees_externes()
                         st.success("Leçon publiée.")
 
-        elif menu_prof == "📊 Rapport Journalier":
-            st.markdown("### Rédiger un Rapport Journalier")
+        elif menu_prof == "📑 Cahier de texte":
+            st.markdown("### Cahier de texte")
             st.info(f"📌 Accès restreint à votre classe assignée : **{classe_autorisee}**")
             st.caption("Ce rapport sera directement transmis à la direction et enregistré dans la base globale.")
             with st.form("form_rap_prof"):
@@ -1263,7 +1173,7 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
             st.rerun()
 
         st.markdown("---")
-        t1, t2, t3, t4, t5, t6 = st.tabs(["📊 Bulletin & Notes", "📅 Emploi du Temps", "📉 Absences", "⚠️ Conduite", "📖 Cahier de Textes", "🪪 Carte Scolaire"])
+        t1, t2, t3, t4, t5, t6 = st.tabs(["📊 Bulletin & Notes", "📅 Emploi du Temps", "📉 Absences", "⚠️ Conduite", "📖 Travail fait et à faire", "🪪 Carte Scolaire"])
         
         with t1:
             st.subheader("Bulletin de Notes Officiel (Consultation en ligne)")
@@ -1328,7 +1238,7 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
             else: st.info("Aucune observation disciplinaire.")
 
         with t5:
-            st.subheader("Cahier de Textes de la Classe")
+            st.subheader("Travail fait et à faire de la Classe")
             ct_cls = st.session_state.cahier_textes[st.session_state.cahier_textes["Classe"] == classe]
             if not ct_cls.empty: st.dataframe(ct_cls, use_container_width=True)
             else: st.info("Aucune leçon publiée.")
@@ -1404,9 +1314,9 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             "📅 Emploi du Temps Interactif & Documents",
             "👨‍🎓 Élèves (Export PDF, Modif, Suppr)", 
             "👨‍🏫 Professeurs (Export PDF, Modif, Suppr)", 
-            "🏫 Classes (Définir classe entière & Gestion)", 
-            "📋 Listes Blanches Parents", 
-            "📑 Rapports Journaliers Réceptionnés"
+            "🏫 Gestion des classes et cycles", 
+            "📋 Listes blanches des parents", 
+            "📑 Rapport journalier"
         ])
 
         if adm_tab == "☁️ Sauvegarde & Restauration Cloud (Anti-Effacement)":
@@ -1705,7 +1615,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     st.markdown(resp)
 
         elif adm_tab == "📅 Emploi du Temps Interactif & Documents":
-            st.subheader("📅 Gestion des Emplois du Temps par Classe & Documents")
+            st.subheader("📅 Gestion des Emplois du Temps par Classe")
             classes_edt = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else []
             if classes_edt:
                 cls_edt_sel = st.selectbox("Choisir la classe pour l'emploi du temps", classes_edt, key="sel_edt_adm")
@@ -1718,22 +1628,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     st.session_state.edt_grid_db[cls_edt_sel] = edited_grid
                     sauvegarder_donnees_externes()
                     st.success("Emploi du temps mis à jour et sauvegardé avec succès !")
-
-                st.markdown("---")
-                st.markdown("#### 📁 Documents / PDF associés à l'Emploi du Temps")
-                uploaded_edt_doc = st.file_uploader(f"Ajouter un document PDF/Image pour {cls_edt_sel}", type=["pdf", "png", "jpg"], key=f"up_doc_{cls_edt_sel}")
-                if uploaded_edt_doc is not None:
-                    if cls_edt_sel not in st.session_state.edt_documents:
-                        st.session_state.edt_documents[cls_edt_sel] = []
-                    if uploaded_edt_doc.name not in st.session_state.edt_documents[cls_edt_sel]:
-                        st.session_state.edt_documents[cls_edt_sel].append(uploaded_edt_doc.name)
-                        sauvegarder_donnees_externes()
-                        st.success(f"Document {uploaded_edt_doc.name} ajouté avec succès !")
-
-                if cls_edt_sel in st.session_state.edt_documents and st.session_state.edt_documents[cls_edt_sel]:
-                    st.write("Documents actuellement liés :")
-                    for d_n in st.session_state.edt_documents[cls_edt_sel]:
-                        st.write(f"- {d_n}")
             else:
                 st.warning("Veuillez d'abord créer des classes.")
 
@@ -1823,5 +1717,43 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.success("Mise à jour enregistrée !")
                 st.rerun()
 
-        elif adm_tab == "🏫 Classes (Définir classe entière & Gestion)":
+        elif adm_tab == "🏫 Gestion des classes et cycles":
             st.subheader("🏫 Gestion des Classes et Cycles")
+            edited_classes = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True, key="editor_classes_admin")
+            if st.button("💾 Enregistrer les modifications des classes"):
+                st.session_state.classes_db = edited_classes
+                sauvegarder_donnees_externes()
+                st.success("Classes et cycles mis à jour avec succès !")
+                st.rerun()
+
+        elif adm_tab == "📋 Listes blanches des parents":
+            st.subheader("📋 Listes blanches des parents")
+            edited_parents = st.data_editor(st.session_state.parents_white_list, num_rows="dynamic", use_container_width=True, key="editor_parents_admin")
+            if st.button("💾 Enregistrer la liste blanche des parents"):
+                st.session_state.parents_white_list = edited_parents
+                sauvegarder_donnees_externes()
+                st.success("Liste blanche des parents mise à jour avec succès !")
+                st.rerun()
+
+        elif adm_tab == "📑 Rapport journalier":
+            st.subheader("📑 Rapport journalier")
+            if not st.session_state.rapports_journaliers_prof.empty:
+                st.dataframe(st.session_state.rapports_journaliers_prof, use_container_width=True)
+                if st.button("📄 Télécharger les rapports journaliers (PDF)"):
+                    pdf_rj = export_table_pdf("RAPPORTS JOURNALIERS DES PROFESSEURS", st.session_state.rapports_journaliers_prof)
+                    st.download_button("Télécharger PDF", data=pdf_rj, file_name="rapports_journaliers.pdf", mime="application/pdf")
+            else:
+                st.info("Aucun rapport journalier enregistré.")
+
+elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
+    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Rapports Globaux et Consolidation Annuelle</div>', unsafe_allow_html=True)
+    st.markdown("Téléchargez le rapport général consolidé de l'établissement au format PDF :")
+    if st.button("📄 Générer et Télécharger le Rapport Général Consolidé (PDF)"):
+        pdf_gen = generer_rapport_general_pdf()
+        st.success("Rapport général généré avec succès !")
+        st.download_button(
+            label="📥 Télécharger le Rapport Général PDF",
+            data=pdf_gen,
+            file_name=f"rapport_general_cpnm_{datetime.today().strftime('%Y%m%d')}.pdf",
+            mime="application/pdf"
+        )
