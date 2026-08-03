@@ -573,11 +573,10 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
         pdf.cell(w_moy, 7, "Moy. /20", 1, 0, "C", True)
         pdf.cell(w_app, 7, "Appréciation", 1, 1, "C", True)
     else:
-        w_mat, w_comp, w_coef, w_moy, w_app = 55, 30, 20, 25, 60
+        w_mat, w_comp, w_moy, w_app = 65, 30, 30, 65
         pdf.cell(w_mat, 7, "Matière", 1, 0, "C", True)
         pdf.cell(w_comp, 7, "Évaluation", 1, 0, "C", True)
-        pdf.cell(w_coef, 7, "Coef", 1, 0, "C", True)
-        pdf.cell(w_moy, 7, "Note /Barème", 1, 0, "C", True)
+        pdf.cell(w_moy, 7, "Note /10", 1, 0, "C", True)
         pdf.cell(w_app, 7, "Appréciation", 1, 1, "C", True)
 
     pdf.set_font("Arial", "", 8)
@@ -591,10 +590,10 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
         matieres_list = df_n["Matière"].unique()
         for mat in matieres_list:
             df_mat = df_n[df_n["Matière"] == mat]
-            coef = int(df_mat["Coefficient"].iloc[0]) if "Coefficient" in df_mat.columns and pd.notnull(df_mat["Coefficient"].iloc[0]) else 1
             appr_str = df_mat["Appréciation"].iloc[-1] if not df_mat.empty else "Bon ensemble"
             
             if cycle == "Collège":
+                coef = int(df_mat["Coefficient"].iloc[0]) if "Coefficient" in df_mat.columns and pd.notnull(df_mat["Coefficient"].iloc[0]) else 1
                 note_d1 = df_mat[df_mat["Type Évaluation"] == "Devoir 1"]["Note"].values
                 note_d2 = df_mat[df_mat["Type Évaluation"] == "Devoir 2"]["Note"].values
                 note_comp = df_mat[df_mat["Type Évaluation"] == "Composition"]["Note"].values
@@ -625,15 +624,14 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 comp_str = f"{note_comp[0]:.2f}" if len(note_comp) > 0 else "-"
                 note_val = note_comp[0] if len(note_comp) > 0 else 0.0
                 
-                # Normalisation sur 10 pour l'élémentaire et le préscolaire si le barème saisi est différent de 10
+                # Normalisation stricte sur 10 sans coefficient pour l'élémentaire et le préscolaire
                 note_sur_10 = (note_val / bareme_val) * 10.0 if bareme_val > 0 else note_val
                 total_points_sur_10 += note_sur_10
-                total_coefs += 1 # 1 matière = 1 unité pour le primaire
+                total_coefs += 1 
 
                 pdf.cell(w_mat, 6, str(mat)[:25], 1, 0, "L")
                 pdf.cell(w_comp, 6, comp_str, 1, 0, "C")
-                pdf.cell(w_coef, 6, str(coef), 1, 0, "C")
-                pdf.cell(w_moy, 6, f"{note_val:.2f}/{bareme_val}", 1, 0, "C")
+                pdf.cell(w_moy, 6, f"{note_sur_10:.2f}/10", 1, 0, "C")
                 pdf.cell(w_app, 6, str(appr_str)[:30], 1, 1, "L")
 
     # Calcul de la moyenne générale selon le cycle (sur 20 pour collège, sur 10 pour élémentaire/préscolaire)
@@ -799,7 +797,7 @@ def assistant_ia_repondre(question):
         nb_bg = len(st.session_state.base_globale_db)
         return f"📑 **{nb_r} rapport(s)** journalier(s) enregistrés et **{nb_bg} entrées** centralisées dans la Base Globale de suivi."
     elif "bulletin" in q or "note" in q or "barème" in q:
-        return "📝 Le système applique un barème personnalisé : pour le préscolaire et l'élémentaire, barème libre sans coefficient intégré ; pour le collège, barème et coefficient configurables."
+        return "📝 Le système applique un barème adapté : pour le préscolaire et l'élémentaire, barème sur 10 sans coefficient ; pour le collège, barème sur 20 avec coefficients."
     else:
         return "🤖 **IA Administration École Président Nelson Mandela :** Je suis là pour vous assister ! Posez-moi des questions sur la base globale, les effectifs, emplois du temps ou les rapports."
 
@@ -1036,18 +1034,14 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 else:
                     type_eval_sel = st.selectbox("Type d'Évaluation", ["Composition", "Interrogation", "Devoir"])
 
-            c_bar, c_coef = st.columns(2)
             if cycle_sel in ["Préscolaire", "Élémentaire"]:
-                with c_bar:
-                    bareme_sel = st.number_input("Barème personnalisé de l'évaluation", min_value=1, max_value=100, value=10)
+                bareme_sel = 10
                 coef_val = 1 
-                with c_coef:
-                    st.info("Coefficient : Non intégré (fixé à 1 pour ce cycle)")
+                st.info("📌 Cycle Élémentaire / Préscolaire : Barème fixe sur 10 (sans coefficient).")
             else:
-                with c_bar:
-                    bareme_sel = st.number_input("Barème de l'évaluation", min_value=1, max_value=100, value=20)
-                with c_coef:
-                    coef_val = st.number_input("Coefficient de l'évaluation", min_value=1, max_value=10, value=3)
+                bareme_sel = 20
+                coef_val = st.number_input("Coefficient de l'évaluation", min_value=1, max_value=10, value=3)
+                st.info("📌 Cycle Collège : Barème sur 20 avec coefficients.")
 
             mode_mat = st.radio("Saisie Matière :", ["Saisir directement la matière", "Choisir parmi les matières prédéfinies"], horizontal=True)
             
@@ -1058,8 +1052,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 if not mats_filt:
                     mats_filt = ["Mathématiques", "Français", "Histoire-Géo"]
                 matiere_sel = st.selectbox("Matière Prédéfinie", mats_filt)
-
-            st.info(f"📌 Cycle : **{cycle_sel}** | Classe : **{cls_n}** | Période : **{trimestre_sel}** | Évaluation : **{type_eval_sel}** | Barème : **/{bareme_sel}** | Coef : **{coef_val}**")
 
             eleves_cls = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_n]["Nom Complet"].tolist()
 
@@ -1130,7 +1122,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             new_bg_rows.append({
                                 "Date": d_today, "Année": "2025-2026", "Trimestre": trimestre_sel, "Mois": m_today,
                                 "Type Acteur": "Élève", "Nom Acteur": r["Élève"], "Classe": cls_n,
-                                "Type Entrée": "Note", "Détail / Contenu": f"{matiere_sel} ({type_eval_sel} - Coef {coef_val}): {r[f'Note /{bareme_sel}']}/{bareme_sel}",
+                                "Type Entrée": "Note", "Détail / Contenu": f"{matiere_sel} ({type_eval_sel}): {r[f'Note /{bareme_sel}']}/{bareme_sel}",
                                 "Appréciation": r["Appréciation"]
                             })
                         
@@ -1138,7 +1130,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, pd.DataFrame(new_bg_rows)], ignore_index=True)
                         
                         sauvegarder_donnees_externes()
-                        st.success(f"Fiche de {matiere_sel} ({type_eval_sel} - Coef {coef_val}) enregistrée, synchronisée et sauvegardée automatiquement !")
+                        st.success(f"Fiche de {matiere_sel} ({type_eval_sel}) enregistrée, synchronisée et sauvegardée automatiquement !")
 
                 editeur_notes_fragment()
 
@@ -1281,20 +1273,18 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
             
             notes_el = st.session_state.notes_db[
                 (st.session_state.notes_db["Élève"] == eleve) & 
-                (st.session_state.notes_db["Trimestre"] == tri_p)
-            ]
+                (st.session_state.notes_db["Trimestre"] == tri_p]
 
             if not notes_el.empty:
-                st.dataframe(notes_el[["Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Appréciation"]], use_container_width=True)
-                
                 if cycle_eleve == "Collège":
+                    st.dataframe(notes_el[["Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Appréciation"]], use_container_width=True)
                     total_pts = (notes_el["Note"] * notes_el["Coefficient"]).sum()
                     total_coef = notes_el["Coefficient"].sum()
                     if total_coef > 0:
                         moy = total_pts / total_coef
                         st.markdown(f"### 🎯 Moyenne générale pondérée : **{moy:.2f} / 20**")
                 else:
-                    # Normalisation sur 10 pour l'élémentaire/préscolaire dans l'affichage parent
+                    st.dataframe(notes_el[["Matière", "Type Évaluation", "Note", "Barème", "Appréciation"]], use_container_width=True)
                     somme_sur_10 = 0.0
                     nb_mat = 0
                     for _, r in notes_el.iterrows():
@@ -1754,7 +1744,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.session_state.eleves_db["Prénom"] = prenoms
                 st.session_state.eleves_db["Nom"] = noms
 
-            # Colonnes à afficher et éditer
             cols_eleves_edit = ["Prénom", "Nom", "Date de Naissance", "Classe"]
             for col in cols_eleves_edit:
                 if col not in st.session_state.eleves_db.columns:
@@ -1784,17 +1773,13 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             )
 
             if st.button("💾 Enregistrer les modifications de la liste des élèves"):
-                # Reconstitution de la base propre
                 clean_df = edited_eleves_df.copy()
                 clean_df["Prénom"] = clean_df["Prénom"].fillna("").astype(str).str.strip()
                 clean_df["Nom"] = clean_df["Nom"].fillna("").astype(str).str.strip()
                 clean_df["Date de Naissance"] = clean_df["Date de Naissance"].fillna("2012-01-01").astype(str).str.strip()
                 clean_df["Classe"] = clean_df["Classe"].fillna(classes_dispo[0]).astype(str).str.strip()
-                
-                # Recalcul de Nom Complet et conservation de Photo si existante
                 clean_df["Nom Complet"] = clean_df["Prénom"] + " " + clean_df["Nom"]
                 
-                # Conserver les photos d'origine si présentes par correspondance
                 photos = []
                 for _, r in clean_df.iterrows():
                     match_orig = st.session_state.eleves_db[
