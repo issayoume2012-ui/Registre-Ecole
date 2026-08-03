@@ -583,7 +583,8 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
     pdf.set_font("Arial", "", 8)
     pdf.set_text_color(0, 0, 0)
 
-    total_points = 0.0
+    total_points_sur_20 = 0.0
+    total_points_sur_10 = 0.0
     total_coefs = 0
 
     if not df_n.empty:
@@ -608,7 +609,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
 
                 moy_mat = ((d1_val + d2_val) / 2.0) + comp_val
                 tot = moy_mat * coef
-                total_points += tot
+                total_points_sur_20 += tot
                 total_coefs += coef
 
                 pdf.cell(w_mat, 6, str(mat)[:20], 1, 0, "L")
@@ -622,26 +623,38 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 note_comp = df_mat["Note"].values
                 bareme_val = int(df_mat["Barème"].iloc[0]) if "Barème" in df_mat.columns and pd.notnull(df_mat["Barème"].iloc[0]) else 10
                 comp_str = f"{note_comp[0]:.2f}" if len(note_comp) > 0 else "-"
-                moy_mat = note_comp[0] if len(note_comp) > 0 else 0.0
+                note_val = note_comp[0] if len(note_comp) > 0 else 0.0
                 
-                tot = moy_mat * coef
-                total_points += tot
-                total_coefs += coef
+                # Normalisation sur 10 pour l'élémentaire et le préscolaire si le barème saisi est différent de 10
+                note_sur_10 = (note_val / bareme_val) * 10.0 if bareme_val > 0 else note_val
+                total_points_sur_10 += note_sur_10
+                total_coefs += 1 # 1 matière = 1 unité pour le primaire
 
                 pdf.cell(w_mat, 6, str(mat)[:25], 1, 0, "L")
                 pdf.cell(w_comp, 6, comp_str, 1, 0, "C")
                 pdf.cell(w_coef, 6, str(coef), 1, 0, "C")
-                pdf.cell(w_moy, 6, f"{moy_mat:.2f}/{bareme_val}", 1, 0, "C")
+                pdf.cell(w_moy, 6, f"{note_val:.2f}/{bareme_val}", 1, 0, "C")
                 pdf.cell(w_app, 6, str(appr_str)[:30], 1, 1, "L")
 
-    moyenne = (total_points / total_coefs) if total_coefs > 0 else 0.0
+    # Calcul de la moyenne générale selon le cycle (sur 20 pour collège, sur 10 pour élémentaire/préscolaire)
+    if cycle == "Collège":
+        moyenne = (total_points_sur_20 / total_coefs) if total_coefs > 0 else 0.0
+        libelle_moy = f"MOYENNE GÉNÉRALE : {moyenne:.2f} / 20"
+    else:
+        moyenne = (total_points_sur_10 / total_coefs) if total_coefs > 0 else 0.0
+        libelle_moy = f"MOYENNE GÉNÉRALE : {moyenne:.2f} / 10"
+
     pdf.ln(3)
     pdf.set_font("Arial", "B", 10)
-    pdf.cell(95, 7, f"Total des Points : {total_points:.2f}", 1, 0, "L")
-    pdf.cell(95, 7, f"Total des Coefficients : {total_coefs}", 1, 1, "L")
+    if cycle == "Collège":
+        pdf.cell(95, 7, f"Total des Points : {total_points_sur_20:.2f}", 1, 0, "L")
+        pdf.cell(95, 7, f"Total des Coefficients : {total_coefs}", 1, 1, "L")
+    else:
+        pdf.cell(95, 7, f"Somme des notes sur 10 : {total_points_sur_10:.2f}", 1, 0, "L")
+        pdf.cell(95, 7, f"Nombre de matières : {total_coefs}", 1, 1, "L")
     
     pdf.set_fill_color(230, 242, 255)
-    pdf.cell(190, 8, f"MOYENNE GÉNÉRALE : {moyenne:.2f}", 1, 1, "C", True)
+    pdf.cell(190, 8, libelle_moy, 1, 1, "C", True)
 
     df_bg_abs = st.session_state.base_globale_db[
         (st.session_state.base_globale_db["Nom Acteur"] == eleve_nom) & 
@@ -1274,12 +1287,24 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
             if not notes_el.empty:
                 st.dataframe(notes_el[["Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Appréciation"]], use_container_width=True)
                 
-                total_pts = (notes_el["Note"] * notes_el["Coefficient"]).sum()
-                total_coef = notes_el["Coefficient"].sum()
-                
-                if total_coef > 0:
-                    moy = total_pts / total_coef
-                    st.markdown(f"### 🎯 Moyenne générale pondérée : **{moy:.2f}**")
+                if cycle_eleve == "Collège":
+                    total_pts = (notes_el["Note"] * notes_el["Coefficient"]).sum()
+                    total_coef = notes_el["Coefficient"].sum()
+                    if total_coef > 0:
+                        moy = total_pts / total_coef
+                        st.markdown(f"### 🎯 Moyenne générale pondérée : **{moy:.2f} / 20**")
+                else:
+                    # Normalisation sur 10 pour l'élémentaire/préscolaire dans l'affichage parent
+                    somme_sur_10 = 0.0
+                    nb_mat = 0
+                    for _, r in notes_el.iterrows():
+                        n_val = float(r["Note"]) if pd.notnull(r["Note"]) else 0.0
+                        b_val = float(r["Barème"]) if pd.notnull(r["Barème"]) and float(r["Barème"]) > 0 else 10.0
+                        somme_sur_10 += (n_val / b_val) * 10.0
+                        nb_mat += 1
+                    if nb_mat > 0:
+                        moy = somme_sur_10 / nb_mat
+                        st.markdown(f"### 🎯 Moyenne générale : **{moy:.2f} / 10**")
             else:
                 st.info(f"Aucune note enregistrée pour le {tri_p}.")
 
