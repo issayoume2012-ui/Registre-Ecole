@@ -81,6 +81,20 @@ def init_sqlite_db():
 
 init_sqlite_db()
 
+def corriger_schema_si_besoin():
+    """Vérifie et corrige définitivement la présence des colonnes indispensables dans les tables SQLite."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    # Vérification et ajout de la colonne 'prenom' dans la table eleves si absente
+    cursor.execute("PRAGMA table_info(eleves)")
+    colonnes_eleves = [col[1] for col in cursor.fetchall()]
+    if "prenom" not in colonnes_eleves:
+        cursor.execute("ALTER TABLE eleves ADD COLUMN prenom TEXT;")
+        conn.commit()
+    conn.close()
+
+corriger_schema_si_besoin()
+
 def charger_donnees_externes():
     """Charge les données depuis la base de données SQLite externe."""
     data = {}
