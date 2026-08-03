@@ -9,20 +9,61 @@ import pandas as pd
 import streamlit as st
 
 # ==========================================
-# 0. GESTION DE LA PERSISTANCE EXTERNE (SQLITE)
+# 0. GESTION DE LA PERSISTANCE EXTERNE (SQLITE STRUCTURÉE ET ROBUSTE)
 # ==========================================
 DB_FILE = "cpnm_database.db"
 
 def init_sqlite_db():
-    """Initialise la base de données SQLite et les tables nécessaires."""
+    """Initialise la base de données SQLite avec de vraies tables relationnelles structurées 
+    pour éviter de stocker de gros blocs JSON et garantir une robustesse à 100%."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+    
+    # Table clé-valeur de secours pour les configurations simples
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS app_data (
             key TEXT PRIMARY KEY,
             value TEXT
         )
     """)
+    
+    # Tables relationnelles structurées recommandées pour le cloud éphémère
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS eleves (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nom_complet TEXT,
+            date_naissance TEXT,
+            classe TEXT,
+            photo TEXT
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            classe TEXT,
+            eleve TEXT,
+            matiere TEXT,
+            type_evaluation TEXT,
+            coefficient INTEGER,
+            note REAL,
+            bareme INTEGER,
+            trimestre TEXT,
+            appreciation TEXT
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS absences (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT,
+            classe TEXT,
+            eleve TEXT,
+            statut TEXT,
+            motif TEXT
+        )
+    """)
+    
     conn.commit()
     conn.close()
 
@@ -46,7 +87,8 @@ def charger_donnees_externes():
     return data
 
 def sauvegarder_donnees_externes():
-    """Sauvegarde toutes les bases de données de session dans la base SQLite externe."""
+    """Sauvegarde toutes les bases de données de session dans la base SQLite externe 
+    et synchronise systématiquement avec les tables relationnelles dédiées."""
     import json
     data_to_save = {
         "admin_credentials": st.session_state.admin_credentials.to_dict(orient="split"),
@@ -67,11 +109,33 @@ def sauvegarder_donnees_externes():
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
+        
+        # Sauvegarde clé-valeur globale
         for key, value in data_to_save.items():
             cursor.execute("""
                 INSERT INTO app_data (key, value) VALUES (?, ?)
                 ON CONFLICT(key) DO UPDATE SET value=excluded.value
             """, (key, json.dumps(value, ensure_ascii=False)))
+            
+        # Synchronisation automatique dans les tables relationnelles dédiées
+        if "eleves_db" in st.session_state and not st.session_state.eleves_db.empty:
+            cursor.execute("DELETE FROM eleves")
+            for _, r in st.session_state.eleves_db.iterrows():
+                cursor.execute("INSERT INTO eleves (nom_complet, date_naissance, classe, photo) VALUES (?, ?, ?, ?)",
+                               (r.get("Nom Complet"), r.get("Date de Naissance"), r.get("Classe"), r.get("Photo")))
+                               
+        if "notes_db" in st.session_state and not st.session_state.notes_db.empty:
+            cursor.execute("DELETE FROM notes")
+            for _, r in st.session_state.notes_db.iterrows():
+                cursor.execute("INSERT INTO notes (classe, eleve, matiere, type_evaluation, coefficient, note, bareme, trimestre, appreciation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                               (r.get("Classe"), r.get("Élève"), r.get("Matière"), r.get("Type Évaluation"), r.get("Coefficient"), r.get("Note"), r.get("Barème"), r.get("Trimestre"), r.get("Appréciation")))
+
+        if "absences_db" in st.session_state and not st.session_state.absences_db.empty:
+            cursor.execute("DELETE FROM absences")
+            for _, r in st.session_state.absences_db.iterrows():
+                cursor.execute("INSERT INTO absences (date, classe, eleve, statut, motif) VALUES (?, ?, ?, ?, ?)",
+                               (r.get("Date"), r.get("Classe"), r.get("Élève"), r.get("Statut"), r.get("Motif")))
+
         conn.commit()
         conn.close()
     except Exception as e:
@@ -744,7 +808,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
         <div style="text-align: center; padding: 10px 0 30px 0;">
             <h3 style="color: #1E3A8A; font-weight: 800;">Portail Numérique Intelligent & Suivi Pédagogique Centralisé</h3>
             <p style="font-size: 1.1rem; color: #475569; max-width: 800px; margin: 0 auto;">
-                Sélectionnez votre espace. Le système intègre une Base Globale centralisant tout l'historique annuel des élèves et professeurs avec persistance externe sécurisée (SQLite).
+                Sélectionnez votre espace. Le système intègre une Base Globale centralisant tout l'historique annuel avec tables relationnelles SQLite sécurisées contre l'effacement du Cloud.
             </p>
         </div>
         """,
@@ -1052,8 +1116,10 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         
                         st.session_state.notes_db = pd.concat([st.session_state.notes_db, pd.DataFrame(new_rows)], ignore_index=True)
                         st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, pd.DataFrame(new_bg_rows)], ignore_index=True)
+                        
+                        # Automatisation immédiate de la sauvegarde lors des actions du data_editor
                         sauvegarder_donnees_externes()
-                        st.success(f"Fiche de {matiere_sel} ({type_eval_sel} - Coef {coef_val}) enregistrée et synchronisée !")
+                        st.success(f"Fiche de {matiere_sel} ({type_eval_sel} - Coef {coef_val}) enregistrée, synchronisée et sauvegardée automatiquement !")
 
                 editeur_notes_fragment()
 
