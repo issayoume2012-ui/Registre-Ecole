@@ -31,7 +31,7 @@ def init_sqlite_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS eleves (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            prenom TEXT,
+            prenoms TEXT,
             nom TEXT,
             date_naissance TEXT,
             classe TEXT,
@@ -134,7 +134,7 @@ def sauvegarder_donnees_externes():
         if "eleves_db" in st.session_state and not st.session_state.eleves_db.empty:
             cursor.execute("DELETE FROM eleves")
             for _, r in st.session_state.eleves_db.iterrows():
-                cursor.execute("INSERT INTO eleves (prenom, nom, date_naissance, classe, photo) VALUES (?, ?, ?, ?, ?)",
+                cursor.execute("INSERT INTO eleves (prenoms, nom, date_naissance, classe, photo) VALUES (?, ?, ?, ?, ?)",
                                (r.get("Prénom"), r.get("Nom"), r.get("Date de Naissance"), r.get("Classe"), r.get("Photo")))
 
         if "prof_credentials" in st.session_state and not st.session_state.prof_credentials.empty:
@@ -1526,7 +1526,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                         st.dataframe(df_imported.head(), use_container_width=True)
 
                         cols_lower = [str(c).strip().lower() for c in df_imported.columns]
-                        col_prenom = next((df_imported.columns[i] for i, c in enumerate(cols_lower) if "prenom" in c or "prénom" in c), None)
+                        col_prenom = next((df_imported.columns[i] for i, c in enumerate(cols_lower) if "prenom" in c or "prénom" in c or "prénoms" in c), None)
                         col_nom = next((df_imported.columns[i] for i, c in enumerate(cols_lower) if c == "nom" or "nom" in c), None)
                         col_nais = next((df_imported.columns[i] for i, c in enumerate(cols_lower) if "naissance" in c or "date" in c), None)
 
