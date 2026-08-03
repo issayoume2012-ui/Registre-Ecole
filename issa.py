@@ -1271,9 +1271,11 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
                     ["1er Trimestre", "2ème Trimestre", "3ème Trimestre"],
                 )
             
+            # CORRECTION APPLIQUÉE ICI : Fermeture correcte de la parenthèse du DataFrame
             notes_el = st.session_state.notes_db[
                 (st.session_state.notes_db["Élève"] == eleve) & 
                 (st.session_state.notes_db["Trimestre"] == tri_p)
+            ]
 
             if not notes_el.empty:
                 if cycle_eleve == "Collège":
@@ -1818,39 +1820,3 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
         elif adm_tab == "🏫 Classes (Définir classe entière & Gestion)":
             st.subheader("🏫 Gestion des Classes et Cycles")
-            edited_cls = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True, key="editor_classes_admin")
-            if st.button("💾 Enregistrer les classes"):
-                st.session_state.classes_db = edited_cls
-                sauvegarder_donnees_externes()
-                st.success("Classes mises à jour !")
-                st.rerun()
-
-        elif adm_tab == "📋 Listes Blanches Parents":
-            st.subheader("📋 Gestion de la Liste Blanche des Parents")
-            edited_par = st.data_editor(st.session_state.parents_white_list, num_rows="dynamic", use_container_width=True, key="editor_parents_admin")
-            if st.button("💾 Enregistrer la liste blanche parents"):
-                st.session_state.parents_white_list = edited_par
-                sauvegarder_donnees_externes()
-                st.success("Liste blanche mise à jour !")
-                st.rerun()
-
-        elif adm_tab == "📑 Rapports Journaliers Réceptionnés":
-            st.subheader("📑 Rapports Journaliers et Bilans des Professeurs")
-            if not st.session_state.rapports_journaliers_prof.empty:
-                st.dataframe(st.session_state.rapports_journaliers_prof, use_container_width=True)
-            else:
-                st.info("Aucun rapport journalier pour le moment.")
-
-elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
-    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Rapports Généraux & Consolidation Annuelle</div>', unsafe_allow_html=True)
-    st.info("Téléchargez le rapport général complet de l'établissement consigné au format PDF.")
-
-    if st.button("📄 Générer & Télécharger le Rapport Général PDF"):
-        pdf_gen_bytes = generer_rapport_general_pdf()
-        st.success("Rapport général généré avec succès !")
-        st.download_button(
-            label="📥 Télécharger le Rapport Général Consolidé (.pdf)",
-            data=pdf_gen_bytes,
-            file_name=f"rapport_general_cpnm_{datetime.today().strftime('%Y%m%d')}.pdf",
-            mime="application/pdf"
-        )
