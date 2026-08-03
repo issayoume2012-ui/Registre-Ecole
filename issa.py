@@ -1606,7 +1606,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.markdown(f"**Réponse :** {rep}")
 
         elif adm_tab == "📅 Emploi du Temps Interactif & Documents":
-            st.subheader("📅 Gestion des Emplois du Temps & Dépôt de Documents")
+            st.subheader("📅 Gestion des Emplois du Temps")
             classes_edt = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"]
             cls_edt_sel = st.selectbox("Sélectionner la classe pour l'EDT", classes_edt)
             
@@ -1619,17 +1619,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             if st.button("💾 Enregistrer l'Emploi du Temps"):
                 sauvegarder_donnees_externes()
                 st.success("Emploi du temps mis à jour et sauvegardé !")
-
-            st.markdown("---")
-            st.markdown("#### 📂 Téléversement de documents liés à l'Emploi du Temps")
-            uploaded_edt_doc = st.file_uploader(f"Ajouter un fichier d'emploi du temps pour {cls_edt_sel}", type=["pdf", "png", "jpg", "docx"], key=f"file_edt_{cls_edt_sel}")
-            if uploaded_edt_doc is not None:
-                if cls_edt_sel not in st.session_state.edt_documents:
-                    st.session_state.edt_documents[cls_edt_sel] = []
-                if uploaded_edt_doc.name not in st.session_state.edt_documents[cls_edt_sel]:
-                    st.session_state.edt_documents[cls_edt_sel].append(uploaded_edt_doc.name)
-                    sauvegarder_donnees_externes()
-                    st.success(f"Document '{uploaded_edt_doc.name}' ajouté avec succès pour la classe {cls_edt_sel} !")
 
         elif adm_tab == "👨‍🎓 Élèves (Export PDF, Modif, Suppr)":
             st.subheader("👨‍🎓 Gestion des Élèves")
