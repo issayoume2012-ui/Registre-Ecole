@@ -1723,4 +1723,3 @@ elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
         st.write("#### Répartition des Entrées de la Base Globale")
         if not st.session_state.base_globale_db.empty:
             st.bar_chart(st.session_state.base_globale_db["Type Entrée"].value_counts())
-```[cite: 7]
