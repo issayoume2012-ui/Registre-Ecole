@@ -81,20 +81,6 @@ def init_sqlite_db():
 
 init_sqlite_db()
 
-def corriger_schema_si_besoin():
-    """Vérifie et corrige définitivement la présence des colonnes indispensables dans les tables SQLite."""
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    # Vérification et ajout de la colonne 'prenom' dans la table eleves si absente
-    cursor.execute("PRAGMA table_info(eleves)")
-    colonnes_eleves = [col[1] for col in cursor.fetchall()]
-    if "prenom" not in colonnes_eleves:
-        cursor.execute("ALTER TABLE eleves ADD COLUMN prenom TEXT;")
-        conn.commit()
-    conn.close()
-
-corriger_schema_si_besoin()
-
 def charger_donnees_externes():
     """Charge les données depuis la base de données SQLite externe."""
     data = {}
@@ -543,39 +529,6 @@ def export_table_pdf(title, df, columns_to_show=None):
 
     return bytes(pdf.output())
 
-def export_edt_pdf(classe_nom, df_edt):
-    pdf = PDFReport()
-    pdf.add_page(orientation='L')
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 8, f"EMPLOI DU TEMPS OFFICIEL - CLASSE DE {classe_nom.upper()}", 0, 1, "C")
-    pdf.ln(6)
-
-    col_widths = [35] + [255 / len(df_edt.columns)] * len(df_edt.columns)
-
-    pdf.set_font("Arial", "B", 10)
-    pdf.set_fill_color(30, 58, 138)
-    pdf.set_text_color(255, 255, 255)
-
-    pdf.cell(col_widths[0], 8, "Jours", 1, 0, "C", True)
-    for i, col_h in enumerate(df_edt.columns):
-        pdf.cell(col_widths[i+1], 8, str(col_h), 1, 0, "C", True)
-    pdf.ln()
-
-    pdf.set_font("Arial", "", 9)
-    pdf.set_text_color(0, 0, 0)
-    fill = False
-    pdf.set_fill_color(240, 244, 248)
-
-    for jour, row in df_edt.iterrows():
-        pdf.cell(col_widths[0], 8, str(jour), 1, 0, "C", fill)
-        for i, col_h in enumerate(df_edt.columns):
-            val = str(row[col_h]) if pd.notnull(row[col_h]) else ""
-            pdf.cell(col_widths[i+1], 8, val[:15], 1, 0, "C", fill)
-        pdf.ln()
-        fill = not fill
-
-    return bytes(pdf.output())
-
 def export_table_excel(df, columns_to_show=None):
     df_sub = df[columns_to_show] if columns_to_show else df
     output = io.BytesIO()
@@ -905,7 +858,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
             <div class="animated-card">
                 <h1 style="font-size: 3rem; margin: 0;">🔒</h1>
                 <h3 style="color: #1E3A8A; margin: 10px 0;">Administration</h3>
-                <p style="font-size: 0.85rem; color: #64748B;">Gestion Base Globale, import de fichiers élèves, EDT & PDF.</p>
+                <p style="font-size: 0.85rem; color: #64748B;">Gestion Base Globale, EDT & PDF.</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -1340,14 +1293,6 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
                 for doc_name in st.session_state.edt_documents[classe]:
                     st.write(f"- {doc_name}")
 
-            pdf_edt_data = export_edt_pdf(classe, grid_edt)
-            st.download_button(
-                label="📄 Télécharger l'Emploi du Temps en PDF",
-                data=pdf_edt_data,
-                file_name=f"emploi_du_temps_{classe.replace(' ', '_')}.pdf",
-                mime="application/pdf"
-            )
-
         with t3:
             st.subheader("Absences (Historique Base Globale)")
             abs_el = st.session_state.absences_db[st.session_state.absences_db["Élève"].str.contains(eleve, case=False, na=False)]
@@ -1429,7 +1374,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
         st.markdown("---")
         adm_tab = st.selectbox("Gestion Administrative :", [
             "📑 Bulletins PDF (Par Élève & Par Classe)",
-            "📥 Importation & Synchronisation de Fichiers Élèves",
             "🛡️ Gestionnaires & Propriétaires (Liste Blanche)",
             "📊 Liste & Classement des Élèves (Par Classe & Niveau)",
             "🗄️ Base Globale & Suivi Annuel/Trimestriel/Mensuel",
@@ -1515,78 +1459,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                         st.warning("Aucun élève dans cette classe.")
                 else:
                     st.warning("Aucune classe disponible.")
-
-        elif adm_tab == "📥 Importation & Synchronisation de Fichiers Élèves":
-            st.subheader("📥 Importation de la Fiche des Élèves")
-            st.info("Veuillez importer le fichier des élèves correspondant fidèlement au document joint.")
-
-            classes_dispo = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"]
-            classe_cible_import = st.selectbox("Affecter les élèves extraits à la classe :", classes_dispo)
-
-            uploaded_file_eleves = st.file_uploader("Téléverser le fichier des élèves (Excel .xlsx, .xls ou CSV)", type=["xlsx", "xls", "csv"])
-
-            if uploaded_file_eleves is not None:
-                file_ext = uploaded_file_eleves.name.split(".")[-1].lower()
-                nouveaux_eleves_extraits = []
-
-                try:
-                    if file_ext in ["xlsx", "xls", "csv"]:
-                        if file_ext == "csv":
-                            df_imported = pd.read_csv(uploaded_file_eleves)
-                        else:
-                            df_imported = pd.read_excel(uploaded_file_eleves)
-                        
-                        st.markdown("#### Aperçu des données importées :")
-                        st.dataframe(df_imported.head(), use_container_width=True)
-
-                        cols_lower = [str(c).strip().lower() for c in df_imported.columns]
-                        col_prenom = next((df_imported.columns[i] for i, c in enumerate(cols_lower) if "prenom" in c or "prénom" in c), None)
-                        col_nom = next((df_imported.columns[i] for i, c in enumerate(cols_lower) if c == "nom" or "nom" in c), None)
-                        col_nais = next((df_imported.columns[i] for i, c in enumerate(cols_lower) if "naissance" in c or "date" in c), None)
-
-                        if col_prenom is not None and col_nom is not None:
-                            for _, row in df_imported.iterrows():
-                                p_val = str(row[col_prenom]).strip()
-                                n_val = str(row[col_nom]).strip()
-                                d_val = str(row[col_nais]).strip() if col_nais is not None and pd.notnull(row[col_nais]) else "2012-01-01"
-                                
-                                if p_val and p_val != "nan" and n_val and n_val != "nan":
-                                    nom_complet = f"{p_val} {n_val}"
-                                    nouveaux_eleves_extraits.append({
-                                        "Nom Complet": nom_complet,
-                                        "Prénom": p_val,
-                                        "Nom": n_val,
-                                        "Date de Naissance": d_val[:10],
-                                        "Classe": classe_cible_import,
-                                        "Photo": None
-                                    })
-
-                    if nouveaux_eleves_extraits:
-                        st.success(f"✅ Extraction réussie : **{len(nouveaux_eleves_extraits)} élèves** détectés.")
-                        df_nouveaux = pd.DataFrame(nouveaux_eleves_extraits)
-                        st.dataframe(df_nouveaux, use_container_width=True)
-
-                        if st.button("🔄 Synchroniser et enregistrer dans la base des élèves"):
-                            st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, df_nouveaux], ignore_index=True)
-                            st.session_state.eleves_db = st.session_state.eleves_db.sort_values(by="Nom").reset_index(drop=True)
-                            
-                            new_bg_imports = []
-                            d_today = str(datetime.today().date())
-                            for _, r in df_nouveaux.iterrows():
-                                new_bg_imports.append({
-                                    "Date": d_today, "Année": "2025-2026", "Trimestre": "1er Semestre", "Mois": datetime.today().strftime("%B"),
-                                    "Type Acteur": "Élève", "Nom Acteur": r["Nom Complet"], "Classe": classe_cible_import,
-                                    "Type Entrée": "Inscription", "Détail / Contenu": "Importation du fichier des élèves", "Appréciation": "Inscrit(e)"
-                                })
-                            st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, pd.DataFrame(new_bg_imports)], ignore_index=True)
-                            
-                            sauvegarder_donnees_externes()
-                            st.success("🎉 Synchronisation effectuée avec succès !")
-                    else:
-                        st.warning("Aucune donnée exploitable n'a pu être extraite du fichier.")
-
-                except Exception as e:
-                    st.error(f"Erreur lors de l'analyse du fichier : {e}")
 
         elif adm_tab == "🛡️ Gestionnaires & Propriétaires (Liste Blanche)":
             st.subheader("🛡️ Liste Blanche des Gestionnaires & Propriétaires")
@@ -1851,3 +1723,4 @@ elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
         st.write("#### Répartition des Entrées de la Base Globale")
         if not st.session_state.base_globale_db.empty:
             st.bar_chart(st.session_state.base_globale_db["Type Entrée"].value_counts())
+```[cite: 7]
