@@ -606,7 +606,14 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 d2_str = f"{d2_val:.2f}" if len(note_d2) > 0 else "-"
                 comp_str = f"{comp_val:.2f}" if len(note_comp) > 0 else "-"
 
-                moy_mat = ((d1_val + d2_val) / 2.0) + comp_val
+                # CORRECTION APPLIQUÉE ICI : Moyenne de la matière sur 20 correcte (Devoirs + Composition / 2)
+                notes_dispo_mat = []
+                if len(note_d1) > 0 and pd.notnull(note_d1[0]): notes_dispo_mat.append(d1_val)
+                if len(note_d2) > 0 and pd.notnull(note_d2[0]): notes_dispo_mat.append(d2_val)
+                if len(note_comp) > 0 and pd.notnull(note_comp[0]): notes_dispo_mat.append(comp_val)
+                
+                moy_mat = sum(notes_dispo_mat) / len(notes_dispo_mat) if notes_dispo_mat else 0.0
+                
                 tot = moy_mat * coef
                 total_points_sur_20 += tot
                 total_coefs += coef
@@ -624,7 +631,6 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 comp_str = f"{note_comp[0]:.2f}" if len(note_comp) > 0 else "-"
                 note_val = note_comp[0] if len(note_comp) > 0 else 0.0
                 
-                # Normalisation stricte sur 10 sans coefficient pour l'élémentaire et le préscolaire
                 note_sur_10 = (note_val / bareme_val) * 10.0 if bareme_val > 0 else note_val
                 total_points_sur_10 += note_sur_10
                 total_coefs += 1 
@@ -634,7 +640,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 pdf.cell(w_moy, 6, f"{note_sur_10:.2f}/10", 1, 0, "C")
                 pdf.cell(w_app, 6, str(appr_str)[:30], 1, 1, "L")
 
-    # Calcul de la moyenne générale selon le cycle (sur 20 pour collège, sur 10 pour élémentaire/préscolaire)
+    # Calcul de la moyenne générale selon le cycle (somme des notes pondérées divisée par la somme des coefficients)
     if cycle == "Collège":
         moyenne = (total_points_sur_20 / total_coefs) if total_coefs > 0 else 0.0
         libelle_moy = f"MOYENNE GÉNÉRALE : {moyenne:.2f} / 20"
@@ -1271,7 +1277,6 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
                     ["1er Trimestre", "2ème Trimestre", "3ème Trimestre"],
                 )
             
-            # CORRECTION APPLIQUÉE ICI : Fermeture correcte de la parenthèse du DataFrame
             notes_el = st.session_state.notes_db[
                 (st.session_state.notes_db["Élève"] == eleve) & 
                 (st.session_state.notes_db["Trimestre"] == tri_p)
