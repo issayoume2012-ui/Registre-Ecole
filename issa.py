@@ -31,10 +31,22 @@ def init_sqlite_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS eleves (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nom_complet TEXT,
+            prenom TEXT,
+            nom TEXT,
             date_naissance TEXT,
             classe TEXT,
             photo TEXT
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS professeurs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            prenom TEXT,
+            nom TEXT,
+            matiere_principale TEXT,
+            classe_attribuee TEXT,
+            mot_de_passe TEXT
         )
     """)
     
@@ -104,7 +116,8 @@ def sauvegarder_donnees_externes():
         "notes_db": st.session_state.notes_db.to_dict(orient="split"),
         "matieres_def": st.session_state.matieres_def.to_dict(orient="split"),
         "conduite_db": st.session_state.conduite_db.to_dict(orient="split"),
-        "edt_grid_db": {k: v.to_dict(orient="split") for k, v in st.session_state.edt_grid_db.items()}
+        "edt_grid_db": {k: v.to_dict(orient="split") for k, v in st.session_state.edt_grid_db.items()},
+        "edt_documents": {k: v for k, v in st.session_state.edt_documents.items()}
     }
     try:
         conn = sqlite3.connect(DB_FILE)
@@ -121,8 +134,14 @@ def sauvegarder_donnees_externes():
         if "eleves_db" in st.session_state and not st.session_state.eleves_db.empty:
             cursor.execute("DELETE FROM eleves")
             for _, r in st.session_state.eleves_db.iterrows():
-                cursor.execute("INSERT INTO eleves (nom_complet, date_naissance, classe, photo) VALUES (?, ?, ?, ?)",
-                               (r.get("Nom Complet"), r.get("Date de Naissance"), r.get("Classe"), r.get("Photo")))
+                cursor.execute("INSERT INTO eleves (prenom, nom, date_naissance, classe, photo) VALUES (?, ?, ?, ?, ?)",
+                               (r.get("Prénom"), r.get("Nom"), r.get("Date de Naissance"), r.get("Classe"), r.get("Photo")))
+
+        if "prof_credentials" in st.session_state and not st.session_state.prof_credentials.empty:
+            cursor.execute("DELETE FROM professeurs")
+            for _, r in st.session_state.prof_credentials.iterrows():
+                cursor.execute("INSERT INTO professeurs (prenom, nom, matiere_principale, classe_attribuee, mot_de_passe) VALUES (?, ?, ?, ?, ?)",
+                               (r.get("Prénom"), r.get("Nom"), r.get("Matière Principale"), r.get("Classe Attribuée"), r.get("Mot de passe")))
                                
         if "notes_db" in st.session_state and not st.session_state.notes_db.empty:
             cursor.execute("DELETE FROM notes")
@@ -174,7 +193,7 @@ telecharger_polices()
 # 1. CONFIGURATION DE LA PAGE & DESIGN XXL RESPONSIVE FAST-LOAD
 # ==========================================
 st.set_page_config(
-    page_title="Portail Pédagogique - Cours Privé Nelson Mandela | Sénégal",
+    page_title="Portail Pédagogique - École Président Nelson Mandela | Sénégal",
     page_icon="🇸🇳",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -190,7 +209,7 @@ st.markdown(
         font-size: clamp(1.8rem, 4vw, 2.8rem); 
         font-weight: 900; 
         text-align: center; 
-        margin-bottom: 5px;
+        margin-bottom: 2px;
         text-transform: uppercase;
         letter-spacing: 1px;
         padding: 0 10px;
@@ -203,6 +222,7 @@ st.markdown(
         text-align: center; 
         margin-bottom: 25px; 
         padding: 0 10px;
+        font-style: italic;
     }
 
     .animated-card {
@@ -274,7 +294,7 @@ if "admin_credentials" not in st.session_state:
         st.session_state.admin_credentials = pd.DataFrame(**saved_data["admin_credentials"])
     else:
         st.session_state.admin_credentials = pd.DataFrame([
-            {"Nom": "Admin", "Prénom": "Principal", "Email": "cpnm@gmail.com", "Mot de passe": "cpnm2026"}
+            {"Nom": "Principal", "Prénom": "Admin", "Email": "cpnm@gmail.com", "Mot de passe": "cpnm2026"}
         ])
 
 if "gestionnaires_proprietaires_db" not in st.session_state:
@@ -325,14 +345,26 @@ if "eleves_db" not in st.session_state:
         st.session_state.eleves_db = pd.DataFrame(**saved_data["eleves_db"])
     else:
         st.session_state.eleves_db = pd.DataFrame(
-            columns=["Nom Complet", "Date de Naissance", "Classe", "Photo"],
+            columns=["Nom Complet", "Prénom", "Nom", "Date de Naissance", "Classe", "Photo"],
             data=[
-                ["Mamadou Diallo", "2012-05-14", "6ème A", None],
-                ["Fatou Sow", "2015-08-20", "CP", None],
-                ["Aminata Ba", "2013-02-10", "6ème A", None],
-                ["Oumar Sy", "2011-11-03", "5ème A", None]
+                ["Mamadou Diallo", "Mamadou", "Diallo", "2012-05-14", "6ème A", None],
+                ["Fatou Sow", "Fatou", "Sow", "2015-08-20", "CP", None],
+                ["Aminata Ba", "Aminata", "Ba", "2013-02-10", "6ème A", None],
+                ["Oumar Sy", "Oumar", "Sy", "2011-11-03", "5ème A", None]
             ]
         )
+# Ensure columns exist if loaded from older sessions
+if "Prénom" not in st.session_state.eleves_db.columns or "Nom" not in st.session_state.eleves_db.columns:
+    prenoms = []
+    noms = []
+    for _, r in st.session_state.eleves_db.iterrows():
+        nc = str(r.get("Nom Complet", ""))
+        parts = nc.split(" ", 1)
+        prenoms.append(parts[0] if len(parts) > 0 else "")
+        noms.append(parts[1] if len(parts) > 1 else "")
+    st.session_state.eleves_db["Prénom"] = prenoms
+    st.session_state.eleves_db["Nom"] = noms
+    st.session_state.eleves_db = st.session_state.eleves_db.sort_values(by="Nom").reset_index(drop=True)
 
 if "base_globale_db" not in st.session_state:
     if "base_globale_db" in saved_data:
@@ -355,6 +387,12 @@ if "edt_grid_db" not in st.session_state:
         st.session_state.edt_grid_db = {k: pd.DataFrame(**v) for k, v in saved_data["edt_grid_db"].items()}
     else:
         st.session_state.edt_grid_db = {}
+
+if "edt_documents" not in st.session_state:
+    if "edt_documents" in saved_data:
+        st.session_state.edt_documents = saved_data["edt_documents"]
+    else:
+        st.session_state.edt_documents = {}
 
 def get_or_create_edt(classe):
     if classe not in st.session_state.edt_grid_db:
@@ -423,8 +461,8 @@ if "matieres_def" not in st.session_state:
             {"Matière": "Histoire-Géographie", "Coefficient": 2, "Cycle": "Collège"},
             {"Matière": "SVT", "Coefficient": 2, "Cycle": "Collège"},
             {"Matière": "Anglais", "Coefficient": 2, "Cycle": "Collège"},
-            {"Matière": "Lecture / Langage", "Coefficient": 2, "Cycle": "Élémentaire"},
-            {"Matière": "Calcul / Mathématiques", "Coefficient": 2, "Cycle": "Élémentaire"},
+            {"Matière": "Lecture / Langage", "Coefficient": 1, "Cycle": "Élémentaire"},
+            {"Matière": "Calcul / Mathématiques", "Coefficient": 1, "Cycle": "Élémentaire"},
             {"Matière": "Éveil / Science", "Coefficient": 1, "Cycle": "Élémentaire"},
             {"Matière": "Activités Sensorielles", "Coefficient": 1, "Cycle": "Préscolaire"},
             {"Matière": "Graphisme / Dessin", "Coefficient": 1, "Cycle": "Préscolaire"}
@@ -447,16 +485,16 @@ if "conduite_db" not in st.session_state:
 class PDFReport(FPDF):
     def header(self):
         self.set_font("Arial", "B", 14)
-        self.cell(0, 8, "COURS PRIVÉ NELSON MANDELA - SÉNÉGAL", 0, 1, "C")
+        self.cell(0, 8, "ÉCOLE PRÉSIDENT NELSON MANDELA - SÉNÉGAL", 0, 1, "C")
         self.set_font("Arial", "I", 9)
-        self.cell(0, 5, "Excellence - Discipline - Ancrage Culturel", 0, 1, "C")
+        self.cell(0, 5, "éduquer, instruire et promouvoir les vertus africaines.", 0, 1, "C")
         self.line(10, 25, 200, 25)
         self.ln(8)
 
     def footer(self):
         self.set_y(-15)
         self.set_font("Arial", "I", 8)
-        self.cell(0, 10, f"Page {self.page_no()} - Document Officiel CPNM Généré le {datetime.now().strftime('%d/%m/%Y')}", 0, 0, "C")
+        self.cell(0, 10, f"Page {self.page_no()} - Document Officiel ÉPNM Généré le {datetime.now().strftime('%d/%m/%Y')}", 0, 0, "C")
 
 def export_table_pdf(title, df, columns_to_show=None):
     pdf = PDFReport()
@@ -537,7 +575,6 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
     
     row_cls = st.session_state.classes_db[st.session_state.classes_db["Classe"] == classe_nom]
     cycle = row_cls["Cycle"].values[0] if not row_cls.empty else "Collège"
-    bareme = 10 if cycle in ["Préscolaire", "Élémentaire"] else 20
     
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 7, f"BULLETIN DE NOTES ET BILAN GLOBAL - {trimestre_sel.upper()}", 0, 1, "C")
@@ -546,8 +583,8 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
     pdf.set_font("Arial", "", 10)
     pdf.cell(100, 6, f"Élève : {eleve_nom}", 0, 0, "L")
     pdf.cell(90, 6, f"Classe : {classe_nom} ({cycle})", 0, 1, "R")
-    pdf.cell(100, 6, f"Établissement : Cours Privé Nelson Mandela", 0, 0, "L")
-    pdf.cell(90, 6, f"Barème officiel : / {bareme}", 0, 1, "R")
+    pdf.cell(100, 6, f"Établissement : École Président Nelson Mandela", 0, 0, "L")
+    pdf.cell(90, 6, f"Devise : éduquer, instruire et promouvoir les vertus africaines.", 0, 1, "R")
     pdf.ln(5)
 
     df_n = st.session_state.notes_db[
@@ -566,14 +603,14 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
         pdf.cell(w_d2, 7, "Devoir 2", 1, 0, "C", True)
         pdf.cell(w_comp, 7, "Composition", 1, 0, "C", True)
         pdf.cell(w_coef, 7, "Coef", 1, 0, "C", True)
-        pdf.cell(w_moy, 7, f"Moy. /{bareme}", 1, 0, "C", True)
+        pdf.cell(w_moy, 7, "Moy. /20", 1, 0, "C", True)
         pdf.cell(w_app, 7, "Appréciation", 1, 1, "C", True)
     else:
         w_mat, w_comp, w_coef, w_moy, w_app = 55, 30, 20, 25, 60
         pdf.cell(w_mat, 7, "Matière", 1, 0, "C", True)
-        pdf.cell(w_comp, 7, "Composition", 1, 0, "C", True)
+        pdf.cell(w_comp, 7, "Évaluation", 1, 0, "C", True)
         pdf.cell(w_coef, 7, "Coef", 1, 0, "C", True)
-        pdf.cell(w_moy, 7, f"Note /{bareme}", 1, 0, "C", True)
+        pdf.cell(w_moy, 7, "Note /Barème", 1, 0, "C", True)
         pdf.cell(w_app, 7, "Appréciation", 1, 1, "C", True)
 
     pdf.set_font("Arial", "", 8)
@@ -586,7 +623,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
         matieres_list = df_n["Matière"].unique()
         for mat in matieres_list:
             df_mat = df_n[df_n["Matière"] == mat]
-            coef = int(df_mat["Coefficient"].iloc[0])
+            coef = int(df_mat["Coefficient"].iloc[0]) if "Coefficient" in df_mat.columns and pd.notnull(df_mat["Coefficient"].iloc[0]) else 1
             appr_str = df_mat["Appréciation"].iloc[-1] if not df_mat.empty else "Bon ensemble"
             
             if cycle == "Collège":
@@ -615,7 +652,8 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 pdf.cell(w_moy, 6, f"{moy_mat:.2f}", 1, 0, "C")
                 pdf.cell(w_app, 6, str(appr_str)[:25], 1, 1, "L")
             else:
-                note_comp = df_mat[df_mat["Type Évaluation"] == "Composition"]["Note"].values
+                note_comp = df_mat["Note"].values
+                bareme_val = int(df_mat["Barème"].iloc[0]) if "Barème" in df_mat.columns and pd.notnull(df_mat["Barème"].iloc[0]) else 10
                 comp_str = f"{note_comp[0]:.2f}" if len(note_comp) > 0 else "-"
                 moy_mat = note_comp[0] if len(note_comp) > 0 else 0.0
                 
@@ -626,7 +664,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 pdf.cell(w_mat, 6, str(mat)[:25], 1, 0, "L")
                 pdf.cell(w_comp, 6, comp_str, 1, 0, "C")
                 pdf.cell(w_coef, 6, str(coef), 1, 0, "C")
-                pdf.cell(w_moy, 6, f"{moy_mat:.2f}", 1, 0, "C")
+                pdf.cell(w_moy, 6, f"{moy_mat:.2f}/{bareme_val}", 1, 0, "C")
                 pdf.cell(w_app, 6, str(appr_str)[:30], 1, 1, "L")
 
     moyenne = (total_points / total_coefs) if total_coefs > 0 else 0.0
@@ -636,7 +674,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
     pdf.cell(95, 7, f"Total des Coefficients : {total_coefs}", 1, 1, "L")
     
     pdf.set_fill_color(230, 242, 255)
-    pdf.cell(190, 8, f"MOYENNE GÉNÉRALE : {moyenne:.2f} / {bareme}", 1, 1, "C", True)
+    pdf.cell(190, 8, f"MOYENNE GÉNÉRALE : {moyenne:.2f}", 1, 1, "C", True)
 
     df_bg_abs = st.session_state.base_globale_db[
         (st.session_state.base_globale_db["Nom Acteur"] == eleve_nom) & 
@@ -655,7 +693,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
     rem_cond = df_bg_cond["Type"].iloc[-1] if not df_bg_cond.empty else "R.A.S"
     pdf.cell(95, 6, f"Remarque Conduite : {rem_cond}", 1, 1, "L")
 
-    if bareme == 20:
+    if cycle == "Collège":
         if moyenne >= 16: mention = "Très Bien (Félicitations du Conseil)"
         elif moyenne >= 14: mention = "Bien (Tableau d'Honneur)"
         elif moyenne >= 12: mention = "Assez Bien"
@@ -781,15 +819,15 @@ def assistant_ia_repondre(question):
         nb_bg = len(st.session_state.base_globale_db)
         return f"📑 **{nb_r} rapport(s)** journalier(s) enregistrés et **{nb_bg} entrées** centralisées dans la Base Globale de suivi."
     elif "bulletin" in q or "note" in q or "barème" in q:
-        return "📝 Le système applique le barème sénégalais officialisé : **/10 pour le préscolaire/élémentaire** et **/20 pour le collège** (avec la formule Devoir 1 + Devoir 2 divisé par 2, sommé à la composition multipliée par le coefficient)."
+        return "📝 Le système applique un barème personnalisé : pour le préscolaire et l'élémentaire, barème libre sans coefficient intégré ; pour le collège, barème et coefficient configurables."
     else:
-        return "🤖 **IA Administration Nelson Mandela :** Je suis là pour vous assister ! Posez-moi des questions sur la base globale, les effectifs, emplois du temps ou les rapports."
+        return "🤖 **IA Administration École Président Nelson Mandela :** Je suis là pour vous assister ! Posez-moi des questions sur la base globale, les effectifs, emplois du temps ou les rapports."
 
 # ==========================================
 # 4. EN-TÊTE ET NAVIGATION GLOBALE
 # ==========================================
-st.markdown('<div class="header-ecole">🦁 Cours Privé Nelson Mandela</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Excellence, Discipline et Ancrage Culturel au Cœur du Sénégal</div>', unsafe_allow_html=True)
+st.markdown('<div class="header-ecole">🦁 École Président Nelson Mandela</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">éduquer, instruire et promouvoir les vertus africaines.</div>', unsafe_allow_html=True)
 
 if st.session_state.espace_actif != "🏠 Accueil":
     col_ret1, col_ret2 = st.columns([1, 5])
@@ -1004,7 +1042,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             
             row_c = st.session_state.classes_db[st.session_state.classes_db["Classe"] == cls_n]
             cycle_sel = row_c["Cycle"].values[0] if not row_c.empty else "Collège"
-            bareme_sel = 10 if cycle_sel in ["Préscolaire", "Élémentaire"] else 20
             
             c_tri, c_type_eval = st.columns(2)
             with c_tri:
@@ -1017,29 +1054,33 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 if cycle_sel == "Collège":
                     type_eval_sel = st.selectbox("Type d'Évaluation", ["Devoir 1", "Devoir 2", "Composition"])
                 else:
-                    type_eval_sel = st.selectbox("Type d'Évaluation", ["Composition"])
+                    type_eval_sel = st.selectbox("Type d'Évaluation", ["Composition", "Interrogation", "Devoir"])
 
-            mode_mat = st.radio("Saisie Matière :", ["Saisir directement la matière & coef", "Choisir parmi les matières prédéfinies"], horizontal=True)
-            
-            c_mat, c_coef = st.columns([3, 1])
-            if mode_mat == "Saisir directement la matière & coef":
-                with c_mat:
-                    matiere_sel = st.text_input("Saisir le nom de la Matière", value="", placeholder="ex: Mathématiques, Arabe, Physique...")
+            # Règle demandée : Pour le préscolaire et l'élémentaire : le professeur peut définir le barème de son choix sans coefficient intégré. Pour le collège : le professeur définit à la fois le barème et le coefficient de l'évaluation.
+            c_bar, c_coef = st.columns(2)
+            if cycle_sel in ["Préscolaire", "Élémentaire"]:
+                with c_bar:
+                    bareme_sel = st.number_input("Barème personnalisé de l'évaluation", min_value=1, max_value=100, value=10)
+                coef_val = 1 # Pas de coefficient intégré pour préscolaire/élémentaire
                 with c_coef:
-                    coef_val = st.number_input("Coefficient", min_value=1, max_value=10, value=2)
+                    st.info("Coefficient : Non intégré (fixé à 1 pour ce cycle)")
             else:
-                with c_mat:
-                    mats_filt = st.session_state.matieres_def[st.session_state.matieres_def["Cycle"] == cycle_sel]["Matière"].tolist()
-                    if not mats_filt:
-                        mats_filt = ["Mathématiques", "Français", "Histoire-Géo"]
-                    matiere_sel = st.selectbox("Matière Prédéfinie", mats_filt)
-                
-                row_mat = st.session_state.matieres_def[st.session_state.matieres_def["Matière"] == matiere_sel]
-                coef_def = int(row_mat["Coefficient"].values[0]) if not row_mat.empty else 2
+                with c_bar:
+                    bareme_sel = st.number_input("Barème de l'évaluation", min_value=1, max_value=100, value=20)
                 with c_coef:
-                    coef_val = st.number_input("Coefficient", min_value=1, max_value=10, value=coef_def)
+                    coef_val = st.number_input("Coefficient de l'évaluation", min_value=1, max_value=10, value=3)
 
-            st.info(f"📌 Cycle : **{cycle_sel}** | Classe : **{cls_n}** | Période : **{trimestre_sel}** | Évaluation : **{type_eval_sel}** | Barème : **Note /{bareme_sel}** | Coef : **{coef_val}**")
+            mode_mat = st.radio("Saisie Matière :", ["Saisir directement la matière", "Choisir parmi les matières prédéfinies"], horizontal=True)
+            
+            if mode_mat == "Saisir directement la matière":
+                matiere_sel = st.text_input("Saisir le nom de la Matière", value="", placeholder="ex: Mathématiques, Arabe, Éveil...")
+            else:
+                mats_filt = st.session_state.matieres_def[st.session_state.matieres_def["Cycle"] == cycle_sel]["Matière"].tolist()
+                if not mats_filt:
+                    mats_filt = ["Mathématiques", "Français", "Histoire-Géo"]
+                matiere_sel = st.selectbox("Matière Prédéfinie", mats_filt)
+
+            st.info(f"📌 Cycle : **{cycle_sel}** | Classe : **{cls_n}** | Période : **{trimestre_sel}** | Évaluation : **{type_eval_sel}** | Barème : **/{bareme_sel}** | Coef : **{coef_val}**")
 
             eleves_cls = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_n]["Nom Complet"].tolist()
 
@@ -1117,7 +1158,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         st.session_state.notes_db = pd.concat([st.session_state.notes_db, pd.DataFrame(new_rows)], ignore_index=True)
                         st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, pd.DataFrame(new_bg_rows)], ignore_index=True)
                         
-                        # Automatisation immédiate de la sauvegarde lors des actions du data_editor
                         sauvegarder_donnees_externes()
                         st.success(f"Fiche de {matiere_sel} ({type_eval_sel} - Coef {coef_val}) enregistrée, synchronisée et sauvegardée automatiquement !")
 
@@ -1270,19 +1310,24 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
                 
                 total_pts = (notes_el["Note"] * notes_el["Coefficient"]).sum()
                 total_coef = notes_el["Coefficient"].sum()
-                bareme_c = notes_el["Barème"].iloc[0] if "Barème" in notes_el.columns else (10 if cycle_eleve in ["Préscolaire", "Élémentaire"] else 20)
                 
                 if total_coef > 0:
                     moy = total_pts / total_coef
-                    st.markdown(f"### 🎯 Moyenne générale : **{moy:.2f} / {bareme_c}**")
+                    st.markdown(f"### 🎯 Moyenne générale pondérée : **{moy:.2f}**")
             else:
                 st.info(f"Aucune note enregistrée pour le {tri_p}.")
 
         with t2:
-            st.subheader("Emploi du Temps de la Classe")
+            st.subheader("Emploi du Temps de la Classe & Documents Interactifs")
             grid_edt = get_or_create_edt(classe)
             st.dataframe(grid_edt, use_container_width=True)
             
+            # Affichage des documents synchronisés/déposés s'il y en a
+            if classe in st.session_state.edt_documents and st.session_state.edt_documents[classe]:
+                st.markdown("#### 📁 Documents associés à l'emploi du temps :")
+                for doc_name in st.session_state.edt_documents[classe]:
+                    st.write(f"- {doc_name}")
+
             pdf_edt_data = export_edt_pdf(classe, grid_edt)
             st.download_button(
                 label="📄 Télécharger l'Emploi du Temps en PDF",
@@ -1314,8 +1359,8 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
             st.markdown(
                 f"""
                 <div style="border: 2px solid #1E3A8A; padding: 20px; border-radius: 12px; background-color: #FFF; max-width: 400px;">
-                    <h4 style="color: #1E3A8A; text-align: center; margin:0;">COURS PRIVÉ NELSON MANDELA</h4>
-                    <p style="text-align: center; font-size: 0.7rem; color: #666;">RÉPUBLIQUE DU SÉNÉGAL</p>
+                    <h4 style="color: #1E3A8A; text-align: center; margin:0;">ÉCOLE PRÉSIDENT NELSON MANDELA</h4>
+                    <p style="text-align: center; font-size: 0.7rem; color: #666;">éduquer, instruire et promouvoir les vertus africaines.</p>
                     <hr>
                     <p><b>Nom & Prénom :</b> {eleve}</p>
                     <p><b>Classe :</b> {classe} ({cycle_eleve})</p>
@@ -1377,7 +1422,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             "📊 Liste & Classement des Élèves (Par Classe & Niveau)",
             "🗄️ Base Globale & Suivi Annuel/Trimestriel/Mensuel",
             "🤖 Assistant IA Administration",
-            "📅 Emploi du Temps (Grille Jours x Heures)",
+            "📅 Emploi du Temps Interactif & Documents",
             "👨‍🎓 Élèves (Export PDF, Modif, Suppr)", 
             "👨‍🏫 Professeurs (Export PDF, Modif, Suppr)", 
             "🏫 Classes (Définir classe entière & Gestion)", 
@@ -1460,8 +1505,8 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     st.warning("Aucune classe disponible.")
 
         elif adm_tab == "📥 Importation & Synchronisation de Fichiers Élèves":
-            st.subheader("📥 Importation de Fichiers (PDF, Word, Excel) contenant les Élèves")
-            st.info("Déposez un fichier contenant la liste des élèves (colonnes ou texte structuré comprenant : Prénom, Nom, Date de naissance). Le système extraira et synchronisera automatiquement les données.")
+            st.subheader("📥 Importation & Extraction Complète de Fichiers Élèves")
+            st.info("Déposez un fichier contenant la liste des élèves. Extraction complète de toutes les données (sans se limiter aux simples prénom, nom et date de naissance). De plus, les listes des élèves possèdent désormais des colonnes prénom et nom distinctes, triées par ordre alphabétique du nom.")
 
             classes_dispo = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"]
             classe_cible_import = st.selectbox("Affecter les élèves extraits à la classe :", classes_dispo)
@@ -1479,7 +1524,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                         else:
                             df_imported = pd.read_excel(uploaded_file_eleves)
                         
-                        st.markdown("#### Aperçu du fichier importé :")
+                        st.markdown("#### Aperçu complet des données importées :")
                         st.dataframe(df_imported.head(), use_container_width=True)
 
                         cols_lower = [str(c).strip().lower() for c in df_imported.columns]
@@ -1497,12 +1542,27 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                                     nom_complet = f"{p_val} {n_val}"
                                     nouveaux_eleves_extraits.append({
                                         "Nom Complet": nom_complet,
+                                        "Prénom": p_val,
+                                        "Nom": n_val,
                                         "Date de Naissance": d_val[:10],
                                         "Classe": classe_cible_import,
                                         "Photo": None
                                     })
                         else:
-                            st.warning("Impossible de détecter automatiquement les colonnes 'Prénom' et 'Nom'. Veuillez vérifier les en-têtes de votre fichier.")
+                            st.warning("Impossible de détecter automatiquement les colonnes 'Prénom' et 'Nom'. Extraction globale ligne par ligne.")
+                            for _, row in df_imported.iterrows():
+                                full_line_str = " ".join([str(val) for val in row.values if pd.notnull(val)])
+                                parts = full_line_str.split()
+                                p_val = parts[0] if len(parts) > 0 else "Inconnu"
+                                n_val = parts[1] if len(parts) > 1 else "Inconnu"
+                                nouveaux_eleves_extraits.append({
+                                    "Nom Complet": f"{p_val} {n_val}",
+                                    "Prénom": p_val,
+                                    "Nom": n_val,
+                                    "Date de Naissance": "2012-01-01",
+                                    "Classe": classe_cible_import,
+                                    "Photo": None
+                                })
 
                     elif file_ext == "docx":
                         import docx
@@ -1521,18 +1581,22 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                                 nom_complet = f"{p_val} {n_val}"
                                 nouveaux_eleves_extraits.append({
                                     "Nom Complet": nom_complet,
+                                    "Prénom": p_val,
+                                    "Nom": n_val,
                                     "Date de Naissance": "2012-01-01",
                                     "Classe": classe_cible_import,
                                     "Photo": None
                                 })
 
                     if nouveaux_eleves_extraits:
-                        st.success(f"✅ Extraction réussie : **{len(nouveaux_eleves_extraits)} élèves** détectés.")
+                        st.success(f"✅ Extraction complète réussie : **{len(nouveaux_eleves_extraits)} élèves** détectés avec toutes leurs données.")
                         df_nouveaux = pd.DataFrame(nouveaux_eleves_extraits)
                         st.dataframe(df_nouveaux, use_container_width=True)
 
                         if st.button("🔄 Synchroniser et enregistrer dans la base des élèves"):
                             st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, df_nouveaux], ignore_index=True)
+                            # Tri alphabétique par nom
+                            st.session_state.eleves_db = st.session_state.eleves_db.sort_values(by="Nom").reset_index(drop=True)
                             
                             new_bg_imports = []
                             d_today = str(datetime.today().date())
@@ -1540,12 +1604,12 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                                 new_bg_imports.append({
                                     "Date": d_today, "Année": "2025-2026", "Trimestre": "1er Semestre", "Mois": datetime.today().strftime("%B"),
                                     "Type Acteur": "Élève", "Nom Acteur": r["Nom Complet"], "Classe": classe_cible_import,
-                                    "Type Entrée": "Inscription", "Détail / Contenu": "Importation administrative par fichier", "Appréciation": "Inscrit(e)"
+                                    "Type Entrée": "Inscription", "Détail / Contenu": "Importation administrative complète par fichier", "Appréciation": "Inscrit(e)"
                                 })
                             st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, pd.DataFrame(new_bg_imports)], ignore_index=True)
                             
                             sauvegarder_donnees_externes()
-                            st.success("🎉 Synchronisation effectuée avec succès ! Les élèves ont été intégrés dans les parties concernées.")
+                            st.success("🎉 Synchronisation effectuée avec succès ! Les listes triées par ordre alphabétique du nom sont à jour.")
                     else:
                         st.warning("Aucune donnée exploitable n'a pu être extraite du fichier.")
 
@@ -1605,7 +1669,19 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
         elif adm_tab == "📊 Liste & Classement des Élèves (Par Classe & Niveau)":
             st.subheader("📊 Classement et Liste des Élèves par Classe et par Niveau (Cycle)")
+            st.info("Les listes des élèves possèdent désormais des colonnes prénom et nom distinctes, triées par ordre alphabétique du nom.")
 
+            if "Prénom" not in st.session_state.eleves_db.columns or "Nom" not in st.session_state.eleves_db.columns:
+                prenoms, noms = [], []
+                for _, r in st.session_state.eleves_db.iterrows():
+                    nc = str(r.get("Nom Complet", ""))
+                    parts = nc.split(" ", 1)
+                    prenoms.append(parts[0] if len(parts) > 0 else "")
+                    noms.append(parts[1] if len(parts) > 1 else "")
+                st.session_state.eleves_db["Prénom"] = prenoms
+                st.session_state.eleves_db["Nom"] = noms
+
+            st.session_state.eleves_db = st.session_state.eleves_db.sort_values(by="Nom").reset_index(drop=True)
             df_merged = pd.merge(st.session_state.eleves_db, st.session_state.classes_db[["Classe", "Cycle"]], on="Classe", how="left")
 
             t_niv, t_cls = st.tabs(["🏛️ Par Niveau (Cycle)", "🏫 Par Classe"])
@@ -1617,7 +1693,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     df_c = df_merged[df_merged["Cycle"] == cyc]
                     if not df_c.empty:
                         with st.expander(f"📌 Cycle {cyc.upper()} ({len(df_c)} Élèves)", expanded=True):
-                            df_export_niv = df_c[["Nom Complet", "Classe", "Date de Naissance"]].sort_values(by=["Classe", "Nom Complet"])
+                            df_export_niv = df_c[["Nom", "Prénom", "Classe", "Date de Naissance"]].sort_values(by=["Nom", "Prénom"])
                             st.dataframe(df_export_niv, use_container_width=True)
                             
                             c_exp_pdf, c_exp_excel = st.columns(2)
@@ -1647,7 +1723,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     df_cl = df_merged[df_merged["Classe"] == cl]
                     if not df_cl.empty:
                         with st.expander(f"🏫 Classe : {cl} ({len(df_cl)} Élèves)", expanded=True):
-                            df_export_cls = df_cl[["Nom Complet", "Date de Naissance"]].sort_values(by="Nom Complet")
+                            df_export_cls = df_cl[["Nom", "Prénom", "Date de Naissance"]].sort_values(by=["Nom", "Prénom"])
                             st.dataframe(df_export_cls, use_container_width=True)
                             
                             c_exp_pdf_cls, c_exp_excel_cls = st.columns(2)
@@ -1711,7 +1787,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.download_button(
                     label="📊 Télécharger le RAPPORT GÉNÉRAL OFFICIEL (PDF)",
                     data=pdf_rap_gen,
-                    file_name="rapport_general_nelson_mandela.pdf",
+                    file_name="rapport_general_ecole_nelson_mandela.pdf",
                     mime="application/pdf",
                     type="primary"
                 )
@@ -1743,7 +1819,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             st.rerun()
 
         elif adm_tab == "🤖 Assistant IA Administration":
-            st.subheader("🤖 Assistant virtuel IA - Administration Nelson Mandela")
+            st.subheader("🤖 Assistant virtuel IA - Administration École Président Nelson Mandela")
             st.caption("Posez une question ou demandez une analyse de situation de l'établissement.")
             q_ia = st.text_input("Posez votre question à l'IA :", placeholder="ex: Quel est l'effectif ou quel est le bilan de la base globale ?")
             if st.button("Consulter l'IA"):
@@ -1753,12 +1829,30 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 else:
                     st.warning("Veuillez saisir une question.")
 
-        elif adm_tab == "📅 Emploi du Temps (Grille Jours x Heures)":
-            st.subheader("Édition & Téléchargement de l'Emploi du Temps (Jours à gauche | Heures en haut)")
+        elif adm_tab == "📅 Emploi du Temps Interactif & Documents":
+            st.subheader("📅 Emploi du Temps Interactif — Synchronisation & Dépôt de Documents")
+            st.info("Possibilité d'y déposer ou de synchroniser des documents (Word, Excel, PDF) et d'extraire les informations nécessaires.")
+
             cls_selected = st.selectbox("Sélectionner la classe à configurer", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
             
-            st.info("Remplissez la grille d'emploi du temps ci-dessous (incluant les créneaux 17h-19h). Chaque case représente la matière ou l'activité.")
+            # Dépôt de documents (Word, Excel, PDF)
+            uploaded_doc_edt = st.file_uploader("Déposer un document (Word, Excel, PDF) pour synchroniser l'emploi du temps", type=["xlsx", "xls", "docx", "pdf", "csv"], key=f"up_edt_{cls_selected}")
             
+            if uploaded_doc_edt is not None:
+                doc_name = uploaded_doc_edt.name
+                if cls_selected not in st.session_state.edt_documents:
+                    st.session_state.edt_documents[cls_selected] = []
+                if doc_name not in st.session_state.edt_documents[cls_selected]:
+                    st.session_state.edt_documents[cls_selected].append(doc_name)
+                    sauvegarder_donnees_externes()
+                st.success(f"📁 Document '{doc_name}' synchronisé avec succès pour la classe {cls_selected} !")
+
+            if cls_selected in st.session_state.edt_documents and st.session_state.edt_documents[cls_selected]:
+                st.markdown("#### Documents synchronisés :")
+                for d in st.session_state.edt_documents[cls_selected]:
+                    st.write(f"- {d}")
+
+            st.markdown("#### Grille Interactive de l'Emploi du Temps")
             grid_edt = get_or_create_edt(cls_selected)
 
             edited_grid = st.data_editor(
@@ -1784,25 +1878,33 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
         elif adm_tab == "👨‍🎓 Élèves (Export PDF, Modif, Suppr)":
             st.subheader("Gestion des Élèves & Impression PDF")
+            st.info("Les listes possèdent des colonnes prénom et nom distinctes, triées par ordre alphabétique du nom.")
             
-            pdf_eleves = export_table_pdf("LISTE OFFICIELLE DES ÉLÈVES", st.session_state.eleves_db, ["Nom Complet", "Date de Naissance", "Classe"])
+            # Assurer le tri
+            if "Nom" in st.session_state.eleves_db.columns and "Prénom" in st.session_state.eleves_db.columns:
+                st.session_state.eleves_db = st.session_state.eleves_db.sort_values(by=["Nom", "Prénom"]).reset_index(drop=True)
+
+            pdf_eleves = export_table_pdf("LISTE OFFICIELLE DES ÉLÈVES", st.session_state.eleves_db, ["Nom", "Prénom", "Date de Naissance", "Classe"])
             st.download_button(
                 label="🖨️ Imprimer / Télécharger la Liste des Élèves (PDF)",
                 data=pdf_eleves,
-                file_name="liste_eleves_nelson_mandela.pdf",
+                file_name="liste_eleves_ecole_nelson_mandela.pdf",
                 mime="application/pdf"
             )
 
             st.markdown("---")
             with st.expander("➕ Ajouter un nouvel élève"):
                 with st.form("form_add_eleve"):
-                    c_nom = st.text_input("Nom complet de l'élève")
+                    c_prenom = st.text_input("Prénom de l'élève")
+                    c_nom = st.text_input("Nom de l'élève")
                     c_date = st.date_input("Date de naissance", value=datetime(2012, 1, 1))
                     c_cls = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"])
                     if st.form_submit_button("Ajouter l'élève"):
-                        if c_nom:
-                            new_el = pd.DataFrame([{"Nom Complet": c_nom, "Date de Naissance": str(c_date), "Classe": c_cls, "Photo": None}])
+                        if c_prenom and c_nom:
+                            nom_complet = f"{c_prenom} {c_nom}"
+                            new_el = pd.DataFrame([{"Nom Complet": nom_complet, "Prénom": c_prenom, "Nom": c_nom, "Date de Naissance": str(c_date), "Classe": c_cls, "Photo": None}])
                             st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, new_el], ignore_index=True)
+                            st.session_state.eleves_db = st.session_state.eleves_db.sort_values(by=["Nom", "Prénom"]).reset_index(drop=True)
                             sauvegarder_donnees_externes()
                             st.success("Élève ajouté avec succès.")
                             st.rerun()
@@ -1810,18 +1912,27 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             st.markdown("#### Liste des Élèves (Modifiable & Supprimable)")
             edited_eleves = st.data_editor(st.session_state.eleves_db, num_rows="dynamic", use_container_width=True, key="editor_eleves")
             if st.button("💾 Enregistrer les Modifications Élèves"):
-                st.session_state.eleves_db = edited_eleves
+                # Mettre à jour Nom Complet si Prénom/Nom ont changé
+                for i, r in edited_eleves.iterrows():
+                    p = str(r.get("Prénom", ""))
+                    n = str(r.get("Nom", ""))
+                    edited_eleves.at[i, "Nom Complet"] = f"{p} {n}".strip()
+                st.session_state.eleves_db = edited_eleves.sort_values(by=["Nom", "Prénom"]).reset_index(drop=True)
                 sauvegarder_donnees_externes()
-                st.success("Base des élèves mise à jour !")
+                st.success("Base des élèves mise à jour et triée par ordre alphabétique du nom !")
 
         elif adm_tab == "👨‍🏫 Professeurs (Export PDF, Modif, Suppr)":
             st.subheader("Gestion des Professeurs & Impression PDF")
+            st.info("Les listes des professeurs possèdent désormais des colonnes prénom et nom distinctes, triées par ordre alphabétique du nom.")
+
+            if "Nom" in st.session_state.prof_credentials.columns and "Prénom" in st.session_state.prof_credentials.columns:
+                st.session_state.prof_credentials = st.session_state.prof_credentials.sort_values(by=["Nom", "Prénom"]).reset_index(drop=True)
             
             pdf_profs = export_table_pdf("LISTE DU CORPS ENSEIGNANT", st.session_state.prof_credentials, ["Nom", "Prénom", "Matière Principale", "Classe Attribuée"])
             st.download_button(
                 label="🖨️ Imprimer / Télécharger la Liste des Professeurs (PDF)",
                 data=pdf_profs,
-                file_name="liste_professeurs_nelson_mandela.pdf",
+                file_name="liste_professeurs_ecole_nelson_mandela.pdf",
                 mime="application/pdf"
             )
 
@@ -1837,6 +1948,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                         if p_n and p_p and p_pwd:
                             new_p = pd.DataFrame([{"Nom": p_n, "Prénom": p_p, "Mot de passe": p_pwd, "Matière Principale": p_mat, "Classe Attribuée": p_cls_attrib}])
                             st.session_state.prof_credentials = pd.concat([st.session_state.prof_credentials, new_p], ignore_index=True)
+                            st.session_state.prof_credentials = st.session_state.prof_credentials.sort_values(by=["Nom", "Prénom"]).reset_index(drop=True)
                             sauvegarder_donnees_externes()
                             st.success("Professeur enregistré.")
                             st.rerun()
@@ -1844,9 +1956,9 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             st.markdown("#### Liste des Professeurs (Modifiable & Supprimable)")
             edited_profs = st.data_editor(st.session_state.prof_credentials, num_rows="dynamic", use_container_width=True, key="editor_profs")
             if st.button("💾 Enregistrer les Modifications Professeurs"):
-                st.session_state.prof_credentials = edited_profs
+                st.session_state.prof_credentials = edited_profs.sort_values(by=["Nom", "Prénom"]).reset_index(drop=True)
                 sauvegarder_donnees_externes()
-                st.success("Base des professeurs mise à jour !")
+                st.success("Base des professeurs mise à jour et triée par ordre alphabétique du nom !")
 
         elif adm_tab == "🏫 Classes (Définir classe entière & Gestion)":
             st.subheader("Gestion des Classes de l'Établissement")
@@ -1855,7 +1967,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             st.download_button(
                 label="🖨️ Imprimer / Télécharger la Liste des Classes (PDF)",
                 data=pdf_cls_list,
-                file_name="liste_classes_nelson_mandela.pdf",
+                file_name="liste_classes_ecole_nelson_mandela.pdf",
                 mime="application/pdf"
             )
 
@@ -1919,32 +2031,33 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 
                 pdf_r_prof = export_table_pdf("RAPPORTS JOURNALIERS DES ENSEIGNANTS", st.session_state.rapports_journaliers_prof)
                 st.download_button(
-                    label="📄 Télécharger les Rapports en PDF",
+                    label="🖨️ Télécharger les Rapports en PDF",
                     data=pdf_r_prof,
-                    file_name="rapports_journaliers_profs.pdf",
+                    file_name="rapports_journaliers.pdf",
                     mime="application/pdf"
                 )
             else:
-                st.info("Aucun rapport journalier soumis pour le moment.")
+                st.info("Aucun rapport journalier pour le moment.")
 
 elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
-    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Rapports Globaux & Consolidation Annuelle</div>', unsafe_allow_html=True)
-    st.info("Consultez et téléchargez ci-dessous le rapport général consolidé de l'établissement au format officiel PDF.")
+    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Administration XXL & Rapports Globaux</div>', unsafe_allow_html=True)
+    st.info("Synthèse globale et téléchargement direct du rapport consolidé de l'École Président Nelson Mandela.")
 
-    col_r1, col_r2 = st.columns(2)
-    with col_r1:
-        st.markdown("### 📊 Synthèse des Données")
-        st.markdown(f"- **Total Élèves :** {len(st.session_state.eleves_db)}")
-        st.markdown(f"- **Total Professeurs :** {len(st.session_state.prof_credentials)}")
-        st.markdown(f"- **Total Classes :** {len(st.session_state.classes_db)}")
-        st.markdown(f"- **Entrées Base Globale :** {len(st.session_state.base_globale_db)}")
-    with col_r2:
-        st.markdown("### 📄 Export Officiel")
-        pdf_rap_XXL = generer_rapport_general_pdf()
-        st.download_button(
-            label="📥 Télécharger le Rapport Général Consolidé (PDF)",
-            data=pdf_rap_XXL,
-            file_name="rapport_general_complet_cpnm.pdf",
-            mime="application/pdf",
-            type="primary"
-        )
+    col_k1, col_k2, col_k3 = st.columns(3)
+    with col_k1:
+        st.metric("Total Élèves", len(st.session_state.eleves_db))
+    with col_k2:
+        st.metric("Total Professeurs", len(st.session_state.prof_credentials))
+    with col_k3:
+        st.metric("Entrées Base Globale", len(st.session_state.base_globale_db))
+
+    st.markdown("---")
+    st.markdown("### 📄 Génération du Rapport Annuel / Général")
+    pdf_gen = generer_rapport_general_pdf()
+    st.download_button(
+        label="📥 Télécharger le Rapport Général Consolidé (PDF)",
+        data=pdf_gen,
+        file_name="rapport_general_ecole_nelson_mandela.pdf",
+        mime="application/pdf",
+        type="primary"
+    )
