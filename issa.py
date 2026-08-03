@@ -354,25 +354,16 @@ if "eleves_db" not in st.session_state:
             ]
         )
 
-# Correctif robuste pour éviter les doublons de noms/prénoms si le DataFrame est mal initialisé
-if "Prénom" not in st.session_state.eleves_db.columns or "Nom" not in st.session_state.eleves_db.columns or "Nom Complet" not in st.session_state.eleves_db.columns:
+if "Prénom" not in st.session_state.eleves_db.columns or "Nom" not in st.session_state.eleves_db.columns:
     prenoms = []
     noms = []
-    noms_complets = []
     for _, r in st.session_state.eleves_db.iterrows():
-        p = str(r.get("Prénom", "")).strip()
-        n = str(r.get("Nom", "")).strip()
-        if not p or not n or p == "nan" or n == "nan":
-            nc = str(r.get("Nom Complet", "")).strip()
-            parts = nc.split(" ", 1)
-            p = parts[0] if len(parts) > 0 else ""
-            n = parts[1] if len(parts) > 1 else ""
-        prenoms.append(p)
-        noms.append(n)
-        noms_complets.append(f"{p} {n}".strip())
+        nc = str(r.get("Nom Complet", ""))
+        parts = nc.split(" ", 1)
+        prenoms.append(parts[0] if len(parts) > 0 else "")
+        noms.append(parts[1] if len(parts) > 1 else "")
     st.session_state.eleves_db["Prénom"] = prenoms
     st.session_state.eleves_db["Nom"] = noms
-    st.session_state.eleves_db["Nom Complet"] = noms_complets
     st.session_state.eleves_db = st.session_state.eleves_db.sort_values(by="Nom").reset_index(drop=True)
 
 if "base_globale_db" not in st.session_state:
@@ -404,20 +395,10 @@ if "edt_documents" not in st.session_state:
         st.session_state.edt_documents = {}
 
 def get_or_create_edt(classe):
-    if classe not in st.session_state.edt_grid_db or not isinstance(st.session_state.edt_grid_db[classe], pd.DataFrame):
+    if classe not in st.session_state.edt_grid_db:
         st.session_state.edt_grid_db[classe] = pd.DataFrame(
             "", index=JOURS_LIST, columns=HEURES_LIST
         )
-    else:
-        # S'assure que toutes les colonnes et index requis sont présents pour éviter les plantages
-        df = st.session_state.edt_grid_db[classe]
-        for j in JOURS_LIST:
-            if j not in df.index:
-                df.loc[j] = ""
-        for h in HEURES_LIST:
-            if h not in df.columns:
-                df[h] = ""
-        st.session_state.edt_grid_db[classe] = df.reindex(index=JOURS_LIST, columns=HEURES_LIST).fillna("")
     return st.session_state.edt_grid_db[classe]
 
 if "cahier_textes" not in st.session_state:
@@ -555,10 +536,7 @@ def export_edt_pdf(classe_nom, df_edt):
     pdf.cell(0, 8, f"EMPLOI DU TEMPS OFFICIEL - CLASSE DE {classe_nom.upper()}", 0, 1, "C")
     pdf.ln(6)
 
-    # Calcul sécurisé des largeurs en mode paysage (277 mm de largeur utile)
-    num_cols = len(df_edt.columns)
-    col_w_heure = 240 / num_cols if num_cols > 0 else 30
-    col_widths = [37] + [col_w_heure] * num_cols
+    col_widths = [35] + [255 / len(df_edt.columns)] * len(df_edt.columns)
 
     pdf.set_font("Arial", "B", 10)
     pdf.set_fill_color(30, 58, 138)
@@ -1549,7 +1527,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
                         cols_lower = [str(c).strip().lower() for c in df_imported.columns]
                         col_prenom = next((df_imported.columns[i] for i, c in enumerate(cols_lower) if "prenom" in c or "prénom" in c), None)
-                        col_nom = next((df_imported.columns[i] for i, c in enumerate(cols_lower) if c == "nom" or ("nom" in c and "complet" not in c)), None)
+                        col_nom = next((df_imported.columns[i] for i, c in enumerate(cols_lower) if c == "nom" or "nom" in c), None)
                         col_nais = next((df_imported.columns[i] for i, c in enumerate(cols_lower) if "naissance" in c or "date" in c), None)
 
                         if col_prenom is not None and col_nom is not None:
@@ -1844,7 +1822,7 @@ elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
     st.download_button(
         label="📄 Télécharger le Rapport Général Complet en PDF",
         data=s_pdf,
-        file_name="rapport_general_cpnm.pdf",
+        file_name="rapport_general_cpnpm.pdf",
         mime="application/pdf"
     )
 
