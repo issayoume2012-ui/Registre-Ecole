@@ -193,7 +193,7 @@ telecharger_polices()
 # 1. CONFIGURATION DE LA PAGE & DESIGN XXL RESPONSIVE FAST-LOAD
 # ==========================================
 st.set_page_config(
-    page_title="Portail Pédagogique - École Président Nelson Mandela | Sénégal",
+    page_title="Portail Pédagogique-École Président Nelson Mandela | Sénégal",
     page_icon="🇸🇳",
     layout="wide",
     initial_sidebar_state="collapsed",
