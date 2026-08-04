@@ -1638,7 +1638,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             st.session_state.eleves_db.loc[mask, "Date de Naissance"] = row_ed.get("Date de Naissance", "")
                         else:
                             # Ajout nouvelle ligne
-                            nouv_ L = pd.DataFrame([{
+                            nouv_L = pd.DataFrame([{
                                 "Nom Complet": nc_n,
                                 "Prénom": p_n,
                                 "Nom": n_n,
