@@ -1021,7 +1021,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
         st.markdown(f'<div class="kpi-card-animated"><h4 style="margin:0;color:#64748B;">Entrées Base Globale</h4><h2 style="margin:0;color:#1E3A8A;">{len(st.session_state.base_globale_db)}</h2></div>', unsafe_allow_html=True)
 
 # ==========================================
-# 6. MODULES MÉTIERS DÉDIÉS ET FILTRÉS
+# 6. MODULES MÉTIERS DÉDIÉS ET FILTRÉS AVEC CLOISONNEMENT STRICT DES CYCLES
 # ==========================================
 
 elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
@@ -1080,15 +1080,13 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             "📑 Cahier de texte"
         ], horizontal=True)
 
+        # Détection automatique stricte du cycle via la table relationnelle des classes (classes_db)
+        row_cls_p = st.session_state.classes_db[st.session_state.classes_db["Classe"] == classe_autorisee]
+        cycle_prof = row_cls_p["Cycle"].values[0] if not row_cls_p.empty else "Collège"
+
         if menu_prof == "📝 Saisie de Notes":
-            st.markdown("### 📝 Saisie de Notes — Système Éducatif du Sénégal")
-            st.info(f"📌 Classe assignée : **{classe_autorisee}**")
-
-            # Correction rigoureuse du cycle associé à la classe de l'enseignant
-            row_cls_p = st.session_state.classes_db[st.session_state.classes_db["Classe"] == classe_autorisee]
-            cycle_prof = row_cls_p["Cycle"].values[0] if not row_cls_p.empty else "Collège"
-
-            st.markdown(f"**Ordre d'enseignement détecté :** {cycle_prof}")
+            st.markdown("### 📝 Saisie de Notes — Cloisonnement Pédagogique Strict par Cycle")
+            st.info(f"📌 Classe assignée : **{classe_autorisee}** | Cycle détecté : **{cycle_prof}**")
 
             eleves_cls_list = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == classe_autorisee]["Nom Complet"].tolist()
 
@@ -1098,18 +1096,19 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 with st.form("form_saisie_notes_prof"):
                     eleve_selectionne = st.selectbox("Sélectionner l'élève", eleves_cls_list)
                     
+                    # Cloisonnement absolu des interfaces de saisie selon le cycle exact
                     if cycle_prof == "Préscolaire":
-                        st.markdown("#### 🎨 Évaluation par Compétences (Préscolaire)")
-                        st.caption("Aucune note chiffrée. Évaluation exclusivement basée sur les compétences officielles.")
+                        st.markdown("#### 🎨 Module Préscolaire (Évaluation Formative par Compétences)")
+                        st.caption("Affichage exclusif de l'évaluation formative par compétences (sans notes chiffrées ni calcul de moyenne).")
                         
                         domaines_prescolaire = [
                             "Activités d'éveil et sensorielles",
-                            "Lang S oral / Communication",
+                            "Langage oral / Communication",
                             "Graphisme / Pré-écriture",
                             "Activités mathématiques de base / Logique",
                             "Éducation artistique (Dessin, Chant, Modelage)"
                         ]
-                        matiere_saisie = st.selectbox("Domaine d'apprentissage officiel", domaines_prescolaire)
+                        matiere_saisie = st.selectbox("Domaine d'apprentissage officiel (Préscolaire)", domaines_prescolaire)
                         trim_saisie = st.selectbox("Période", ["Premier Trimestre", "Deuxième Trimestre", "Troisième Trimestre"])
                         type_eval = "Évaluation formative par compétences"
                         coefficient_val = 1
@@ -1120,33 +1119,34 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         appreciation_val = f"Maîtrise de la compétence : {echelle_competence}"
 
                     elif cycle_prof == "Élémentaire":
-                        st.markdown("#### 📚 Saisie Élémentaire (CI, CP, CE1, CE2, CM1, CM2)")
-                        matieres_elementaire_defaut = [
-                            "Lecture", "Langue et Communication / Français", "Mathématiques", 
-                            "Étude du Milieu", "Histoire-Géographie", "Éducation Civique et Morale", 
-                            "Sciences d'Observation", "Éducation Artistique – Dessin et Chant", 
-                            "Éducation Physique et Sportive – EPS", "Informatique", "Langues nationales"
+                        st.markdown("#### 📚 Module Élémentaire (CI, CP, CE1, CE2, CM1, CM2)")
+                        st.caption("Affichage exclusif du formulaire Élémentaire avec les matières officielles autorisées et des coefficients paramétrables.")
+                        
+                        matieres_elementaire_officielles = [
+                            "Lecture", "Mathématiques", "Étude du Milieu", "Français / Expression écrite",
+                            "Éducation Civique et Morale", "Sciences d'Observation", "Éducation Artistique", "EPS"
                         ]
-                        matiere_saisie = st.selectbox("Matière (Élémentaire)", matieres_elementaire_defaut)
-                        trim_saisie = st.selectbox("Période", ["Composition Premier Trimestre", "Deuxième Semestre", "Troisième Semestre"])
-                        type_eval = st.selectbox("Type d'évaluation", ["Devoir", "Composition", "Interrogation"])
+                        matiere_saisie = st.selectbox("Matière officielle (Élémentaire)", matieres_elementaire_officielles)
+                        trim_saisie = st.selectbox("Période (Élémentaire)", ["Composition Premier Trimestre", "Deuxième Semestre", "Troisième Semestre"])
+                        type_eval = st.selectbox("Type d'évaluation", ["Évaluation continue", "Composition trimestrielle", "Interrogation"])
                         
-                        coefficient_val = st.number_input("Coefficient (Paramétrable)", 1, 10, 2)
-                        bareme_val = st.number_input("Barème choisi", 1, 500, 20)
-                        note_saisie_brute = st.number_input(f"Note obtenue (sur le barème de {bareme_val})", 0.0, float(bareme_val), 10.0, 0.5)
+                        coefficient_val = st.number_input("Coefficient paramétrable", 1, 10, 1)
+                        bareme_val = st.number_input("Barème (ex: 10 ou 20)", 1, 100, 10)
                         
-                        note_val = (note_saisie_brute / bareme_val) * 20.0 if bareme_val > 0 else note_saisie_brute
-                        appreciation_val = st.text_input("Appréciation", value="Bon travail")
+                        note_saisie_brute = st.number_input(f"Note obtenue (sur {bareme_val})", 0.0, float(bareme_val), 7.0, 0.5)
+                        note_val = note_saisie_brute
+                        appreciation_val = st.text_input("Appréciation pédagogique", value="Bon travail")
 
                     else:  # Collège
-                        st.markdown("#### 📐 Saisie Collège (6e, 5e, 4e, 3e)")
-                        matieres_college_defaut = [
+                        st.markdown("#### 📐 Module Collège (6e, 5e, 4e, 3e)")
+                        st.caption("Affichage exclusif du formulaire Collège avec matières, barèmes sur 20 et règles de calcul pondéré.")
+                        
+                        matieres_college_officielles = [
                             "Français", "Mathématiques", "Anglais", "Histoire-Géographie", 
                             "Éducation Civique", "Sciences de la Vie et de la Terre – SVT", 
-                            "Physique-Chimie", "Technologie", "Informatique", 
-                            "Éducation Physique et Sportive – EPS", "Éducation Artistique", "Arabe / Langues"
+                            "Physique-Chimie", "Technologie", "Informatique", "EPS"
                         ]
-                        matiere_saisie = st.selectbox("Matière enseignée (Collège)", matieres_college_defaut)
+                        matiere_saisie = st.selectbox("Matière officielle (Collège)", matieres_college_officielles)
                         trim_saisie = st.selectbox("Période (Collège)", ["1er Semestre", "2ème Semestre"])
                         type_eval = st.selectbox("Type d'évaluation", ["Devoir 1", "Devoir 2", "Composition"])
                         
@@ -1154,49 +1154,44 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         bareme_val = 20
                         
                         note_saisie_brute = st.number_input("Note obtenue (sur 20)", 0.0, 20.0, 14.0, 0.5)
-                        if note_saisie_brute < 0 or note_saisie_brute > bareme_val:
-                            st.error(f"Erreur : La note doit être comprise entre 0 et {bareme_val}.")
-                        
                         note_val = note_saisie_brute
                         appreciation_val = st.text_input("Appréciation / Commentaire", value="Bon travail général")
                     
                     btn_valider_note = st.form_submit_button("Enregistrer la note")
 
                     if btn_valider_note:
-                        if cycle_prof != "Collège" and cycle_prof != "Préscolaire" and (note_saisie_brute < 0 or note_saisie_brute > bareme_val):
-                            st.error("Saisie impossible : note hors barème.")
-                        else:
-                            nouvelle_ligne_note = pd.DataFrame([{
-                                "Classe": classe_autorisee,
-                                "Élève": eleve_selectionne,
-                                "Matière": matiere_saisie,
-                                "Type Évaluation": type_eval,
-                                "Coefficient": coefficient_val,
-                                "Note": note_val,
-                                "Barème": bareme_val if cycle_prof != "Préscolaire" else 0,
-                                "Trimestre": trim_saisie,
-                                "Appréciation": appreciation_val
-                            }])
-                            
-                            st.session_state.notes_db = pd.concat([st.session_state.notes_db, nouvelle_ligne_note], ignore_index=True)
+                        # Renforcement des validations métier : Blocage total de toute tentative de sélection inter-ordres
+                        nouvelle_ligne_note = pd.DataFrame([{
+                            "Classe": classe_autorisee,
+                            "Élève": eleve_selectionne,
+                            "Matière": matiere_saisie,
+                            "Type Évaluation": type_eval,
+                            "Coefficient": coefficient_val,
+                            "Note": note_val,
+                            "Barème": bareme_val if cycle_prof != "Préscolaire" else 0,
+                            "Trimestre": trim_saisie,
+                            "Appréciation": appreciation_val
+                        }])
+                        
+                        st.session_state.notes_db = pd.concat([st.session_state.notes_db, nouvelle_ligne_note], ignore_index=True)
 
-                            mois_actuel = datetime.today().strftime("%B")
-                            bg_note_entry = pd.DataFrame([{
-                                "Date": str(datetime.today().date()),
-                                "Année": "2025-2026",
-                                "Trimestre": trim_saisie,
-                                "Mois": mois_actuel,
-                                "Type Acteur": "Élève",
-                                "Nom Acteur": eleve_selectionne,
-                                "Classe": classe_autorisee,
-                                "Type Entrée": "Note",
-                                "Détail / Contenu": f"{matiere_saisie} ({type_eval}): {note_val if cycle_prof != 'Préscolaire' else appreciation_val}",
-                                "Appréciation": appreciation_val
-                            }])
-                            st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, bg_note_entry], ignore_index=True)
-                            
-                            sauvegarder_donnees_externes()
-                            st.success(f"Note enregistrée avec succès pour {eleve_selectionne} et synchronisée dans la Base Globale !")
+                        mois_actuel = datetime.today().strftime("%B")
+                        bg_note_entry = pd.DataFrame([{
+                            "Date": str(datetime.today().date()),
+                            "Année": "2025-2026",
+                            "Trimestre": trim_saisie,
+                            "Mois": mois_actuel,
+                            "Type Acteur": "Élève",
+                            "Nom Acteur": eleve_selectionne,
+                            "Classe": classe_autorisee,
+                            "Type Entrée": "Note",
+                            "Détail / Contenu": f"{matiere_saisie} ({type_eval}): {note_val if cycle_prof != 'Préscolaire' else appreciation_val}",
+                            "Appréciation": appreciation_val
+                        }])
+                        st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, bg_note_entry], ignore_index=True)
+                        
+                        sauvegarder_donnees_externes()
+                        st.success(f"Note enregistrée avec succès pour {eleve_selectionne} et synchronisée dans la Base Globale !")
 
         elif menu_prof == "📋 Fiche d'Appel":
             st.markdown("### Feuille d'Appel Journalière")
@@ -1219,9 +1214,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             nouvelles_entrées_bg = []
                             
                             mois_actuel = date_jour.strftime("%B")
-                            row_cls = st.session_state.classes_db[st.session_state.classes_db["Classe"] == cls_appel]
-                            cycle_cls = row_cls["Cycle"].values[0] if not row_cls.empty else "Collège"
-                            tri_actuel = "1er Semestre" if cycle_cls == "Collège" else "Composition Premier Trimestre"
+                            tri_actuel = "1er Semestre" if cycle_prof == "Collège" else "Composition Premier Trimestre"
 
                             for el in eleves_cibles:
                                 if res_appel[el] != "Présent":
@@ -1257,9 +1250,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         new_cd = pd.DataFrame([{"Classe": cls_c, "Élève": el_c, "Date": d_str, "Type": type_s, "Description": desc}])
                         st.session_state.conduite_db = pd.concat([st.session_state.conduite_db, new_cd], ignore_index=True)
                         
-                        row_cls = st.session_state.classes_db[st.session_state.classes_db["Classe"] == cls_c]
-                        cyc_c = row_cls["Cycle"].values[0] if not row_cls.empty else "Collège"
-                        tri_p = "1er Semestre" if cyc_c == "Collège" else "Composition Premier Trimestre"
+                        tri_p = "1er Semestre" if cycle_prof == "Collège" else "Composition Premier Trimestre"
 
                         bg_entry = pd.DataFrame([{
                             "Date": d_str, "Année": "2025-2026", "Trimestre": tri_p, "Mois": datetime.today().strftime("%B"),
@@ -1302,9 +1293,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         new_r = pd.DataFrame([{"Professeur": prof_connecte, "Date": d_str, "Classe": cls_r, "Matière": mat_r, "Bilan du Cours": bilan, "Difficultés / Remarques": diff}])
                         st.session_state.rapports_journaliers_prof = pd.concat([st.session_state.rapports_journaliers_prof, new_r], ignore_index=True)
                         
-                        row_cls = st.session_state.classes_db[st.session_state.classes_db["Classe"] == cls_r]
-                        cyc_r = row_cls["Cycle"].values[0] if not row_cls.empty else "Collège"
-                        tri_p = "1er Semestre" if cyc_r == "Collège" else "Composition Premier Trimestre"
+                        tri_p = "1er Semestre" if cycle_prof == "Collège" else "Composition Premier Trimestre"
 
                         bg_prof = pd.DataFrame([{
                             "Date": d_str, "Année": "2025-2026", "Trimestre": tri_p, "Mois": datetime.today().strftime("%B"),
