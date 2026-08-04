@@ -634,6 +634,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 d2_str = f"{d2_val:.2f}" if len(note_d2) > 0 else "-"
                 comp_str = f"{comp_val:.2f}" if len(note_comp) > 0 else "-"
 
+                # Formule corrigée pour le collège : ((Devoir 1 + Devoir 2) / 2 + Composition) / 2
                 moy_mat = (((d1_val + d2_val) / 2.0) + comp_val) / 2.0
                 
                 tot = moy_mat * coef
@@ -918,7 +919,7 @@ def assistant_ia_repondre(question):
         nb_bg = len(st.session_state.base_globale_db)
         return f"📑 **{nb_r} rapport(s)** journalier(s) enregistrés et **{nb_bg} entrées** centralisées dans la Base Globale de suivi."
     elif "bulletin" in q or "note" in q or "barème" in q:
-        return "📝 Le système applique les règles spécifiques des cycles au Sénégal : Préscolaire & Élémentaire (3 périodes exclusives : Composition Premier Trimestre, Deuxième Semestre et Troisième Semestre, suppression totale des coefficients, barème libre défini par le professeur) et Collège (deux semestres distincts S1 et S2 avec Devoir 1, Devoir 2, Composition, choix de la matière et du coefficient)."
+        return "📝 Le système applique les règles spécifiques des cycles au Sénégal : Préscolaire & Élémentaire (3 périodes exclusives : Composition Premier Trimestre, Deuxième Semestre et Troisième Semestre, suppression totale des coefficients, barème libre défini par le professeur) et Collège (deux semestres distincts S1 et S2 avec Devoir 1, Devoir 2, Composition, choix de la matière, du coefficient, barème sur 20 et formule ((Devoir 1 + Devoir 2) / 2 + Composition) / 2)."
     else:
         return "🤖 **IA Administration École Président Nelson Mandela :** Je suis là pour vous assister ! Posez-moi des questions sur la base globale, les effectifs, emplois du temps ou les rapports."
 
@@ -1104,7 +1105,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                     eleve_selectionne = st.selectbox("Sélectionner l'élève", eleves_cls_list)
                     
                     if cycle_prof == "Collège":
-                        # Correction rigoureuse des matières pour le collège au Sénégal
                         matieres_college = ["Mathématiques", "Français", "Histoire-Géographie", "SVT", "Sciences Physiques", "Anglais", "LV2 (Espagnol/Arabe)", "Éducation artistique", "EPS"]
                         matiere_saisie = st.selectbox("Matière enseignée (Collège)", matieres_college)
                         trim_saisie = st.selectbox("Période (Collège)", ["1er Semestre", "2ème Semestre"])
