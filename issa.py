@@ -722,7 +722,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
 
     return bytes(pdf.output())
 
-def generer_ BULLETIN_classe_pdf(classe_nom, trimestre_sel):
+def generer_bulletin_classe_pdf(classe_nom, trimestre_sel):
     """Génère un seul PDF consolidé contenant les bulletins de tous les élèves d'une classe."""
     pdf = PDFReport()
     eleves_classe = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == classe_nom]
@@ -1274,7 +1274,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         st.success("Rapport transmis et centralisé dans la Base Globale !")
 
 elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élèves":
-    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Portail Parent & Élève (Système Sه‌ایenégalais)</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Portail Parent & Élève (Système Sénégalais)</div>', unsafe_allow_html=True)
 
     if "parent_logged_eleve" not in st.session_state:
         st.session_state["parent_logged_eleve"] = ""
@@ -1486,7 +1486,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     st.markdown("#### 📁 Télécharger pour TOUTE LA CLASSE")
                     st.caption(f"Génère un fichier PDF unique regroupant les bulletins de tous les élèves de la classe {classe_choisie_adm}.")
                     if st.button("Générer PDF toute la classe"):
-                        pdf_classe_bytes = generer_ BULLETIN_classe_pdf(classe_choisie_adm, trim_choisi_adm)
+                        pdf_classe_bytes = generer_bulletin_classe_pdf(classe_choisie_adm, trim_choisi_adm)
                         st.download_button(
                             label=f"📥 Télécharger Bulletin Global ({classe_choisie_adm}) .pdf",
                             data=pdf_classe_bytes,
