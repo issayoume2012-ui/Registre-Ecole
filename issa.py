@@ -1102,15 +1102,18 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             else:
                 with st.form("form_saisie_notes_prof"):
                     eleve_selectionne = st.selectbox("Sélectionner l'élève", eleves_cls_list)
-                    matiere_saisie = st.text_input("Matière enseignée", value="Mathématiques" if cycle_prof == "Collège" else "Calcul / Mathématiques")
                     
                     if cycle_prof == "Collège":
+                        # Correction rigoureuse des matières pour le collège au Sénégal
+                        matieres_college = ["Mathématiques", "Français", "Histoire-Géographie", "SVT", "Sciences Physiques", "Anglais", "LV2 (Espagnol/Arabe)", "Éducation artistique", "EPS"]
+                        matiere_saisie = st.selectbox("Matière enseignée (Collège)", matieres_college)
                         trim_saisie = st.selectbox("Période (Collège)", ["1er Semestre", "2ème Semestre"])
                         type_eval = st.selectbox("Type d'évaluation", ["Devoir 1", "Devoir 2", "Composition"])
                         coefficient_val = st.number_input("Coefficient", 1, 10, 3)
-                        note_val = st.number_input("Note obtenue", 0.0, 20.0, 14.0, 0.5)
                         bareme_val = 20
+                        note_val = st.number_input("Note obtenue (sur 20)", 0.0, 20.0, 14.0, 0.5)
                     else:
+                        matiere_saisie = st.text_input("Matière enseignée", value="Calcul / Mathématiques")
                         trim_saisie = st.selectbox("Période (Préscolaire / Élémentaire)", ["Composition Premier Trimestre", "Deuxième Semestre", "Troisième Semestre"])
                         type_eval = "Composition d'évaluation"
                         coefficient_val = 1
@@ -1566,7 +1569,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     st.success("Mise à jour enregistrée avec succès !")
             
             with col_gp2:
-                # Correction section mot de passe bloquée : ajout d'un formulaire interactif dédié pour réinitialiser ou changer le mot de passe en toute sécurité
                 with st.expander("🔑 Modifier / Réinitialiser un Mot de Passe"):
                     with st.form("form_change_pwd_gp"):
                         email_cible = st.text_input("Email du compte à modifier")
@@ -1590,7 +1592,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             st.subheader("📊 Liste & Classement des Élèves par Classe et par Niveau (Synchronisation Intégrale)")
             st.info("Visualisez, filtrez et synchronisez instantanément les listes d'élèves par niveau d'enseignement.")
 
-            # Correction de la synchronisation par niveau et classe
             cycles_dispo = ["Tous les cycles", "Préscolaire", "Élémentaire", "Collège"]
             cycle_filtre = st.selectbox("Filtrer par niveau / cycle", cycles_dispo, key="filter_niveau_eleves")
 
@@ -1612,7 +1613,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             if classe_filtre_sel != "Toutes les classes":
                 df_eleves_affiche = df_eleves_affiche[df_eleves_affiche["Classe"] == classe_filtre_sel]
 
-            # Éditeur interactif synchronisé en temps réel
             edited_eleves_niveau = st.data_editor(
                 df_eleves_affiche,
                 num_rows="dynamic",
@@ -1623,12 +1623,10 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             col_sync1, col_sync2 = st.columns(2)
             with col_sync1:
                 if st.button("Synchroniser et Sauvegarder les modifications d'élèves"):
-                    # Mise à jour globale robuste de la base élèves
                     for _, row_ed in edited_eleves_niveau.iterrows():
                         p_n = str(row_ed.get("Prénom", ""))
                         n_n = str(row_ed.get("Nom", ""))
                         nc_n = f"{p_n} {n_n}".strip()
-                        # Recherche si l'élève existe déjà par index ou nom
                         mask = st.session_state.eleves_db["Nom Complet"] == row_ed.get("Nom Complet", nc_n)
                         if mask.any():
                             st.session_state.eleves_db.loc[mask, "Prénom"] = p_n
@@ -1637,7 +1635,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             st.session_state.eleves_db.loc[mask, "Classe"] = row_ed.get("Classe", "")
                             st.session_state.eleves_db.loc[mask, "Date de Naissance"] = row_ed.get("Date de Naissance", "")
                         else:
-                            # Ajout nouvelle ligne
                             nouv_L = pd.DataFrame([{
                                 "Nom Complet": nc_n,
                                 "Prénom": p_n,
