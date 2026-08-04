@@ -103,7 +103,6 @@ def sauvegarder_donnees_externes():
     et synchronise systématiquement avec les tables relationnelles dédiées."""
     import json
     
-    # Correction robuste de la table eleves pour s'assurer que les colonnes prenom et nom existent toujours
     if "eleves_db" in st.session_state and not st.session_state.eleves_db.empty:
         if "Prénom" not in st.session_state.eleves_db.columns or "Nom" not in st.session_state.eleves_db.columns:
             prenoms = []
@@ -137,7 +136,6 @@ def sauvegarder_donnees_externes():
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        # Vérification et mise à jour dynamique du schéma de la table eleves pour éviter toute erreur "has no column named nom"
         cursor.execute("PRAGMA table_info(eleves)")
         columns_info = [col[1] for col in cursor.fetchall()]
         if "nom" not in columns_info:
@@ -151,14 +149,12 @@ def sauvegarder_donnees_externes():
         if "photo" not in columns_info:
             cursor.execute("ALTER TABLE eleves ADD COLUMN photo TEXT")
 
-        # Sauvegarde clé-valeur globale
         for key, value in data_to_save.items():
             cursor.execute("""
                 INSERT INTO app_data (key, value) VALUES (?, ?)
                 ON CONFLICT(key) DO UPDATE SET value=excluded.value
             """, (key, json.dumps(value, ensure_ascii=False)))
             
-        # Synchronisation automatique dans les tables relationnelles dédiées
         if "eleves_db" in st.session_state and not st.session_state.eleves_db.empty:
             cursor.execute("DELETE FROM eleves")
             for _, r in st.session_state.eleves_db.iterrows():
@@ -197,7 +193,6 @@ FONT_PATH = "DejaVuSans.ttf"
 
 @st.cache_resource
 def telecharger_polices():
-    """Télécharge les polices Unicode depuis GitHub avec mise en cache Streamlit."""
     fonts = {
         "DejaVuSans.ttf": "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf",
         "DejaVuSans-Bold.ttf": "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans-Bold.ttf",
@@ -634,7 +629,6 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 d2_str = f"{d2_val:.2f}" if len(note_d2) > 0 else "-"
                 comp_str = f"{comp_val:.2f}" if len(note_comp) > 0 else "-"
 
-                # Formule corrigée pour le collège : ((Devoir 1 + Devoir 2) / 2 + Composition) / 2
                 moy_mat = (((d1_val + d2_val) / 2.0) + comp_val) / 2.0
                 
                 tot = moy_mat * coef
@@ -724,7 +718,6 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
     return bytes(pdf.output())
 
 def generer_bulletin_classe_pdf(classe_nom, trimestre_sel):
-    """Génère un seul PDF consolidé contenant les bulletins de tous les élèves d'une classe."""
     pdf = PDFReport()
     eleves_classe = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == classe_nom]
     
@@ -919,7 +912,7 @@ def assistant_ia_repondre(question):
         nb_bg = len(st.session_state.base_globale_db)
         return f"📑 **{nb_r} rapport(s)** journalier(s) enregistrés et **{nb_bg} entrées** centralisées dans la Base Globale de suivi."
     elif "bulletin" in q or "note" in q or "barème" in q:
-        return "📝 Le système applique les règles spécifiques des cycles au Sénégal : Préscolaire & Élémentaire (3 périodes exclusives : Composition Premier Trimestre, Deuxième Semestre et Troisième Semestre, suppression totale des coefficients, barème libre défini par le professeur) et Collège (deux semestres distincts S1 et S2 avec Devoir 1, Devoir 2, Composition, choix de la matière, du coefficient, barème sur 20 et formule ((Devoir 1 + Devoir 2) / 2 + Composition) / 2)."
+        return "📝 Le système applique les règles spécifiques des cycles au Sénégal : Préscolaire & Élémentaire (3 périodes exclusives, suppression totale de la comptabilité, barème et coefficients paramétrables) et Collège."
     else:
         return "🤖 **IA Administration École Président Nelson Mandela :** Je suis là pour vous assister ! Posez-moi des questions sur la base globale, les effectifs, emplois du temps ou les rapports."
 
@@ -946,7 +939,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
         <div style="text-align: center; padding: 10px 0 30px 0;">
             <h3 style="color: #1E3A8A; font-weight: 800;">Portail Numérique Intelligent & Suivi Pédagogique Centralisé</h3>
             <p style="font-size: 1.1rem; color: #475569; max-width: 800px; margin: 0 auto;">
-                Sélectionnez votre espace. Le système intègre une Base Globale centralisant tout l'historique annuel avec tables relationnelles SQLite sécurisées contre l'effacement du Cloud.
+                Sélectionnez votre espace. Le système intègre une Base Globale centralisant tout l'historique annuel avec tables relationnelles SQLite sécurisées.
             </p>
         </div>
         """,
@@ -1104,7 +1097,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 with st.form("form_saisie_notes_prof"):
                     eleve_selectionne = st.selectbox("Sélectionner l'élève", eleves_cls_list)
                     
-                    # Logique rigoureusement adaptée selon le niveau (Préscolaire, Élémentaire, Collège)
                     if cycle_prof == "Préscolaire":
                         st.markdown("#### 🎨 Évaluation par Compétences (Préscolaire)")
                         st.caption("Aucune note chiffrée. Évaluation exclusivement basée sur les compétences officielles.")
@@ -1123,7 +1115,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         bareme_val = 0
                         
                         echelle_competence = st.selectbox("Évaluation de la compétence", ["Acquis", "En cours d'acquisition", "Non acquis"])
-                        note_val = 0.0 # Pas de note chiffrée
+                        note_val = 0.0
                         appreciation_val = f"Maîtrise de la compétence : {echelle_competence}"
 
                     elif cycle_prof == "Élémentaire":
@@ -1139,12 +1131,9 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         type_eval = st.selectbox("Type d'évaluation", ["Devoir", "Composition", "Interrogation"])
                         
                         coefficient_val = st.number_input("Coefficient (Paramétrable)", 1, 10, 2)
-                        
-                        # Barème entièrement paramétrable (10, 15, 20, 30, 40, 50, 100 ou tout autre barème positif)
                         bareme_val = st.number_input("Barème choisi", 1, 500, 20)
                         note_saisie_brute = st.number_input(f"Note obtenue (sur le barème de {bareme_val})", 0.0, float(bareme_val), 10.0, 0.5)
                         
-                        # Règle : conversion automatique des notes sur 20 avant tout calcul / normalisation
                         note_val = (note_saisie_brute / bareme_val) * 20.0 if bareme_val > 0 else note_saisie_brute
                         appreciation_val = st.text_input("Appréciation", value="Bon travail")
 
@@ -1164,7 +1153,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         bareme_val = 20
                         
                         note_saisie_brute = st.number_input("Note obtenue (sur 20)", 0.0, 20.0, 14.0, 0.5)
-                        # Empêcher toute saisie de note inférieure à 0 ou supérieure au barème choisi
                         if note_saisie_brute < 0 or note_saisie_brute > bareme_val:
                             st.error(f"Erreur : La note doit être comprise entre 0 et {bareme_val}.")
                         
