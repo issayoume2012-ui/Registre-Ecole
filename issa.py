@@ -699,6 +699,19 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
 
     return bytes(pdf.output())
 
+def generer_rapport_general_pdf():
+    pdf = PDFReport()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 7, "RAPPORT GÉNÉRAL CONSOLIDÉ DE L'ÉTABLISSEMENT", 0, 1, "C")
+    pdf.ln(4)
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(0, 6, f"Total Élèves : {len(st.session_state.eleves_db)}", 0, 1, "L")
+    pdf.cell(0, 6, f"Total Classes : {len(st.session_state.classes_db)}", 0, 1, "L")
+    pdf.cell(0, 6, f"Total Professeurs : {len(st.session_state.prof_credentials)}", 0, 1, "L")
+    pdf.cell(0, 6, f"Entrées Base Globale : {len(st.session_state.base_globale_db)}", 0, 1, "L")
+    return bytes(pdf.output())
+
 def assistant_ia_repondre(question):
     q = question.lower()
     if "élève" in q or "effectif" in q or "nombre" in q:
@@ -713,7 +726,7 @@ def assistant_ia_repondre(question):
         nb_bg = len(st.session_state.base_globale_db)
         return f"📑 **{nb_r} rapport(s)** journalier(s) enregistrés et **{nb_bg} entrées** centralisées dans la Base Globale de suivi."
     elif "bulletin" in q or "note" in q or "barème" in q:
-        return "📝 Le système applique un barème adapté : pour le préscolaire et l'élémentaire, barème sur 10 sans coefficient ; pour le collège, barème sur 20 avec coefficients."
+        return "📝 Le système applique un barème adapté : pour le préscolaire et l'élémentaire, le professeur définit librement le barème sans coefficient ; pour le collège, barème sur 20 avec coefficients."
     else:
         return "🤖 **IA Administration École Président Nelson Mandela :** Je suis là pour vous assister ! Posez-moi des questions sur la base globale, les effectifs, emplois du temps ou les rapports."
 
@@ -951,13 +964,13 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                     type_eval_sel = st.selectbox("Type d'Évaluation", ["Composition", "Interrogation", "Devoir"])
 
             if cycle_sel in ["Préscolaire", "Élémentaire"]:
-                bareme_sel = 10
+                bareme_sel = st.number_input("Définir le barème de notation (ex: 10, 20, 5...)", min_value=1, max_value=100, value=10)
                 coef_val = 1 
-                st.info("📌 Cycle Élémentaire / Préscolaire : Barème fixe sur 10 (sans coefficient).")
+                st.info(f"📌 Cycle Élémentaire / Préscolaire : Saisie sans coefficient avec barème personnalisable sur **{bareme_sel}**.")
             else:
                 bareme_sel = 20
                 coef_val = st.number_input("Coefficient de l'évaluation", min_value=1, max_value=10, value=3)
-                st.info("📌 Cycle Collège : Barème sur 20 avec coefficients.")
+                st.info("📌 Cycle Collège : Barème fixe sur 20 avec coefficients.")
 
             mode_mat = st.radio("Saisie Matière :", ["Saisir directement la matière", "Choisir parmi les matières prédéfinies"], horizontal=True)
             
@@ -1007,7 +1020,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             ),
                             "Élève": st.column_config.TextColumn("Nom & Prénom Élève", disabled=True)
                         },
-                        key=f"editor_{cls_n}_{matiere_sel}_{type_eval_sel}_{trimestre_sel}"
+                        key=f"editor_{cls_n}_{matiere_sel}_{type_eval_sel}_{trimestre_sel}_{bareme_sel}"
                     )
 
                     if st.button("💾 Enregistrer la Fiche de Matière"):
