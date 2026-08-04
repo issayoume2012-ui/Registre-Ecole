@@ -475,7 +475,7 @@ if "notes_db" not in st.session_state:
                 ["6ème A", "Mamadou Diallo", "Français", "Devoir 1", 3, 13.0, 20, "1er Semestre", "Assez bon."],
                 ["6ème A", "Mamadou Diallo", "Français", "Devoir 2", 3, 14.5, 20, "1er Semestre", "Bon travail."],
                 ["6ème A", "Mamadou Diallo", "Français", "Composition", 3, 15.0, 20, "1er Semestre", "Très bien."],
-                ["CP", "Fatou Sow", "Graphisme / Écriture", "Composition 1er trimestre", 1, 8.5, 10, "1er Trimestre", "Très bien."]
+                ["CP", "Fatou Sow", "Graphisme / Écriture", "Composition Premier Trimestre", 1, 8.5, 10, "Composition Premier Trimestre", "Très bien."]
             ]
         )
 
@@ -634,7 +634,6 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 d2_str = f"{d2_val:.2f}" if len(note_d2) > 0 else "-"
                 comp_str = f"{comp_val:.2f}" if len(note_comp) > 0 else "-"
 
-                # Formule exacte pour collège : (((D1 + D2) / 2) + Composition) / 2 * coefficient
                 moy_mat = (((d1_val + d2_val) / 2.0) + comp_val) / 2.0
                 
                 tot = moy_mat * coef
@@ -723,6 +722,175 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
 
     return bytes(pdf.output())
 
+def generer_ BULLETIN_classe_pdf(classe_nom, trimestre_sel):
+    """Génère un seul PDF consolidé contenant les bulletins de tous les élèves d'une classe."""
+    pdf = PDFReport()
+    eleves_classe = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == classe_nom]
+    
+    if eleves_classe.empty:
+        pdf.add_page()
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, f"Aucun élève trouvé dans la classe {classe_nom}", 0, 1, "C")
+        return bytes(pdf.output())
+
+    for idx, r_el in eleves_classe.iterrows():
+        eleve_nom = r_el["Nom Complet"]
+        pdf.add_page()
+        
+        row_cls = st.session_state.classes_db[st.session_state.classes_db["Classe"] == classe_nom]
+        cycle = row_cls["Cycle"].values[0] if not row_cls.empty else "Collège"
+        
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 7, f"BULLETIN DE NOTES ET BILAN GLOBAL - {trimestre_sel.upper()}", 0, 1, "C")
+        pdf.ln(2)
+        
+        pdf.set_font("Arial", "", 10)
+        pdf.cell(100, 6, f"Élève : {eleve_nom}", 0, 0, "L")
+        pdf.cell(90, 6, f"Classe : {classe_nom} ({cycle})", 0, 1, "R")
+        pdf.cell(100, 6, f"Établissement : École Président Nelson Mandela", 0, 0, "L")
+        pdf.cell(90, 6, f"Devise : éduquer, instruire et promouvoir les vertus africaines.", 0, 1, "R")
+        pdf.ln(5)
+
+        df_n = st.session_state.notes_db[
+            (st.session_state.notes_db["Élève"] == eleve_nom) & 
+            (st.session_state.notes_db["Trimestre"] == trimestre_sel)
+        ]
+
+        pdf.set_font("Arial", "B", 8)
+        pdf.set_fill_color(30, 58, 138)
+        pdf.set_text_color(255, 255, 255)
+        
+        if cycle == "Collège":
+            w_mat, w_d1, w_d2, w_comp, w_coef, w_moy, w_app = 35, 18, 18, 30, 14, 20, 55
+            pdf.cell(w_mat, 7, "Matière", 1, 0, "C", True)
+            pdf.cell(w_d1, 7, "Devoir 1", 1, 0, "C", True)
+            pdf.cell(w_d2, 7, "Devoir 2", 1, 0, "C", True)
+            pdf.cell(w_comp, 7, "Composition", 1, 0, "C", True)
+            pdf.cell(w_coef, 7, "Coef", 1, 0, "C", True)
+            pdf.cell(w_moy, 7, "Moy. /20", 1, 0, "C", True)
+            pdf.cell(w_app, 7, "Appréciation", 1, 1, "C", True)
+        else:
+            w_mat, w_comp, w_moy, w_app = 65, 30, 30, 65
+            pdf.cell(w_mat, 7, "Matière", 1, 0, "C", True)
+            pdf.cell(w_comp, 7, "Évaluation", 1, 0, "C", True)
+            pdf.cell(w_moy, 7, "Note /Barème", 1, 0, "C", True)
+            pdf.cell(w_app, 7, "Appréciation", 1, 1, "C", True)
+
+        pdf.set_font("Arial", "", 8)
+        pdf.set_text_color(0, 0, 0)
+
+        total_points_sur_20 = 0.0
+        total_points_sur_10 = 0.0
+        total_coefs = 0
+
+        if not df_n.empty:
+            matieres_list = df_n["Matière"].unique()
+            for mat in matieres_list:
+                df_mat = df_n[df_n["Matière"] == mat]
+                appr_str = df_mat["Appréciation"].iloc[-1] if not df_mat.empty else "Bon ensemble"
+                
+                if cycle == "Collège":
+                    coef = int(df_mat["Coefficient"].iloc[0]) if "Coefficient" in df_mat.columns and pd.notnull(df_mat["Coefficient"].iloc[0]) else 1
+                    note_d1 = df_mat[df_mat["Type Évaluation"] == "Devoir 1"]["Note"].values
+                    note_d2 = df_mat[df_mat["Type Évaluation"] == "Devoir 2"]["Note"].values
+                    note_comp = df_mat[df_mat["Type Évaluation"].isin(["Composition", "Composition 1er semestre", "Composition 2ème semestre"])]["Note"].values
+
+                    d1_val = float(note_d1[0]) if len(note_d1) > 0 and pd.notnull(note_d1[0]) else 0.0
+                    d2_val = float(note_d2[0]) if len(note_d2) > 0 and pd.notnull(note_d2[0]) else 0.0
+                    comp_val = float(note_comp[0]) if len(note_comp) > 0 and pd.notnull(note_comp[0]) else 0.0
+
+                    d1_str = f"{d1_val:.2f}" if len(note_d1) > 0 else "-"
+                    d2_str = f"{d2_val:.2f}" if len(note_d2) > 0 else "-"
+                    comp_str = f"{comp_val:.2f}" if len(note_comp) > 0 else "-"
+
+                    moy_mat = (((d1_val + d2_val) / 2.0) + comp_val) / 2.0
+                    
+                    tot = moy_mat * coef
+                    total_points_sur_20 += tot
+                    total_coefs += coef
+
+                    pdf.cell(w_mat, 6, str(mat)[:20], 1, 0, "L")
+                    pdf.cell(w_d1, 6, d1_str, 1, 0, "C")
+                    pdf.cell(w_d2, 6, d2_str, 1, 0, "C")
+                    pdf.cell(w_comp, 6, comp_str, 1, 0, "C")
+                    pdf.cell(w_coef, 6, str(coef), 1, 0, "C")
+                    pdf.cell(w_moy, 6, f"{moy_mat:.2f}", 1, 0, "C")
+                    pdf.cell(w_app, 6, str(appr_str)[:25], 1, 1, "L")
+                else:
+                    note_comp = df_mat["Note"].values
+                    bareme_val = int(df_mat["Barème"].iloc[0]) if "Barème" in df_mat.columns and pd.notnull(df_mat["Barème"].iloc[0]) else 10
+                    comp_str = f"{note_comp[0]:.2f}" if len(note_comp) > 0 else "-"
+                    note_val = note_comp[0] if len(note_comp) > 0 else 0.0
+                    
+                    note_sur_10 = (note_val / bareme_val) * 10.0 if bareme_val > 0 else note_val
+                    total_points_sur_10 += note_sur_10
+                    total_coefs += 1 
+
+                    pdf.cell(w_mat, 6, str(mat)[:25], 1, 0, "L")
+                    pdf.cell(w_comp, 6, comp_str, 1, 0, "C")
+                    pdf.cell(w_moy, 6, f"{note_val:.2f}/{bareme_val}", 1, 0, "C")
+                    pdf.cell(w_app, 6, str(appr_str)[:30], 1, 1, "L")
+
+        if cycle == "Collège":
+            moyenne = (total_points_sur_20 / total_coefs) if total_coefs > 0 else 0.0
+            libelle_moy = f"MOYENNE GÉNÉRALE : {moyenne:.2f} / 20"
+        else:
+            moyenne = (total_points_sur_10 / total_coefs) if total_coefs > 0 else 0.0
+            libelle_moy = f"MOYENNE GÉNÉRALE CONSOLIDÉE : {moyenne:.2f} / 10"
+
+        pdf.ln(3)
+        pdf.set_font("Arial", "B", 10)
+        if cycle == "Collège":
+            pdf.cell(95, 7, f"Total des Points : {total_points_sur_20:.2f}", 1, 0, "L")
+            pdf.cell(95, 7, f"Total des Coefficients : {total_coefs}", 1, 1, "L")
+        else:
+            pdf.cell(95, 7, f"Somme des notes ramenées sur 10 : {total_points_sur_10:.2f}", 1, 0, "L")
+            pdf.cell(95, 7, f"Nombre de matières : {total_coefs}", 1, 1, "L")
+        
+        pdf.set_fill_color(230, 242, 255)
+        pdf.cell(190, 8, libelle_moy, 1, 1, "C", True)
+
+        df_bg_abs = st.session_state.base_globale_db[
+            (st.session_state.base_globale_db["Nom Acteur"] == eleve_nom) & 
+            (st.session_state.base_globale_db["Trimestre"] == trimestre_sel) & 
+            (st.session_state.base_globale_db["Type Entrée"] == "Absence")
+        ]
+        df_bg_cond = st.session_state.conduite_db[st.session_state.conduite_db["Élève"] == eleve_nom]
+
+        nb_abs = len(df_bg_abs)
+        
+        pdf.ln(4)
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 6, "BILAN ASSIDUITÉ & COMPORTEMENT (BASE GLOBALE)", 0, 1, "L")
+        pdf.set_font("Arial", "", 9)
+        pdf.cell(95, 6, f"Nombre d'absences relevées : {nb_abs}", 1, 0, "L")
+        rem_cond = df_bg_cond["Type"].iloc[-1] if not df_bg_cond.empty else "R.A.S"
+        pdf.cell(95, 6, f"Remarque Conduite : {rem_cond}", 1, 1, "L")
+
+        if cycle == "Collège":
+            if moyenne >= 16: mention = "Très Bien (Félicitations du Conseil)"
+            elif moyenne >= 14: mention = "Bien (Tableau d'Honneur)"
+            elif moyenne >= 12: mention = "Assez Bien"
+            elif moyenne >= 10: mention = "Passable"
+            else: mention = "Insuffisant - Avertissement Travail"
+        else:
+            if moyenne >= 8: mention = "Très Bon travail"
+            elif moyenne >= 6: mention = "Travail Satisfaisant"
+            elif moyenne >= 5: mention = "Moyen"
+            else: mention = "Efforts requis"
+
+        pdf.ln(3)
+        pdf.set_font("Arial", "I", 10)
+        pdf.cell(0, 6, f"Appréciation Globale & Mention : {mention}", 0, 1, "L")
+
+        pdf.ln(8)
+        pdf.set_font("Arial", "B", 9)
+        pdf.cell(60, 6, "Le Professeur Principal", 0, 0, "C")
+        pdf.cell(70, 6, "Les Parents", 0, 0, "C")
+        pdf.cell(60, 6, "Le Directeur des Études", 0, 1, "C")
+
+    return bytes(pdf.output())
+
 def generer_rapport_general_pdf():
     pdf = PDFReport()
     pdf.add_page()
@@ -750,7 +918,7 @@ def assistant_ia_repondre(question):
         nb_bg = len(st.session_state.base_globale_db)
         return f"📑 **{nb_r} rapport(s)** journalier(s) enregistrés et **{nb_bg} entrées** centralisées dans la Base Globale de suivi."
     elif "bulletin" in q or "note" in q or "barème" in q:
-        return "📝 Le système applique les règles spécifiques des cycles : Préscolaire/Élémentaire (3 périodes exclusives : Composition Premier Trimestre, Deuxième Semestre et Troisième Semestre, suppression totale des coefficients, barème libre défini par le professeur, suppression de l'ancien système pour intégrer un choix de matière libre ou prédéfinie) et Collège (deux semestres distincts S1 et S2 avec Devoir 1, Devoir 2, Composition, choix de la matière et du coefficient)."
+        return "📝 Le système applique les règles spécifiques des cycles au Sénégal : Préscolaire & Élémentaire (3 périodes exclusives : Composition Premier Trimestre, Deuxième Semestre et Troisième Semestre, suppression totale des coefficients, barème libre défini par le professeur) et Collège (deux semestres distincts S1 et S2 avec Devoir 1, Devoir 2, Composition, choix de la matière et du coefficient)."
     else:
         return "🤖 **IA Administration École Président Nelson Mandela :** Je suis là pour vous assister ! Posez-moi des questions sur la base globale, les effectifs, emplois du temps ou les rapports."
 
@@ -792,7 +960,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
             <div class="animated-card">
                 <h1 style="font-size: 3rem; margin: 0;">👨‍🏫</h1>
                 <h3 style="color: #1E3A8A; margin: 10px 0;">Espace Professeurs</h3>
-                <p style="font-size: 0.85rem; color: #64748B;">Fiches d'appel, travail fait et à faire & alimentation de la base globale.</p>
+                <p style="font-size: 0.85rem; color: #64748B;">Saisie des notes selon le système éducatif du Sénégal, fiches d'appel & base globale.</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -807,7 +975,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
             <div class="animated-card">
                 <h1 style="font-size: 3rem; margin: 0;">👨‍👩‍👧</h1>
                 <h3 style="color: #1E3A8A; margin: 10px 0;">Espace Parents</h3>
-                <p style="font-size: 0.85rem; color: #64748B;">Consultation des bulletins en ligne (téléchargement réservé à l'admin).</p>
+                <p style="font-size: 0.85rem; color: #64748B;">Consultation des bulletins en ligne selon les ordres d'enseignement.</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -822,7 +990,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
             <div class="animated-card">
                 <h1 style="font-size: 3rem; margin: 0;">🔒</h1>
                 <h3 style="color: #1E3A8A; margin: 10px 0;">Administration</h3>
-                <p style="font-size: 0.85rem; color: #64748B;">Gestion Base Globale, EDT & PDF.</p>
+                <p style="font-size: 0.85rem; color: #64748B;">Téléchargement PDF bulletins classe/élève, Base Globale & EDT.</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -911,13 +1079,84 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         st.markdown("---")
         menu_prof = st.radio("Menu Professeur :", [
+            "📝 Saisie de Notes",
             "📋 Fiche d'Appel", 
             "⚠️ Conduite", 
             "📖 Travail fait et à faire", 
             "📑 Cahier de texte"
         ], horizontal=True)
 
-        if menu_prof == "📋 Fiche d'Appel":
+        if menu_prof == "📝 Saisie de Notes":
+            st.markdown("### 📝 Saisie de Notes — Système Éducatif du Sénégal")
+            st.info(f"📌 Classe assignée : **{classe_autorisee}**")
+
+            row_cls_p = st.session_state.classes_db[st.session_state.classes_db["Classe"] == classe_autorisee]
+            cycle_prof = row_cls_p["Cycle"].values[0] if not row_cls_p.empty else "Collège"
+
+            st.markdown(f"**Ordre d'enseignement détecté :** {cycle_prof}")
+
+            eleves_cls_list = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == classe_autorisee]["Nom Complet"].tolist()
+
+            if not eleves_cls_list:
+                st.warning("Aucun élève trouvé dans cette classe pour effectuer la saisie des notes.")
+            else:
+                with st.form("form_saisie_notes_prof"):
+                    eleve_selectionne = st.selectbox("Sélectionner l'élève", eleves_cls_list)
+                    matiere_saisie = st.text_input("Matière enseignée", value="Mathématiques" if cycle_prof == "Collège" else "Calcul / Mathématiques")
+                    
+                    if cycle_prof == "Collège":
+                        trim_saisie = st.selectbox("Période (Collège)", ["1er Semestre", "2ème Semestre"])
+                        type_eval = st.selectbox("Type d'évaluation", ["Devoir 1", "Devoir 2", "Composition"])
+                        coefficient_val = st.number_input("Coefficient", 1, 10, 3)
+                        note_val = st.number_input("Note obtenue", 0.0, 20.0, 14.0, 0.5)
+                        bareme_val = 20
+                    else:
+                        # Préscolaire et Élémentaire au Sénégal : 3 périodes exclusives, pas de coefficients, barème libre
+                        trim_saisie = st.selectbox("Période (Préscolaire / Élémentaire)", ["Composition Premier Trimestre", "Deuxième Semestre", "Troisième Semestre"])
+                        type_eval = "Composition d'évaluation"
+                        coefficient_val = 1
+                        bareme_val = st.number_input("Barème de notation (ex: 10 ou 20)", 5, 20, 10)
+                        note_val = st.number_input("Note obtenue", 0.0, float(bareme_val), float(bareme_val / 2), 0.5)
+
+                    appreciation_val = st.text_input("Appréciation / Commentaire", value="Bon travail général")
+                    
+                    btn_valider_note = st.form_submit_button("Enregistrer la note")
+
+                    if btn_valider_note:
+                        nouvelle_ligne_note = pd.DataFrame([{
+                            "Classe": classe_autorisee,
+                            "Élève": eleve_selectionne,
+                            "Matière": matiere_saisie,
+                            "Type Évaluation": type_eval,
+                            "Coefficient": coefficient_val,
+                            "Note": note_val,
+                            "Barème": bareme_val,
+                            "Trimestre": trim_saisie,
+                            "Appréciation": appreciation_val
+                        }])
+                        
+                        st.session_state.notes_db = pd.concat([st.session_state.notes_db, nouvelle_ligne_note], ignore_index=True)
+
+                        # Enregistrement simultané dans la Base Globale
+                        mois_actuel = datetime.today().strftime("%B")
+                        bg_note_entry = pd.DataFrame([{
+                            "Date": str(datetime.today().date()),
+                            "Année": "2025-2026",
+                            "Trimestre": trim_saisie,
+                            "Mois": mois_actuel,
+                            "Type Acteur": "Élève",
+                            "Nom Acteur": eleve_selectionne,
+                            "Classe": classe_autorisee,
+                            "Type Entrée": "Note",
+                            "Détail / Contenu": f"{matiere_saisie} ({type_eval}): {note_val}/{bareme_val}",
+                            "Appréciation": appreciation_val
+                        }])
+                        st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, bg_note_entry], ignore_index=True)
+                        
+                        sauvegarder_donnees_externes()
+                        st.success(f"Note enregistrée avec succès pour {eleve_selectionne} et synchronisée dans la Base Globale !")
+
+        elif menu_prof == "📋 Fiche d'Appel":
             st.markdown("### Feuille d'Appel Journalière")
             st.info(f"📌 Classe assignée (accès restreint) : **{classe_autorisee}**")
             if not st.session_state.eleves_db.empty:
@@ -940,7 +1179,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             mois_actuel = date_jour.strftime("%B")
                             row_cls = st.session_state.classes_db[st.session_state.classes_db["Classe"] == cls_appel]
                             cycle_cls = row_cls["Cycle"].values[0] if not row_cls.empty else "Collège"
-                            tri_actuel = "1er Semestre" if cycle_cls == "Collège" else "1er Trimestre"
+                            tri_actuel = "1er Semestre" if cycle_cls == "Collège" else "Composition Premier Trimestre"
 
                             for el in eleves_cibles:
                                 if res_appel[el] != "Présent":
@@ -1035,7 +1274,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         st.success("Rapport transmis et centralisé dans la Base Globale !")
 
 elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élèves":
-    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Portail Parent & Élève</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Portail Parent & Élève (Système Sه‌ایenégalais)</div>', unsafe_allow_html=True)
 
     if "parent_logged_eleve" not in st.session_state:
         st.session_state["parent_logged_eleve"] = ""
@@ -1072,7 +1311,7 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
         row_cls = st.session_state.classes_db[st.session_state.classes_db["Classe"] == classe]
         cycle_eleve = row_cls["Cycle"].values[0] if not row_cls.empty else "Collège"
 
-        st.success(f"Connecté pour l'élève : **{eleve}** (Classe : {classe} - {cycle_eleve})")
+        st.success(f"Connecté pour l'élève : **{eleve}** (Classe : {classe} - Cycle : {cycle_eleve})")
         if st.button("Se déconnecter"):
             st.session_state["parent_logged_eleve"] = ""
             st.rerun()
@@ -1081,8 +1320,8 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
         t1, t2, t3, t4, t5, t6 = st.tabs(["📊 Bulletin & Notes", "📅 Emploi du Temps", "📉 Absences", "⚠️ Conduite", "📖 Travail fait et à faire", "🪪 Carte Scolaire"])
         
         with t1:
-            st.subheader("Bulletin de Notes Officiel (Consultation en ligne)")
-            st.info("💡 Conformément au règlement intérieur, le téléchargement direct du bulletin PDF est restreint à l'espace administration.")
+            st.subheader("Bulletin de Notes Officiel (Consultation en ligne - Espace Parents)")
+            st.info("💡 Conformément au règlement, le téléchargement direct du bulletin PDF est accessible dans l'espace administration ou affiché ici en mode consultation.")
             
             if cycle_eleve == "Collège":
                 tri_p = st.selectbox("Sélectionner la Période", ["1er Semestre", "2ème Semestre"])
@@ -1210,6 +1449,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
         st.markdown("---")
         adm_tab = st.selectbox("Gestion Administrative :", [
+            "📥 Téléchargement Bulletins PDF (Classe & Élève)",
             "☁️ Sauvegarde & Restauration Cloud (Anti-Effacement)",
             "🛡️ Gestionnaires & Propriétaires (Liste Blanche)",
             "📊 Liste & Classement des Élèves (Par Classe & Niveau)",
@@ -1223,7 +1463,58 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             "📑 Rapport journalier"
         ])
 
-        if adm_tab == "☁️ Sauvegarde & Restauration Cloud (Anti-Effacement)":
+        if adm_tab == "📥 Téléchargement Bulletins PDF (Classe & Élève)":
+            st.subheader("📥 Téléchargement des Bulletins en PDF (Pour toute la classe et pour chaque élève)")
+            st.info("Sélectionnez la classe, la période et le mode de téléchargement PDF.")
+
+            classes_liste_adm = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else []
+            if classes_liste_adm:
+                classe_choisie_adm = st.selectbox("Sélectionner la classe", classes_liste_adm, key="sel_cls_bulletin_adm")
+                
+                row_c_adm = st.session_state.classes_db[st.session_state.classes_db["Classe"] == classe_choisie_adm]
+                cyc_adm = row_c_adm["Cycle"].values[0] if not row_c_adm.empty else "Collège"
+
+                if cyc_adm == "Collège":
+                    trim_choisi_adm = st.selectbox("Période", ["1er Semestre", "2ème Semestre"], key="trim_adm_col")
+                else:
+                    trim_choisi_adm = st.selectbox("Période", ["Composition Premier Trimestre", "Deuxième Semestre", "Troisième Semestre"], key="trim_adm_elem")
+
+                st.markdown("---")
+                col_dl_c1, col_dl_c2 = st.columns(2)
+
+                with col_dl_c1:
+                    st.markdown("#### 📁 Télécharger pour TOUTE LA CLASSE")
+                    st.caption(f"Génère un fichier PDF unique regroupant les bulletins de tous les élèves de la classe {classe_choisie_adm}.")
+                    if st.button("Générer PDF toute la classe"):
+                        pdf_classe_bytes = generer_ BULLETIN_classe_pdf(classe_choisie_adm, trim_choisi_adm)
+                        st.download_button(
+                            label=f"📥 Télécharger Bulletin Global ({classe_choisie_adm}) .pdf",
+                            data=pdf_classe_bytes,
+                            file_name=f"bulletins_classe_{classe_choisie_adm.replace(' ', '_').lower()}.pdf",
+                            mime="application/pdf",
+                            key="dl_btn_toute_classe"
+                        )
+
+                with col_dl_c2:
+                    st.markdown("#### 👤 Télécharger pour UN ÉLÈVE SPÉCIFIQUE")
+                    eleves_de_la_classe = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == classe_choisie_adm]["Nom Complet"].tolist()
+                    if eleves_de_la_classe:
+                        eleve_choisi_adm = st.selectbox("Sélectionner l'élève", eleves_de_la_classe, key="sel_eleve_bulletin_adm")
+                        if st.button("Générer PDF pour cet élève"):
+                            pdf_eleve_bytes = generer_bulletin_pdf(eleve_choisi_adm, classe_choisie_adm, trim_choisi_adm)
+                            st.download_button(
+                                label=f"📥 Télécharger Bulletin ({eleve_choisi_adm}) .pdf",
+                                data=pdf_eleve_bytes,
+                                file_name=f"bulletin_{eleve_choisi_adm.replace(' ', '_').lower()}.pdf",
+                                mime="application/pdf",
+                                key="dl_btn_eleve_unique"
+                            )
+                    else:
+                        st.warning("Aucun élève dans cette classe.")
+            else:
+                st.warning("Veuillez d'abord créer des classes.")
+
+        elif adm_tab == "☁️ Sauvegarde & Restauration Cloud (Anti-Effacement)":
             st.subheader("☁️ Sauvegarde & Restauration de la Base de Données (Persistance Cloud Éphémère)")
             st.info("Puisque le cloud efface les fichiers locaux lors d'un redémarrage complet du serveur, utilisez cet outil pour **sauvegarder** régulièrement votre base SQLite sur votre ordinateur ou pour la **restaurer** après une réinitialisation.")
 
