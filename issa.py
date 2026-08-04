@@ -7,6 +7,15 @@ import urllib.request
 from fpdf import FPDF
 import pandas as pd
 import streamlit as st
+import base64
+from datetime import datetime
+import io
+import os
+import sqlite3
+import urllib.request
+from fpdf import FPDF
+import pandas as pd
+import streamlit as st
 
 # ==========================================
 # 0. GESTION DE LA PERSISTANCE EXTERNE (SQLITE STRUCTURÉE ET ROBUSTE)
@@ -394,15 +403,7 @@ if "conduite_db" not in st.session_state:
     if "conduite_db" in saved_data:
         st.session_state.conduite_db = pd.DataFrame(**saved_data["conduite_db"])
     else:
-        st.session_state.conduite_db = pd.DataFrame(columns=["Classe", "Élève", "Date", "Type", "Description"])import base64
-from datetime import datetime
-import io
-import os
-import sqlite3
-import urllib.request
-from fpdf import FPDF
-import pandas as pd
-import streamlit as st
+        st.session_state.conduite_db = pd.DataFrame(columns=["Classe", "Élève", "Date", "Type", "Description"])
 
 # ==========================================
 # 0. GESTION DE LA PERSISTANCE EXTERNE (SQLITE STRUCTURÉE ET ROBUSTE)
