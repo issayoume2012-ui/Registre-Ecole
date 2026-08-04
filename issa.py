@@ -1084,7 +1084,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             st.markdown("### 📝 Saisie de Notes — Système Éducatif du Sénégal")
             st.info(f"📌 Classe assignée : **{classe_autorisee}**")
 
-            # Correction dynamique stricte du cycle rattaché à la classe assignée
+            # Correction rigoureuse du cycle associé à la classe de l'enseignant
             row_cls_p = st.session_state.classes_db[st.session_state.classes_db["Classe"] == classe_autorisee]
             cycle_prof = row_cls_p["Cycle"].values[0] if not row_cls_p.empty else "Collège"
 
