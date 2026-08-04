@@ -475,7 +475,7 @@ if "notes_db" not in st.session_state:
                 ["6ème A", "Mamadou Diallo", "Français", "Devoir 1", 3, 13.0, 20, "1er Semestre", "Assez bon."],
                 ["6ème A", "Mamadou Diallo", "Français", "Devoir 2", 3, 14.5, 20, "1er Semestre", "Bon travail."],
                 ["6ème A", "Mamadou Diallo", "Français", "Composition", 3, 15.0, 20, "1er Semestre", "Très bien."],
-                ["CP", "Fatou Sow", "Graphisme / Écriture", "Composition", 1, 8.5, 10, "1er Trimestre", "Très bien."]
+                ["CP", "Fatou Sow", "Graphisme / Écriture", "Composition 1er trimestre", 1, 8.5, 10, "1er Trimestre", "Très bien."]
             ]
         )
 
@@ -604,7 +604,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
         w_mat, w_comp, w_moy, w_app = 65, 30, 30, 65
         pdf.cell(w_mat, 7, "Matière", 1, 0, "C", True)
         pdf.cell(w_comp, 7, "Évaluation", 1, 0, "C", True)
-        pdf.cell(w_moy, 7, "Note /10", 1, 0, "C", True)
+        pdf.cell(w_moy, 7, "Note /Barème", 1, 0, "C", True)
         pdf.cell(w_app, 7, "Appréciation", 1, 1, "C", True)
 
     pdf.set_font("Arial", "", 8)
@@ -634,7 +634,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 d2_str = f"{d2_val:.2f}" if len(note_d2) > 0 else "-"
                 comp_str = f"{comp_val:.2f}" if len(note_comp) > 0 else "-"
 
-                # Calcul spécifique exigé pour collège : (((D1 + D2 / 2) + Composition) / 2) * coef
+                # Calcul spécifique exigé pour collège : (((D1 + D2) / 2) + Composition) / 2
                 moy_mat = (((d1_val + d2_val) / 2.0) + comp_val) / 2.0
                 
                 tot = moy_mat * coef
@@ -660,7 +660,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
 
                 pdf.cell(w_mat, 6, str(mat)[:25], 1, 0, "L")
                 pdf.cell(w_comp, 6, comp_str, 1, 0, "C")
-                pdf.cell(w_moy, 6, f"{note_sur_10:.2f}/10", 1, 0, "C")
+                pdf.cell(w_moy, 6, f"{note_val:.2f}/{bareme_val}", 1, 0, "C")
                 pdf.cell(w_app, 6, str(appr_str)[:30], 1, 1, "L")
 
     if cycle == "Collège":
@@ -668,7 +668,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
         libelle_moy = f"MOYENNE GÉNÉRALE : {moyenne:.2f} / 20"
     else:
         moyenne = (total_points_sur_10 / total_coefs) if total_coefs > 0 else 0.0
-        libelle_moy = f"MOYENNE GÉNÉRALE : {moyenne:.2f} / 10"
+        libelle_moy = f"MOYENNE GÉNÉRALE CONSOLIDÉE : {moyenne:.2f} / 10"
 
     pdf.ln(3)
     pdf.set_font("Arial", "B", 10)
@@ -676,7 +676,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
         pdf.cell(95, 7, f"Total des Points : {total_points_sur_20:.2f}", 1, 0, "L")
         pdf.cell(95, 7, f"Total des Coefficients : {total_coefs}", 1, 1, "L")
     else:
-        pdf.cell(95, 7, f"Somme des notes sur 10 : {total_points_sur_10:.2f}", 1, 0, "L")
+        pdf.cell(95, 7, f"Somme des notes ramenées sur 10 : {total_points_sur_10:.2f}", 1, 0, "L")
         pdf.cell(95, 7, f"Nombre de matières : {total_coefs}", 1, 1, "L")
     
     pdf.set_fill_color(230, 242, 255)
@@ -750,7 +750,7 @@ def assistant_ia_repondre(question):
         nb_bg = len(st.session_state.base_globale_db)
         return f"📑 **{nb_r} rapport(s)** journalier(s) enregistrés et **{nb_bg} entrées** centralisées dans la Base Globale de suivi."
     elif "bulletin" in q or "note" in q or "barème" in q:
-        return "📝 Le système applique un barème adapté : pour le préscolaire et l'élémentaire, le professeur définit librement le barème sans coefficient ; pour le collège, barème sur 20 avec coefficients."
+        return "📝 Le système applique un barème adapté : pour le préscolaire et l'élémentaire, la saisie comporte uniquement les compositions du 1er, 2ème et 3ème trimestre sans coefficient, avec barème personnalisable par le professeur ; pour le collège, les semestres comportent Devoir 1, Devoir 2 et Composition avec coefficients."
     else:
         return "🤖 **IA Administration École Président Nelson Mandela :** Je suis là pour vous assister ! Posez-moi des questions sur la base globale, les effectifs, emplois du temps ou les rapports."
 
@@ -987,16 +987,17 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 if cycle_sel == "Collège":
                     type_eval_sel = st.selectbox("Type d'Évaluation", ["Devoir 1", "Devoir 2", "Composition"])
                 else:
+                    # CORRECTION EXIGÉE : Pour élémentaire et préscolaire, uniquement les compositions de trimestres sans coef
                     type_eval_sel = st.selectbox("Type d'Évaluation", ["Composition 1er trimestre", "Composition 2ème trimestre", "Composition 3ème trimestre"])
 
             if cycle_sel in ["Préscolaire", "Élémentaire"]:
                 bareme_sel = st.number_input("Définir le barème de notation (ex: 10, 20, 5...)", min_value=1, max_value=100, value=10)
                 coef_val = 1 
-                st.info(f"📌 Cycle Élémentaire / Préscolaire : Uniquement Composition 1er, 2ème et 3ème trimestre, sans coefficient et avec barème personnalisable sur **{bareme_sel}**.")
+                st.info(f"📌 Cycle Élémentaire / Préscolaire : Uniquement les compositions de trimestres, sans coefficient et avec barème personnalisable sur **{bareme_sel}**.")
             else:
                 bareme_sel = 20
                 coef_val = st.number_input("Coefficient prédéfini par le professeur", min_value=1, max_value=10, value=3)
-                st.info("📌 Cycle Collège : Devoir 1, Devoir 2 et Composition pour chaque semestre avec coefficients prédéfinis. Formule : (((D1+D2)/2)+Composition)/2 * Coef.")
+                st.info("📌 Cycle Collège : Devoir 1, Devoir 2 et Composition pour chaque semestre avec coefficients prédéfinis. Formule : (((D1 + D2) / 2) + Composition) / 2 * Coef.")
 
             mode_mat = st.radio("Saisie Matière :", ["Saisir directement la matière", "Choisir parmi les matières prédéfinies"], horizontal=True)
             
