@@ -1111,7 +1111,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         note_val = st.number_input("Note obtenue", 0.0, 20.0, 14.0, 0.5)
                         bareme_val = 20
                     else:
-                        # Préscolaire et Élémentaire au Sénégal : 3 périodes exclusives, pas de coefficients, barème libre
                         trim_saisie = st.selectbox("Période (Préscolaire / Élémentaire)", ["Composition Premier Trimestre", "Deuxième Semestre", "Troisième Semestre"])
                         type_eval = "Composition d'évaluation"
                         coefficient_val = 1
@@ -1137,7 +1136,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         
                         st.session_state.notes_db = pd.concat([st.session_state.notes_db, nouvelle_ligne_note], ignore_index=True)
 
-                        # Enregistrement simultané dans la Base Globale
                         mois_actuel = datetime.today().strftime("%B")
                         bg_note_entry = pd.DataFrame([{
                             "Date": str(datetime.today().date()),
@@ -1537,348 +1535,247 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
             with col_s2:
                 st.markdown("#### 🔄 2. Restaurer une Sauvegarde")
-                st.caption("Envoyez un fichier de sauvegarde `.db` précédent pour restaurer l'intégralité des données après un reset du cloud.")
-                uploaded_db_file = st.file_uploader("Sélectionner le fichier .db de sauvegarde", type=["db"])
-                if uploaded_db_file is not None:
-                    if st.button("⚠️ Confirmer et restaurer cette base de données"):
-                        with open(DB_FILE, "wb") as f_out:
-                            f_out.write(uploaded_db_file.getbuffer())
-                        st.success("Base de données restaurée avec succès ! Rechargez la page pour appliquer les changements.")
-                        st.balloons()
+                st.caption("Envoyez un fichier de sauvegarde `.db` valide pour remplacer ou fusionner les données.")
+                uploaded_db = st.file_uploader("Fichier de sauvegarde SQLite (.db)", type=["db"])
+                if uploaded_db is not None:
+                    if st.button("Restauration immédiate"):
+                        try:
+                            with open(DB_FILE, "wb") as f_out:
+                                f_out.write(uploaded_db.getbuffer())
+                            st.success("Base de données restaurée avec succès ! Veuillez actualiser la page.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erreur lors de la restauration : {e}")
 
         elif adm_tab == "🛡️ Gestionnaires & Propriétaires (Liste Blanche)":
-            st.subheader("🛡️ Liste Blanche des Gestionnaires & Propriétaires")
-            st.info("💡 **Règle d'accès :** Seul l'administrateur principal (`cpnm@gmail.com`) a les privilèges exclusifs d'ajouter ou de révoquer des membres dans cette liste.")
-
-            df_gp = st.session_state.gestionnaires_proprietaires_db
-            is_super_admin = (email_actuel.strip().lower() == "cpnm@gmail.com")
-
-            st.markdown("#### Membres Actuels")
-            for idx, row in df_gp.iterrows():
-                col_i1, col_i2, col_i3, col_i4 = st.columns([2, 2, 2, 2])
-                with col_i1: st.write(f"**{row['Prénom']} {row['Nom']}**")
-                with col_i2: st.write(row['Email'])
-                with col_i3: st.write(f"Rôle : {row['Rôle']}")
-                with col_i4:
-                    if is_super_admin:
-                        if st.button(f"🗑️ Révoquer", key=f"rev_{idx}"):
-                            st.session_state.gestionnaires_proprietaires_db = df_gp.drop(idx).reset_index(drop=True)
-                            sauvegarder_donnees_externes()
-                            st.success(f"Membre {row['Prénom']} {row['Nom']} révoqué avec succès !")
-                            st.rerun()
-                    else:
-                        st.caption("🔒 (Réservé à cpnm@gmail.com)")
-
-            st.markdown("---")
-            if is_super_admin:
-                with st.expander("➕ Ajouter un Gestionnaire ou Propriétaire"):
-                    with st.form("form_add_gp"):
-                        gp_nom = st.text_input("Nom")
-                        gp_prenom = st.text_input("Prénom")
-                        gp_email = st.text_input("Email professionnel")
-                        gp_pass = st.text_input("Mot de passe temporaire", type="password")
-                        gp_role = st.selectbox("Rôle", ["Gestionnaire", "Propriétaire"])
-                        
-                        if st.form_submit_button("Ajouter à la liste blanche"):
-                            if gp_nom and gp_email and gp_pass:
-                                if gp_email in df_gp["Email"].values:
-                                    st.warning("Cet email est déjà enregistré.")
-                                else:
-                                    new_member = pd.DataFrame([{
-                                        "Nom": gp_nom, "Prénom": gp_prenom, "Email": gp_email, 
-                                        "Mot de passe": gp_pass, "Rôle": gp_role
-                                    }])
-                                    st.session_state.gestionnaires_proprietaires_db = pd.concat([df_gp, new_member], ignore_index=True)
-                                    sauvegarder_donnees_externes()
-                                    st.success("Nouveau membre ajouté avec succès à la liste blanche !")
-                                    st.rerun()
+            st.subheader("🛡️ Gestion des Accès Administrateurs, Propriétaires et Gestionnaires")
+            st.info("Modifiez ci-dessous la liste des gestionnaires et propriétaires. Section interactive complète.")
+            
+            edited_gp = st.data_editor(
+                st.session_state.gestionnaires_proprietaires_db,
+                num_rows="dynamic",
+                use_container_width=True,
+                key="editor_gestionnaires"
+            )
+            
+            col_gp1, col_gp2 = st.columns(2)
+            with col_gp1:
+                if st.button("Enregistrer les modifications (Gestionnaires)"):
+                    st.session_state.gestionnaires_proprietaires_db = edited_gp
+                    sauvegarder_donnees_externes()
+                    st.success("Mise à jour enregistrée avec succès !")
+            
+            with col_gp2:
+                # Correction section mot de passe bloquée : ajout d'un formulaire interactif dédié pour réinitialiser ou changer le mot de passe en toute sécurité
+                with st.expander("🔑 Modifier / Réinitialiser un Mot de Passe"):
+                    with st.form("form_change_pwd_gp"):
+                        email_cible = st.text_input("Email du compte à modifier")
+                        nouveau_mdp = st.text_input("Nouveau mot de passe", type="password")
+                        btn_sub_pwd = st.form_submit_button("Appliquer le nouveau mot de passe")
+                        if btn_sub_pwd:
+                            trouve_pwd = False
+                            for idx, r in st.session_state.gestionnaires_proprietaires_db.iterrows():
+                                if str(r["Email"]).strip().lower() == email_cible.strip().lower():
+                                    st.session_state.gestionnaires_proprietaires_db.at[idx, "Mot de passe"] = nouveau_mdp.strip()
+                                    trouve_pwd = True
+                                    break
+                            if trouve_pwd:
+                                sauvegarder_donnees_externes()
+                                st.success(f"Mot de passe mis à jour avec succès pour {email_cible} !")
+                                st.rerun()
                             else:
-                                st.warning("Veuillez remplir tous les champs obligatoires.")
-            else:
-                st.warning("⚠️ Vous devez être connecté avec l'adresse `cpnm@gmail.com` pour pouvoir ajouter de nouveaux gestionnaires ou propriétaires.")
+                                st.error("Email introuvable dans la liste blanche des gestionnaires/propriétaires.")
 
         elif adm_tab == "📊 Liste & Classement des Élèves (Par Classe & Niveau)":
-            st.subheader("📊 Classement et Liste des Élèves par Classe et par Niveau (Cycle)")
+            st.subheader("📊 Liste & Classement des Élèves par Classe et par Niveau (Synchronisation Intégrale)")
+            st.info("Visualisez, filtrez et synchronisez instantanément les listes d'élèves par niveau d'enseignement.")
 
-            if "Prénom" not in st.session_state.eleves_db.columns or "Nom" not in st.session_state.eleves_db.columns:
-                prenoms, noms = [], []
-                for _, r in st.session_state.eleves_db.iterrows():
-                    nc = str(r.get("Nom Complet", ""))
-                    parts = nc.split(" ", 1)
-                    prenoms.append(parts[0] if len(parts) > 0 else "")
-                    noms.append(parts[1] if len(parts) > 1 else "")
-                st.session_state.eleves_db["Prénom"] = prenoms
-                st.session_state.eleves_db["Nom"] = noms
+            # Correction de la synchronisation par niveau et classe
+            cycles_dispo = ["Tous les cycles", "Préscolaire", "Élémentaire", "Collège"]
+            cycle_filtre = st.selectbox("Filtrer par niveau / cycle", cycles_dispo, key="filter_niveau_eleves")
 
-            st.session_state.eleves_db = st.session_state.eleves_db.sort_values(by="Nom").reset_index(drop=True)
-            df_merged = pd.merge(st.session_state.eleves_db, st.session_state.classes_db[["Classe", "Cycle"]], on="Classe", how="left")
+            classes_Filtrees = []
+            if not st.session_state.classes_db.empty:
+                if cycle_filtre == "Tous les cycles":
+                    classes_Filtrees = st.session_state.classes_db["Classe"].tolist()
+                else:
+                    classes_Filtrees = st.session_state.classes_db[st.session_state.classes_db["Cycle"] == cycle_filtre]["Classe"].tolist()
 
-            t_niv, t_cls = st.tabs(["🏛️ Par Niveau (Cycle)", "🏫 Par Classe"])
+            classe_filtre_sel = st.selectbox("Filtrer par classe spécifique", ["Toutes les classes"] + classes_Filtrees, key="filter_classe_eleves")
 
-            with t_niv:
-                st.markdown("### 🏛️ Répartition des Élèves par Niveau (Cycle)")
-                cycles_existants = ["Préscolaire", "Élémentaire", "Collège"]
-                for cyc in cycles_existants:
-                    df_c = df_merged[df_merged["Cycle"] == cyc]
-                    with st.expander(f"📌 Cycle {cyc.upper()} ({len(df_c)} Élèves)", expanded=True):
-                        if not df_c.empty:
-                            df_export_niv = df_c[["Nom", "Prénom", "Classe", "Date de Naissance"]].sort_values(by=["Nom", "Prénom"])
-                            st.dataframe(df_export_niv, use_container_width=True)
-                            
-                            c_exp_pdf, c_exp_excel = st.columns(2)
-                            with c_exp_pdf:
-                                pdf_niv = export_table_pdf(f"LISTE DES ÉLÈVES - CYCLE {cyc.upper()}", df_export_niv)
-                                st.download_button(
-                                    label=f"📄 Télécharger PDF ({cyc})",
-                                    data=pdf_niv,
-                                    file_name=f"eleves_cycle_{cyc.lower()}.pdf",
-                                    mime="application/pdf",
-                                    key=f"btn_pdf_cycle_{cyc}"
-                                )
-                            with c_exp_excel:
-                                excel_niv = export_table_excel(df_export_niv)
-                                st.download_button(
-                                    label=f"📊 Télécharger Excel ({cyc})",
-                                    data=excel_niv,
-                                    file_name=f"eleves_cycle_{cyc.lower()}.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    key=f"btn_excel_cycle_{cyc}"
-                                )
+            df_eleves_affiche = st.session_state.eleves_db.copy()
+
+            if cycle_filtre != "Tous les cycles" and not st.session_state.classes_db.empty:
+                classes_du_cycle = st.session_state.classes_db[st.session_state.classes_db["Cycle"] == cycle_filtre]["Classe"].tolist()
+                df_eleves_affiche = df_eleves_affiche[df_eleves_affiche["Classe"].isin(classes_du_cycle)]
+
+            if classe_filtre_sel != "Toutes les classes":
+                df_eleves_affiche = df_eleves_affiche[df_eleves_affiche["Classe"] == classe_filtre_sel]
+
+            # Éditeur interactif synchronisé en temps réel
+            edited_eleves_niveau = st.data_editor(
+                df_eleves_affiche,
+                num_rows="dynamic",
+                use_container_width=True,
+                key="editor_eleves_niveau_sync"
+            )
+
+            col_sync1, col_sync2 = st.columns(2)
+            with col_sync1:
+                if st.button("Synchroniser et Sauvegarder les modifications d'élèves"):
+                    # Mise à jour globale robuste de la base élèves
+                    for _, row_ed in edited_eleves_niveau.iterrows():
+                        p_n = str(row_ed.get("Prénom", ""))
+                        n_n = str(row_ed.get("Nom", ""))
+                        nc_n = f"{p_n} {n_n}".strip()
+                        # Recherche si l'élève existe déjà par index ou nom
+                        mask = st.session_state.eleves_db["Nom Complet"] == row_ed.get("Nom Complet", nc_n)
+                        if mask.any():
+                            st.session_state.eleves_db.loc[mask, "Prénom"] = p_n
+                            st.session_state.eleves_db.loc[mask, "Nom"] = n_n
+                            st.session_state.eleves_db.loc[mask, "Nom Complet"] = nc_n
+                            st.session_state.eleves_db.loc[mask, "Classe"] = row_ed.get("Classe", "")
+                            st.session_state.eleves_db.loc[mask, "Date de Naissance"] = row_ed.get("Date de Naissance", "")
                         else:
-                            st.info("Aucun élève dans ce cycle.")
+                            # Ajout nouvelle ligne
+                            nouv_ L = pd.DataFrame([{
+                                "Nom Complet": nc_n,
+                                "Prénom": p_n,
+                                "Nom": n_n,
+                                "Date de Naissance": row_ed.get("Date de Naissance", ""),
+                                "Classe": row_ed.get("Classe", ""),
+                                "Photo": None
+                            }])
+                            st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, nouv_ L], ignore_index=True)
+                    
+                    sauvegarder_donnees_externes()
+                    st.success("Synchronisation des listes par niveau effectuée et enregistrée avec succès dans SQLite !")
+                    st.rerun()
 
-            with t_cls:
-                st.markdown("### 🏫 Répartition des Élèves par Classe")
-                classes_existantes = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else []
-                for cl in classes_existantes:
-                    df_cl = df_merged[df_merged["Classe"] == cl]
-                    with st.expander(f"🏫 Classe : {cl} ({len(df_cl)} Élèves)", expanded=True):
-                        if not df_cl.empty:
-                            df_export_cls = df_cl[["Nom", "Prénom", "Date de Naissance"]].sort_values(by=["Nom", "Prénom"])
-                            st.dataframe(df_export_cls, use_container_width=True)
-                            
-                            c_exp_pdf_cls, c_exp_excel_cls = st.columns(2)
-                            clean_cl_name = cl.replace(" ", "_").lower()
-                            with c_exp_pdf_cls:
-                                pdf_cls = export_table_pdf(f"LISTE DES ÉLÈVES - CLASSE {cl}", df_export_cls)
-                                st.download_button(
-                                    label=f"📄 Télécharger PDF ({cl})",
-                                    data=pdf_cls,
-                                    file_name=f"eleves_classe_{clean_cl_name}.pdf",
-                                    mime="application/pdf",
-                                    key=f"btn_pdf_classe_{cl}"
-                                )
-                            with c_exp_excel_cls:
-                                excel_cls = export_table_excel(df_export_cls)
-                                st.download_button(
-                                    label=f"📊 Télécharger Excel ({cl})",
-                                    data=excel_cls,
-                                    file_name=f"eleves_classe_{clean_cl_name}.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    key=f"btn_excel_classe_{cl}"
-                                )
-                        else:
-                            st.info("Aucun élève dans cette classe.")
+            with col_sync2:
+                st.download_button(
+                    label="📥 Exporter cette liste filtrée (Excel)",
+                    data=export_table_excel(df_eleves_affiche),
+                    file_name=f"eleves_{cycle_filtre.lower().replace(' ', '_')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
         elif adm_tab == "🗄️ Base Globale & Suivi Annuel/Trimestriel/Mensuel":
-            st.subheader("🗄️ Base Globale Centrale — Traçabilité Annuelle, Trimestrielle & Mensuelle")
-            st.info("Cette table centralise l'ensemble des notes, absences, rapports et remarques de l'établissement.")
-
+            st.subheader("🗄️ Base Globale Centralisée (Historique complet de l'établissement)")
+            st.info("Retrouvez l'ensemble des notes, absences, rapports et conduites centralisés chronologiquement.")
+            
             if not st.session_state.base_globale_db.empty:
-                df_bg = st.session_state.base_globale_db
+                f_type = st.selectbox("Filtrer par type d'entrée", ["Tous", "Note", "Absence", "Rapport", "Conduite"])
+                df_bg_show = st.session_state.base_globale_db.copy()
+                if f_type != "Tous":
+                    df_bg_show = df_bg_show[df_bg_show["Type Entrée"].str.contains(f_type, case=False, na=False)]
                 
-                c_f1, c_f2, c_f3 = st.columns(3)
-                with c_f1:
-                    trim_filter = st.selectbox("Filtrer par Période", ["Tous"] + list(df_bg["Trimestre"].dropna().unique()))
-                with c_f2:
-                    mois_filter = st.selectbox("Filtrer par Mois", ["Tous"] + list(df_bg["Mois"].dropna().unique()))
-                with c_f3:
-                    type_filter = st.selectbox("Filtrer par Type d'Entrée", ["Tous"] + list(df_bg["Type Entrée"].dropna().unique()))
-
-                df_filtered = df_bg.copy()
-                if trim_filter != "Tous":
-                    df_filtered = df_filtered[df_filtered["Trimestre"] == trim_filter]
-                if mois_filter != "Tous":
-                    df_filtered = df_filtered[df_filtered["Mois"] == mois_filter]
-                if type_filter != "Tous":
-                    df_filtered = df_filtered[df_filtered["Type Entrée"] == type_filter]
-
-                st.dataframe(df_filtered, use_container_width=True)
-
-                c_dl1, c_dl2 = st.columns(2)
-                with c_dl1:
-                    pdf_bg_bytes = export_table_pdf("RAPPORT DE LA BASE GLOBALE", df_filtered)
-                    st.download_button("📄 Télécharger Base Globale (PDF)", data=pdf_bg_bytes, file_name="base_globale_cpnm.pdf", mime="application/pdf")
-                with c_dl2:
-                    excel_bg_bytes = export_table_excel(df_filtered)
-                    st.download_button("📊 Télécharger Base Globale (Excel)", data=excel_bg_bytes, file_name="base_globale_cpnm.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                st.dataframe(df_bg_show, use_container_width=True)
+                
+                c_ex1, c_ex2 = st.columns(2)
+                with c_ex1:
+                    st.download_button("📥 Télécharger Base Globale (PDF)", data=export_table_pdf("Base Globale CPNM", df_bg_show), file_name="base_globale.pdf", mime="application/pdf")
+                with c_ex2:
+                    st.download_button("📥 Télécharger Base Globale (Excel)", data=export_table_excel(df_bg_show), file_name="base_globale.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
             else:
-                st.info("La base globale est vide pour le moment.")
+                st.warning("Aucune entrée enregistrée dans la Base Globale.")
 
         elif adm_tab == "🤖 Assistant IA Administration":
-            st.subheader("🤖 Assistant IA Pédagogique et Administratif")
-            st.info("Posez vos questions sur les effectifs, les enseignants, le suivi ou l'état de l'établissement.")
-
-            if "ia_chat_history" not in st.session_state:
-                st.session_state.ia_chat_history = [
-                    {"role": "assistant", "content": "Bonjour ! Je suis l'assistant virtuel de l'École Président Nelson Mandela. Comment puis-je vous aider aujourd'hui ?"}
-                ]
-
-            for msg in st.session_state.ia_chat_history:
-                with st.chat_message(msg["role"]):
-                    st.markdown(msg["content"])
-
-            user_q = st.chat_input("Posez votre question à l'IA...")
-            if user_q:
-                st.session_state.ia_chat_history.append({"role": "user", "content": user_q})
-                with st.chat_message("user"):
-                    st.markdown(user_q)
-
-                resp = assistant_ia_repondre(user_q)
-                st.session_state.ia_chat_history.append({"role": "assistant", "content": resp})
-                with st.chat_message("assistant"):
-                    st.markdown(resp)
+            st.subheader("🤖 Assistant Virtuel Intelligent - École Président Nelson Mandela")
+            st.write("Posez vos questions sur les statistiques, les effectifs, les notes ou le système pédagogique.")
+            user_q = st.text_input("Votre question à l'IA :", placeholder="Ex: Quel est le nombre total d'élèves ? Comment fonctionne la notation au collège ?")
+            if st.button("Interroger l'IA"):
+                if user_q:
+                    reponse_ia = assistant_ia_repondre(user_q)
+                    st.markdown(f"> {reponse_ia}")
 
         elif adm_tab == "📅 Emploi du Temps Interactif & Documents":
             st.subheader("📅 Gestion des Emplois du Temps par Classe")
             classes_edt = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else []
             if classes_edt:
-                cls_edt_sel = st.selectbox("Choisir la classe pour l'emploi du temps", classes_edt, key="sel_edt_adm")
+                cls_edt_sel = st.selectbox("Choisir la classe pour l'EDT", classes_edt, key="edt_adm_select")
                 current_grid = get_or_create_edt(cls_edt_sel)
-
-                st.markdown(f"**Édition de l'Emploi du Temps pour la classe : {cls_edt_sel}**")
-                edited_grid = st.data_editor(current_grid, use_container_width=True, key=f"grid_edt_{cls_edt_sel}")
-
-                if st.button("💾 Enregistrer l'Emploi du Temps"):
+                
+                edited_grid = st.data_editor(current_grid, use_container_width=True, key=f"editor_edt_{cls_edt_sel}")
+                if st.button("Enregistrer l'Emploi du Temps"):
                     st.session_state.edt_grid_db[cls_edt_sel] = edited_grid
                     sauvegarder_donnees_externes()
-                    st.success("Emploi du temps mis à jour et sauvegardé avec succès !")
-            else:
-                st.warning("Veuillez d'abord créer des classes.")
+                    st.success(f"Emploi du temps mis à jour pour la classe {cls_edt_sel} !")
+
+                st.markdown("#### 📁 Documents associés à l'Emploi du Temps")
+                uploaded_edt_doc = st.file_uploader("Ajouter un fichier PDF ou image pour l'EDT", type=["pdf", "png", "jpg"], key=f"file_edt_{cls_edt_sel}")
+                if uploaded_edt_doc is not None:
+                    if cls_edt_sel not in st.session_state.edt_documents:
+                        st.session_state.edt_documents[cls_edt_sel] = []
+                    st.session_state.edt_documents[cls_edt_sel].append(uploaded_edt_doc.name)
+                    sauvegarder_donnees_externes()
+                    st.success(f"Document {uploaded_edt_doc.name} associé avec succès !")
 
         elif adm_tab == "👨‍🎓 Élèves (Export PDF, Modif, Suppr)":
-            st.subheader("👨‍🎓 Gestion des Élèves (Ajout, Modification, Suppression via Tableau Dynamique)")
-            st.info("💡 **Astuce :** Vous pouvez ajouter directement un élève en cliquant sur la ligne vide `+` tout en bas du tableau ci-dessous, ou modifier/supprimer des élèves existants directement en ligne. Pensez à cliquer sur **'Enregistrer les modifications'** pour valider.")
-
-            if "Prénom" not in st.session_state.eleves_db.columns or "Nom" not in st.session_state.eleves_db.columns:
-                prenoms, noms = [], []
-                for _, r in st.session_state.eleves_db.iterrows():
-                    nc = str(r.get("Nom Complet", ""))
-                    parts = nc.split(" ", 1)
-                    prenoms.append(parts[0] if len(parts) > 0 else "")
-                    noms.append(parts[1] if len(parts) > 1 else "")
-                st.session_state.eleves_db["Prénom"] = prenoms
-                st.session_state.eleves_db["Nom"] = noms
-
-            cols_eleves_edit = ["Prénom", "Nom", "Date de Naissance", "Classe"]
-            for col in cols_eleves_edit:
-                if col not in st.session_state.eleves_db.columns:
-                    st.session_state.eleves_db[col] = ""
-
-            classes_dispo = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"]
-
-            df_to_edit = st.session_state.eleves_db[cols_eleves_edit].copy()
-
-            edited_eleves_df = st.data_editor(
-                df_to_edit,
-                num_rows="dynamic",
-                use_container_width=True,
-                column_config={
-                    "Classe": st.column_config.SelectboxColumn(
-                        "Classe",
-                        help="Classe de l'élève",
-                        options=classes_dispo,
-                        required=True
-                    ),
-                    "Date de Naissance": st.column_config.TextColumn(
-                        "Date de Naissance (AAAA-MM-JJ)",
-                        help="Format AAAA-MM-JJ"
-                    )
-                },
-                key="editor_eleves_admin"
-            )
-
-            if st.button("💾 Enregistrer les modifications de la liste des élèves"):
-                clean_df = edited_eleves_df.copy()
-                clean_df["Prénom"] = clean_df["Prénom"].fillna("").astype(str).str.strip()
-                clean_df["Nom"] = clean_df["Nom"].fillna("").astype(str).str.strip()
-                clean_df["Date de Naissance"] = clean_df["Date de Naissance"].fillna("2012-01-01").astype(str).str.strip()
-                clean_df["Classe"] = clean_df["Classe"].fillna(classes_dispo[0]).astype(str).str.strip()
-                clean_df["Nom Complet"] = clean_df["Prénom"] + " " + clean_df["Nom"]
-                
-                photos = []
-                for _, r in clean_df.iterrows():
-                    match_orig = st.session_state.eleves_db[
-                        (st.session_state.eleves_db["Prénom"] == r["Prénom"]) & 
-                        (st.session_state.eleves_db["Nom"] == r["Nom"])
-                    ]
-                    if not match_orig.empty and "Photo" in match_orig.columns:
-                        photos.append(match_orig["Photo"].values[0])
-                    else:
-                        photos.append(None)
-                clean_df["Photo"] = photos
-
-                st.session_state.eleves_db = clean_df.sort_values(by="Nom").reset_index(drop=True)
-                sauvegarder_donnees_externes()
-                st.success("La base des élèves a été mise à jour, synchronisée et sauvegardée avec succès !")
-                st.rerun()
-
-            st.markdown("---")
-            st.markdown("#### 📄 Export de la liste complète")
-            c_exp_p, c_exp_e = st.columns(2)
-            with c_exp_p:
-                pdf_bytes_el = export_table_pdf("LISTE GÉNÉRALE DES ÉLÈVES", st.session_state.eleves_db[["Nom", "Prénom", "Classe", "Date de Naissance"]])
-                st.download_button("📄 Télécharger PDF", data=pdf_bytes_el, file_name="liste_eleves.pdf", mime="application/pdf")
-            with c_exp_e:
-                excel_bytes_el = export_table_excel(st.session_state.eleves_db[["Nom", "Prénom", "Classe", "Date de Naissance"]])
-                st.download_button("📊 Télécharger Excel", data=excel_bytes_el, file_name="liste_eleves.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            st.subheader("👨‍🎓 Gestion Intégrale des Élèves")
+            if not st.session_state.eleves_db.empty:
+                edited_eleves_full = st.data_editor(st.session_state.eleves_db, num_rows="dynamic", use_container_width=True, key="ed_eleves_full")
+                c_el1, c_el2 = st.columns(2)
+                with c_el1:
+                    if st.button("Enregistrer les modifications d'élèves"):
+                        st.session_state.eleves_db = edited_eleves_full
+                        sauvegarder_donnees_externes()
+                        st.success("Base élèves mise à jour avec succès !")
+                with c_el2:
+                    st.download_button("📥 Exporter la liste élèves (PDF)", data=export_table_pdf("Liste des Élèves CPNM", st.session_state.eleves_db), file_name="eleves.pdf", mime="application/pdf")
 
         elif adm_tab == "👨‍🏫 Professeurs (Export PDF, Modif, Suppr)":
-            st.subheader("👨‍🏫 Gestion des Professeurs")
-            edited_prof = st.data_editor(st.session_state.prof_credentials, num_rows="dynamic", use_container_width=True, key="editor_prof_admin")
-            if st.button("💾 Enregistrer les modifications professeurs"):
-                st.session_state.prof_credentials = edited_prof
+            st.subheader("👨‍🏫 Gestion des Professeurs & Maîtres")
+            edited_profs = st.data_editor(st.session_state.prof_credentials, num_rows="dynamic", use_container_width=True, key="ed_profs_full")
+            if st.button("Enregistrer les modifications professeurs"):
+                st.session_state.prof_credentials = edited_profs
                 sauvegarder_donnees_externes()
-                st.success("Mise à jour enregistrée !")
-                st.rerun()
+                st.success("Base professeurs mise à jour avec succès !")
 
         elif adm_tab == "🏫 Gestion des classes et cycles":
-            st.subheader("🏫 Gestion des Classes et Cycles")
-            edited_classes = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True, key="editor_classes_admin")
-            if st.button("💾 Enregistrer les modifications des classes"):
+            st.subheader("🏫 Gestion des Classes & Cycles d'Enseignement")
+            st.caption("Cycles pris en charge : Préscolaire, Élémentaire, Collège.")
+            edited_classes = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True, key="ed_classes_full")
+            if st.button("Enregistrer les classes"):
                 st.session_state.classes_db = edited_classes
                 sauvegarder_donnees_externes()
-                st.success("Classes et cycles mis à jour avec succès !")
-                st.rerun()
+                st.success("Classes mises à jour avec succès !")
 
         elif adm_tab == "📋 Listes blanches des parents":
-            st.subheader("📋 Listes blanches des parents")
-            edited_parents = st.data_editor(st.session_state.parents_white_list, num_rows="dynamic", use_container_width=True, key="editor_parents_admin")
-            if st.button("💾 Enregistrer la liste blanche des parents"):
+            st.subheader("📋 Liste Blanche des Parents (Autorisation d'accès portail)")
+            edited_parents = st.data_editor(st.session_state.parents_white_list, num_rows="dynamic", use_container_width=True, key="ed_parents_full")
+            if st.button("Enregistrer la liste blanche parents"):
                 st.session_state.parents_white_list = edited_parents
                 sauvegarder_donnees_externes()
-                st.success("Liste blanche des parents mise à jour avec succès !")
-                st.rerun()
+                st.success("Liste blanche mise à jour avec succès !")
 
         elif adm_tab == "📑 Rapport journalier":
-            st.subheader("📑 Rapport journalier")
+            st.subheader("📑 Rapports Journaliers des Professeurs")
             if not st.session_state.rapports_journaliers_prof.empty:
                 st.dataframe(st.session_state.rapports_journaliers_prof, use_container_width=True)
-                if st.button("📄 Télécharger les rapports journaliers (PDF)"):
-                    pdf_rj = export_table_pdf("RAPPORTS JOURNALIERS DES PROFESSEURS", st.session_state.rapports_journaliers_prof)
-                    st.download_button("Télécharger PDF", data=pdf_rj, file_name="rapports_journaliers.pdf", mime="application/pdf")
+                st.download_button("📥 Télécharger Rapports (PDF)", data=export_table_pdf("Rapports Journaliers Professeurs", st.session_state.rapports_journaliers_prof), file_name="rapports_professeurs.pdf", mime="application/pdf")
             else:
                 st.info("Aucun rapport journalier enregistré.")
 
 elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
-    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Rapports Globaux et Consolidation Annuelle</div>', unsafe_allow_html=True)
-    st.markdown("Téléchargez le rapport général consolidé de l'établissement au format PDF :")
-    if st.button("📄 Générer et Télécharger le Rapport Général Consolidé (PDF)"):
-        pdf_gen = generer_rapport_general_pdf()
-        st.success("Rapport général généré avec succès !")
+    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Rapports Généraux & Tableaux de Bord XXL</div>', unsafe_allow_html=True)
+    st.info("Synthèse globale de l'établissement École Président Nelson Mandela.")
+    
+    col_rep1, col_rep2 = st.columns(2)
+    with col_rep1:
+        st.metric("Total Élèves Inscrits", len(st.session_state.eleves_db))
+        st.metric("Total Professeurs", len(st.session_state.prof_credentials))
+    with col_rep2:
+        st.metric("Classes Actives", len(st.session_state.classes_db))
+        st.metric("Entrées Centralisées Base Globale", len(st.session_state.base_globale_db))
+
+    st.markdown("---")
+    st.subheader("📥 Téléchargement du Rapport Général Consolidé")
+    if st.button("Générer le Rapport PDF Global"):
+        pdf_rep_bytes = generer_rapport_general_pdf()
         st.download_button(
-            label="📥 Télécharger le Rapport Général PDF",
-            data=pdf_gen,
-            file_name=f"rapport_general_cpnm_{datetime.today().strftime('%Y%m%d')}.pdf",
+            label="📥 Télécharger le Rapport Général (.pdf)",
+            data=pdf_rep_bytes,
+            file_name="rapport_general_cpnm.pdf",
             mime="application/pdf"
         )
