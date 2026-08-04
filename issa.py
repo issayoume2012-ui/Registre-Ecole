@@ -102,6 +102,20 @@ def sauvegarder_donnees_externes():
     """Sauvegarde toutes les bases de données de session dans la base SQLite externe 
     et synchronise systématiquement avec les tables relationnelles dédiées."""
     import json
+    
+    # Correction robuste de la table eleves pour s'assurer que les colonnes prenom et nom existent toujours
+    if "eleves_db" in st.session_state and not st.session_state.eleves_db.empty:
+        if "Prénom" not in st.session_state.eleves_db.columns or "Nom" not in st.session_state.eleves_db.columns:
+            prenoms = []
+            noms = []
+            for _, r in st.session_state.eleves_db.iterrows():
+                nc = str(r.get("Nom Complet", ""))
+                parts = nc.split(" ", 1)
+                prenoms.append(parts[0] if len(parts) > 0 else "")
+                noms.append(parts[1] if len(parts) > 1 else "")
+            st.session_state.eleves_db["Prénom"] = prenoms
+            st.session_state.eleves_db["Nom"] = noms
+
     data_to_save = {
         "admin_credentials": st.session_state.admin_credentials.to_dict(orient="split"),
         "gestionnaires_proprietaires_db": st.session_state.gestionnaires_proprietaires_db.to_dict(orient="split"),
@@ -123,6 +137,20 @@ def sauvegarder_donnees_externes():
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
+        # Vérification et mise à jour dynamique du schéma de la table eleves pour éviter toute erreur "has no column named nom"
+        cursor.execute("PRAGMA table_info(eleves)")
+        columns_info = [col[1] for col in cursor.fetchall()]
+        if "nom" not in columns_info:
+            cursor.execute("ALTER TABLE eleves ADD COLUMN nom TEXT")
+        if "prenom" not in columns_info:
+            cursor.execute("ALTER TABLE eleves ADD COLUMN prenom TEXT")
+        if "date_naissance" not in columns_info:
+            cursor.execute("ALTER TABLE eleves ADD COLUMN date_naissance TEXT")
+        if "classe" not in columns_info:
+            cursor.execute("ALTER TABLE eleves ADD COLUMN classe TEXT")
+        if "photo" not in columns_info:
+            cursor.execute("ALTER TABLE eleves ADD COLUMN photo TEXT")
+
         # Sauvegarde clé-valeur globale
         for key, value in data_to_save.items():
             cursor.execute("""
@@ -443,10 +471,10 @@ if "notes_db" not in st.session_state:
             data=[
                 ["6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 1", 3, 15.5, 20, "1er Semestre", "Très bon travail."],
                 ["6ème A", "Mamadou Diallo", "Mathématiques", "Devoir 2", 3, 14.0, 20, "1er Semestre", "Bon ensemble."],
-                ["6ème A", "Mamadou Diallo", "Mathématiques", "Composition", 3, 16.0, 20, "1er Semestre", "Excellent."],
+                ["6ème A", "Mamadou Diallo", "Mathématiques", "Composition premier semestre", 3, 16.0, 20, "1er Semestre", "Excellent."],
                 ["6ème A", "Mamadou Diallo", "Français", "Devoir 1", 3, 13.0, 20, "1er Semestre", "Assez bon."],
                 ["6ème A", "Mamadou Diallo", "Français", "Devoir 2", 3, 14.5, 20, "1er Semestre", "Bon travail."],
-                ["6ème A", "Mamadou Diallo", "Français", "Composition", 3, 15.0, 20, "1er Semestre", "Très bien."],
+                ["6ème A", "Mamadou Diallo", "Français", "Composition premier semestre", 3, 15.0, 20, "1er Semestre", "Très bien."],
                 ["CP", "Fatou Sow", "Graphisme / Écriture", "Composition", 1, 8.5, 10, "1er Trimestre", "Très bien."]
             ]
         )
@@ -564,7 +592,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
     pdf.set_text_color(255, 255, 255)
     
     if cycle == "Collège":
-        w_mat, w_d1, w_d2, w_comp, w_coef, w_moy, w_app = 40, 20, 20, 25, 15, 20, 50
+        w_mat, w_d1, w_d2, w_comp, w_coef, w_moy, w_app = 35, 18, 18, 30, 14, 20, 55
         pdf.cell(w_mat, 7, "Matière", 1, 0, "C", True)
         pdf.cell(w_d1, 7, "Devoir 1", 1, 0, "C", True)
         pdf.cell(w_d2, 7, "Devoir 2", 1, 0, "C", True)
@@ -596,7 +624,7 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 coef = int(df_mat["Coefficient"].iloc[0]) if "Coefficient" in df_mat.columns and pd.notnull(df_mat["Coefficient"].iloc[0]) else 1
                 note_d1 = df_mat[df_mat["Type Évaluation"] == "Devoir 1"]["Note"].values
                 note_d2 = df_mat[df_mat["Type Évaluation"] == "Devoir 2"]["Note"].values
-                note_comp = df_mat[df_mat["Type Évaluation"] == "Composition"]["Note"].values
+                note_comp = df_mat[df_mat["Type Évaluation"].isin(["Composition premier semestre", "Composition second semestre", "Composition"])]["Note"].values
 
                 d1_val = float(note_d1[0]) if len(note_d1) > 0 and pd.notnull(note_d1[0]) else 0.0
                 d2_val = float(note_d2[0]) if len(note_d2) > 0 and pd.notnull(note_d2[0]) else 0.0
@@ -606,12 +634,8 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 d2_str = f"{d2_val:.2f}" if len(note_d2) > 0 else "-"
                 comp_str = f"{comp_val:.2f}" if len(note_comp) > 0 else "-"
 
-                notes_dispo_mat = []
-                if len(note_d1) > 0 and pd.notnull(note_d1[0]): notes_dispo_mat.append(d1_val)
-                if len(note_d2) > 0 and pd.notnull(note_d2[0]): notes_dispo_mat.append(d2_val)
-                if len(note_comp) > 0 and pd.notnull(note_comp[0]): notes_dispo_mat.append(comp_val)
-                
-                moy_mat = sum(notes_dispo_mat) / len(notes_dispo_mat) if notes_dispo_mat else 0.0
+                # Calcul spécifique exigé pour collège : (((D1 + D2 / 2) + Composition) / 2) * coef
+                moy_mat = (((d1_val + d2_val) / 2.0) + comp_val) / 2.0
                 
                 tot = moy_mat * coef
                 total_points_sur_20 += tot
@@ -959,7 +983,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
             with c_type_eval:
                 if cycle_sel == "Collège":
-                    type_eval_sel = st.selectbox("Type d'Évaluation", ["Devoir 1", "Devoir 2", "Composition"])
+                    type_eval_sel = st.selectbox("Type d'Évaluation", ["Devoir 1", "Devoir 2", "Composition premier semestre", "Composition second semestre"])
                 else:
                     type_eval_sel = st.selectbox("Type d'Évaluation", ["Composition", "Interrogation", "Devoir"])
 
@@ -970,7 +994,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             else:
                 bareme_sel = 20
                 coef_val = st.number_input("Coefficient de l'évaluation", min_value=1, max_value=10, value=3)
-                st.info("📌 Cycle Collège : Barème fixe sur 20 avec coefficients.")
+                st.info("📌 Cycle Collège : Barème fixe sur 20 avec coefficients. (Évaluations requises : Devoir 1, Devoir 2, Composition premier semestre / second semestre).")
 
             mode_mat = st.radio("Saisie Matière :", ["Saisir directement la matière", "Choisir parmi les matières prédéfinies"], horizontal=True)
             
