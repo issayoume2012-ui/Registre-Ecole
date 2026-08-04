@@ -792,7 +792,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
             <div class="animated-card">
                 <h1 style="font-size: 3rem; margin: 0;">👨‍🏫</h1>
                 <h3 style="color: #1E3A8A; margin: 10px 0;">Espace Professeurs</h3>
-                <p style="font-size: 0.85rem; color: #64748B;">Notes, fiches d'appel, travail fait et à faire & alimentation de la base globale.</p>
+                <p style="font-size: 0.85rem; color: #64748B;">Fiches d'appel, travail fait et à faire & alimentation de la base globale.</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -913,7 +913,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
         st.markdown("---")
         menu_prof = st.radio("Menu Professeur :", [
             "📋 Fiche d'Appel", 
-            "📝 Saisie des Notes par Fiche Matière", 
             "⚠️ Conduite", 
             "📖 Travail fait et à faire", 
             "📑 Cahier de texte"
@@ -961,139 +960,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             st.success("Appel enregistré et synchronisé dans la Base Globale !")
                 else:
                     st.info("Aucun élève dans cette classe.")
-
-        elif menu_prof == "📝 Saisie des Notes par Fiche Matière":
-            st.markdown("### Fiche de Matière — Saisie des Notes et Appréciations")
-            st.info(f"📌 Classe assignée de session : **{classe_autorisee}**")
-            
-            cols_requis = ["Classe", "Élève", "Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Trimestre", "Appréciation"]
-            for col in cols_requis:
-                if col not in st.session_state.notes_db.columns:
-                    st.session_state.notes_db[col] = None
-
-            cls_n = classe_autorisee
-            
-            row_c = st.session_state.classes_db[st.session_state.classes_db["Classe"] == cls_n]
-            cycle_sel = row_c["Cycle"].values[0] if not row_c.empty else "Collège"
-            
-            c_tri, c_type_eval = st.columns(2)
-            with c_tri:
-                if cycle_sel == "Collège":
-                    trimestre_sel = st.selectbox("Semestre", ["1er Semestre", "2ème Semestre"])
-                else:
-                    # Application rigoureuse des trois périodes exclusives pour Élémentaire et Préscolaire
-                    trimestre_sel = st.selectbox("Période", ["Composition Premier Trimestre", "Deuxième Semestre", "Troisième Semestre"])
-
-            with c_type_eval:
-                if cycle_sel == "Collège":
-                    type_eval_sel = st.selectbox("Type d'Évaluation", ["Devoir 1", "Devoir 2", "Composition"])
-                else:
-                    type_eval_sel = st.selectbox("Type d'Évaluation", ["Composition"])
-
-            if cycle_sel in ["Préscolaire", "Élémentaire"]:
-                bareme_sel = st.number_input("Définition libre du barème par le professeur (ex: 10, 20, 5...)", min_value=1, max_value=100, value=10)
-                coef_val = 1 
-                st.info(f"📌 Cycle {cycle_sel} : Suppression totale des coefficients pour ce cycle. Définition libre du barème sur **{bareme_sel}**. Bulletins structurés autour de trois périodes exclusives : Composition Premier Trimestre, Deuxième Semestre et Troisième Semestre.")
-            else:
-                bareme_sel = 20
-                coef_val = st.number_input("Coefficient de la matière (Cycle Collège)", min_value=1, max_value=10, value=3)
-                st.info("📌 Cycle Collège : Saisie permettant au professeur de choisir la matière ainsi que son coefficient. Découpage rigoureux en deux semestres distincts (Devoir 1, Devoir 2 et Composition).")
-
-            mode_mat = st.radio("Saisie Matière :", ["Saisir librement la matière", "Choisir parmi les matières prédéfinies"], horizontal=True)
-            
-            if mode_mat == "Saisir librement la matière":
-                matiere_sel = st.text_input("Définition libre de la matière par le professeur", value="", placeholder="ex: Mathématiques, Arabe, Éveil...")
-            else:
-                mats_filt = st.session_state.matieres_def[st.session_state.matieres_def["Cycle"] == cycle_sel]["Matière"].tolist()
-                if not mats_filt:
-                    mats_filt = ["Mathématiques", "Français", "Histoire-Géo"]
-                matiere_sel = st.selectbox("Matière Prédéfinie", mats_filt)
-
-            eleves_cls = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_n]["Nom Complet"].tolist()
-
-            if eleves_cls and matiere_sel.strip() != "":
-                @st.fragment
-                def editeur_notes_fragment():
-                    data_fiche = []
-                    for el in eleves_cls:
-                        existing = st.session_state.notes_db[
-                            (st.session_state.notes_db["Classe"] == cls_n) & 
-                            (st.session_state.notes_db["Élève"] == el) & 
-                            (st.session_state.notes_db["Matière"] == matiere_sel) & 
-                            (st.session_state.notes_db["Type Évaluation"] == type_eval_sel) & 
-                            (st.session_state.notes_db["Trimestre"] == trimestre_sel)
-                        ]
-                        note_init = float(existing["Note"].values[0]) if (not existing.empty and pd.notnull(existing["Note"].values[0])) else float(bareme_sel / 2)
-                        appr_init = str(existing["Appréciation"].values[0]) if (not existing.empty and pd.notnull(existing["Appréciation"].values[0])) else "Bon travail"
-
-                        data_fiche.append({
-                            "Élève": el,
-                            f"Note /{bareme_sel}": note_init,
-                            "Appréciation": appr_init
-                        })
-
-                    df_fiche = pd.DataFrame(data_fiche)
-
-                    edited_fiche = st.data_editor(
-                        df_fiche,
-                        num_rows="fixed",
-                        use_container_width=True,
-                        column_config={
-                            f"Note /{bareme_sel}": st.column_config.NumberColumn(
-                                f"Note /{bareme_sel}",
-                                min_value=0.0,
-                                max_value=float(bareme_sel),
-                                step=0.25
-                            ),
-                            "Élève": st.column_config.TextColumn("Nom & Prénom Élève", disabled=True)
-                        },
-                        key=f"editor_{cls_n}_{matiere_sel}_{type_eval_sel}_{trimestre_sel}_{bareme_sel}"
-                    )
-
-                    if st.button("💾 Enregistrer la Fiche de Matière"):
-                        st.session_state.notes_db = st.session_state.notes_db[
-                            ~((st.session_state.notes_db["Classe"] == cls_n) & 
-                              (st.session_state.notes_db["Matière"] == matiere_sel) & 
-                              (st.session_state.notes_db["Type Évaluation"] == type_eval_sel) & 
-                              (st.session_state.notes_db["Trimestre"] == trimestre_sel))
-                        ]
-                        
-                        new_rows = []
-                        new_bg_rows = []
-                        d_today = str(datetime.today().date())
-                        m_today = datetime.today().strftime("%B")
-
-                        for _, r in edited_fiche.iterrows():
-                            new_rows.append({
-                                "Classe": cls_n,
-                                "Élève": r["Élève"],
-                                "Matière": matiere_sel,
-                                "Type Évaluation": type_eval_sel,
-                                "Coefficient": coef_val,
-                                "Note": r[f"Note /{bareme_sel}"],
-                                "Barème": bareme_sel,
-                                "Trimestre": trimestre_sel,
-                                "Appréciation": r["Appréciation"]
-                            })
-                            new_bg_rows.append({
-                                "Date": d_today, "Année": "2025-2026", "Trimestre": trimestre_sel, "Mois": m_today,
-                                "Type Acteur": "Élève", "Nom Acteur": r["Élève"], "Classe": cls_n,
-                                "Type Entrée": "Note", "Détail / Contenu": f"{matiere_sel} ({type_eval_sel}): {r[f'Note /{bareme_sel}']}/{bareme_sel}",
-                                "Appréciation": r["Appréciation"]
-                            })
-                        
-                        st.session_state.notes_db = pd.concat([st.session_state.notes_db, pd.DataFrame(new_rows)], ignore_index=True)
-                        st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, pd.DataFrame(new_bg_rows)], ignore_index=True)
-                        
-                        sauvegarder_donnees_externes()
-                        st.success(f"Fiche de {matiere_sel} ({type_eval_sel}) enregistrée, synchronisée et sauvegardée automatiquement !")
-
-                editeur_notes_fragment()
-
-            elif not matiere_sel.strip():
-                st.warning("Veuillez indiquer ou saisir le nom de la matière.")
-            else:
-                st.warning("Aucun élève trouvé dans cette classe.")
 
         elif menu_prof == "⚠️ Conduite":
             st.markdown("### Suivi de Conduite")
@@ -1346,7 +1212,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
         st.markdown("---")
         adm_tab = st.selectbox("Gestion Administrative :", [
             "☁️ Sauvegarde & Restauration Cloud (Anti-Effacement)",
-            "📑 Bulletins PDF (Par Élève & Par Classe)",
             "🛡️ Gestionnaires & Propriétaires (Liste Blanche)",
             "📊 Liste & Classement des Élèves (Par Classe & Niveau)",
             "🗄️ Base Globale & Suivi Annuel/Trimestriel/Mensuel",
@@ -1390,80 +1255,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             f_out.write(uploaded_db_file.getbuffer())
                         st.success("Base de données restaurée avec succès ! Rechargez la page pour appliquer les changements.")
                         st.balloons()
-
-        elif adm_tab == "📑 Bulletins PDF (Par Élève & Par Classe)":
-            st.subheader("📑 Génération et Téléchargement des Bulletins en PDF")
-            st.info("Espace sécurisé pour télécharger les bulletins officiels par élève ou pour l'ensemble d'une classe.")
-
-            sous_mode_bul = st.radio("Mode de génération :", ["Par Élève", "Par Classe entière (Zip / Fichiers consolidés)"], horizontal=True)
-
-            if sous_mode_bul == "Par Élève":
-                classes_list = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else []
-                if classes_list:
-                    c_bul_cls = st.selectbox("Sélectionner la classe", classes_list, key="bul_cls_s")
-                    eleves_bul = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == c_bul_cls]["Nom Complet"].tolist()
-                    
-                    if eleves_bul:
-                        c_bul_el = st.selectbox("Sélectionner l'élève", eleves_bul, key="bul_el_s")
-                        row_c = st.session_state.classes_db[st.session_state.classes_db["Classe"] == c_bul_cls]
-                        cyc_bul = row_c["Cycle"].values[0] if not row_c.empty else "Collège"
-                        
-                        if cyc_bul == "Collège":
-                            tri_bul = st.selectbox("Période", ["1er Semestre", "2ème Semestre"], key="bul_tri_c")
-                        else:
-                            tri_bul = st.selectbox("Période", ["Composition Premier Trimestre", "Deuxième Semestre", "Troisième Semestre"], key="bul_tri_e")
-
-                        if st.button("Générer le Bulletin PDF de l'élève"):
-                            pdf_data_b = generer_bulletin_pdf(c_bul_el, c_bul_cls, tri_bul)
-                            st.success("Bulletin généré avec succès !")
-                            st.download_button(
-                                label=f"📄 Télécharger le Bulletin de {c_bul_el} ({tri_bul})",
-                                data=pdf_data_b,
-                                file_name=f"bulletin_{c_bul_el.replace(' ', '_')}_{tri_bul}.pdf",
-                                mime="application/pdf"
-                            )
-                    else:
-                        st.warning("Aucun élève dans cette classe.")
-                else:
-                    st.warning("Aucune classe enregistrée.")
-
-            else:
-                classes_list = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else []
-                if classes_list:
-                    c_bul_cls_tot = st.selectbox("Sélectionner la classe entière", classes_list, key="bul_cls_tot")
-                    row_c = st.session_state.classes_db[st.session_state.classes_db["Classe"] == c_bul_cls_tot]
-                    cyc_bul = row_c["Cycle"].values[0] if not row_c.empty else "Collège"
-                    
-                    if cyc_bul == "Collège":
-                        tri_bul_tot = st.selectbox("Période", ["1er Semestre", "2ème Semestre"], key="bul_tri_tot_c")
-                    else:
-                        tri_bul_tot = st.selectbox("Période", ["Composition Premier Trimestre", "Deuxième Semestre", "Troisième Semestre"], key="bul_tri_tot_e")
-
-                    eleves_classe_tot = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == c_bul_cls_tot]["Nom Complet"].tolist()
-
-                    if eleves_classe_tot:
-                        st.info(f"Classe de **{c_bul_cls_tot}** : {len(eleves_classe_tot)} élèves détectés.")
-                        if st.button("Préparer et Télécharger les Bulletins de la Classe"):
-                            import zipfile
-                            zip_buffer = io.BytesIO()
-                            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                                for el_name in eleves_classe_tot:
-                                    pdf_bytes = generer_bulletin_pdf(el_name, c_bul_cls_tot, tri_bul_tot)
-                                    filename = f"bulletin_{el_name.replace(' ', '_')}_{tri_bul_tot}.pdf"
-                                    zip_file.writestr(filename, pdf_bytes)
-                            
-                            zip_data = zip_buffer.getvalue()
-                            st.success("Archive ZIP des bulletins de la classe générée avec succès !")
-                            st.download_button(
-                                label=f"📦 Télécharger tous les bulletins de {c_bul_cls_tot} (.zip)",
-                                data=zip_data,
-                                file_name=f"bulletins_classe_{c_bul_cls_tot.replace(' ', '_')}.zip",
-                                mime="application/zip"
-                            )
-                    else:
-                        st.warning("Aucun élève dans cette classe.")
-                else:
-                    st.warning("Aucune classe disponible.")
 
         elif adm_tab == "🛡️ Gestionnaires & Propriétaires (Liste Blanche)":
             st.subheader("🛡️ Liste Blanche des Gestionnaires & Propriétaires")
