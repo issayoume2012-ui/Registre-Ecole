@@ -1104,58 +1104,110 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 with st.form("form_saisie_notes_prof"):
                     eleve_selectionne = st.selectbox("Sélectionner l'élève", eleves_cls_list)
                     
-                    if cycle_prof == "Collège":
-                        matieres_college = ["Mathématiques", "Français", "Histoire-Géographie", "SVT", "Sciences Physiques", "Anglais", "LV2 (Espagnol/Arabe)", "Éducation artistique", "EPS"]
-                        matiere_saisie = st.selectbox("Matière enseignée (Collège)", matieres_college)
+                    # Logique rigoureusement adaptée selon le niveau (Préscolaire, Élémentaire, Collège)
+                    if cycle_prof == "Préscolaire":
+                        st.markdown("#### 🎨 Évaluation par Compétences (Préscolaire)")
+                        st.caption("Aucune note chiffrée. Évaluation exclusivement basée sur les compétences officielles.")
+                        
+                        domaines_prescolaire = [
+                            "Activités d'éveil et sensorielles",
+                            "Lang S oral / Communication",
+                            "Graphisme / Pré-écriture",
+                            "Activités mathématiques de base / Logique",
+                            "Éducation artistique (Dessin, Chant, Modelage)"
+                        ]
+                        matiere_saisie = st.selectbox("Domaine d'apprentissage officiel", domaines_prescolaire)
+                        trim_saisie = st.selectbox("Période", ["Premier Trimestre", "Deuxième Trimestre", "Troisième Trimestre"])
+                        type_eval = "Évaluation formative par compétences"
+                        coefficient_val = 1
+                        bareme_val = 0
+                        
+                        echelle_competence = st.selectbox("Évaluation de la compétence", ["Acquis", "En cours d'acquisition", "Non acquis"])
+                        note_val = 0.0 # Pas de note chiffrée
+                        appreciation_val = f"Maîtrise de la compétence : {echelle_competence}"
+
+                    elif cycle_prof == "Élémentaire":
+                        st.markdown("#### 📚 Saisie Élémentaire (CI, CP, CE1, CE2, CM1, CM2)")
+                        matieres_elementaire_defaut = [
+                            "Lecture", "Langue et Communication / Français", "Mathématiques", 
+                            "Étude du Milieu", "Histoire-Géographie", "Éducation Civique et Morale", 
+                            "Sciences d'Observation", "Éducation Artistique – Dessin et Chant", 
+                            "Éducation Physique et Sportive – EPS", "Informatique", "Langues nationales"
+                        ]
+                        matiere_saisie = st.selectbox("Matière (Élémentaire)", matieres_elementaire_defaut)
+                        trim_saisie = st.selectbox("Période", ["Composition Premier Trimestre", "Deuxième Semestre", "Troisième Semestre"])
+                        type_eval = st.selectbox("Type d'évaluation", ["Devoir", "Composition", "Interrogation"])
+                        
+                        coefficient_val = st.number_input("Coefficient (Paramétrable)", 1, 10, 2)
+                        
+                        # Barème entièrement paramétrable (10, 15, 20, 30, 40, 50, 100 ou tout autre barème positif)
+                        bareme_val = st.number_input("Barème choisi", 1, 500, 20)
+                        note_saisie_brute = st.number_input(f"Note obtenue (sur le barème de {bareme_val})", 0.0, float(bareme_val), 10.0, 0.5)
+                        
+                        # Règle : conversion automatique des notes sur 20 avant tout calcul / normalisation
+                        note_val = (note_saisie_brute / bareme_val) * 20.0 if bareme_val > 0 else note_saisie_brute
+                        appreciation_val = st.text_input("Appréciation", value="Bon travail")
+
+                    else:  # Collège
+                        st.markdown("#### 📐 Saisie Collège (6e, 5e, 4e, 3e)")
+                        matieres_college_defaut = [
+                            "Français", "Mathématiques", "Anglais", "Histoire-Géographie", 
+                            "Éducation Civique", "Sciences de la Vie et de la Terre – SVT", 
+                            "Physique-Chimie", "Technologie", "Informatique", 
+                            "Éducation Physique et Sportive – EPS", "Éducation Artistique", "Arabe / Langues"
+                        ]
+                        matiere_saisie = st.selectbox("Matière enseignée (Collège)", matieres_college_defaut)
                         trim_saisie = st.selectbox("Période (Collège)", ["1er Semestre", "2ème Semestre"])
                         type_eval = st.selectbox("Type d'évaluation", ["Devoir 1", "Devoir 2", "Composition"])
+                        
                         coefficient_val = st.number_input("Coefficient", 1, 10, 3)
                         bareme_val = 20
-                        note_val = st.number_input("Note obtenue (sur 20)", 0.0, 20.0, 14.0, 0.5)
-                    else:
-                        matiere_saisie = st.text_input("Matière enseignée", value="Calcul / Mathématiques")
-                        trim_saisie = st.selectbox("Période (Préscolaire / Élémentaire)", ["Composition Premier Trimestre", "Deuxième Semestre", "Troisième Semestre"])
-                        type_eval = "Composition d'évaluation"
-                        coefficient_val = 1
-                        bareme_val = st.number_input("Barème de notation (ex: 10 ou 20)", 5, 20, 10)
-                        note_val = st.number_input("Note obtenue", 0.0, float(bareme_val), float(bareme_val / 2), 0.5)
-
-                    appreciation_val = st.text_input("Appréciation / Commentaire", value="Bon travail général")
+                        
+                        note_saisie_brute = st.number_input("Note obtenue (sur 20)", 0.0, 20.0, 14.0, 0.5)
+                        # Empêcher toute saisie de note inférieure à 0 ou supérieure au barème choisi
+                        if note_saisie_brute < 0 or note_saisie_brute > bareme_val:
+                            st.error(f"Erreur : La note doit être comprise entre 0 et {bareme_val}.")
+                        
+                        note_val = note_saisie_brute
+                        appreciation_val = st.text_input("Appréciation / Commentaire", value="Bon travail général")
                     
                     btn_valider_note = st.form_submit_button("Enregistrer la note")
 
                     if btn_valider_note:
-                        nouvelle_ligne_note = pd.DataFrame([{
-                            "Classe": classe_autorisee,
-                            "Élève": eleve_selectionne,
-                            "Matière": matiere_saisie,
-                            "Type Évaluation": type_eval,
-                            "Coefficient": coefficient_val,
-                            "Note": note_val,
-                            "Barème": bareme_val,
-                            "Trimestre": trim_saisie,
-                            "Appréciation": appreciation_val
-                        }])
-                        
-                        st.session_state.notes_db = pd.concat([st.session_state.notes_db, nouvelle_ligne_note], ignore_index=True)
+                        if cycle_prof != "Collège" and cycle_prof != "Préscolaire" and (note_saisie_brute < 0 or note_saisie_brute > bareme_val):
+                            st.error("Saisie impossible : note hors barème.")
+                        else:
+                            nouvelle_ligne_note = pd.DataFrame([{
+                                "Classe": classe_autorisee,
+                                "Élève": eleve_selectionne,
+                                "Matière": matiere_saisie,
+                                "Type Évaluation": type_eval,
+                                "Coefficient": coefficient_val,
+                                "Note": note_val,
+                                "Barème": bareme_val if cycle_prof != "Préscolaire" else 0,
+                                "Trimestre": trim_saisie,
+                                "Appréciation": appreciation_val
+                            }])
+                            
+                            st.session_state.notes_db = pd.concat([st.session_state.notes_db, nouvelle_ligne_note], ignore_index=True)
 
-                        mois_actuel = datetime.today().strftime("%B")
-                        bg_note_entry = pd.DataFrame([{
-                            "Date": str(datetime.today().date()),
-                            "Année": "2025-2026",
-                            "Trimestre": trim_saisie,
-                            "Mois": mois_actuel,
-                            "Type Acteur": "Élève",
-                            "Nom Acteur": eleve_selectionne,
-                            "Classe": classe_autorisee,
-                            "Type Entrée": "Note",
-                            "Détail / Contenu": f"{matiere_saisie} ({type_eval}): {note_val}/{bareme_val}",
-                            "Appréciation": appreciation_val
-                        }])
-                        st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, bg_note_entry], ignore_index=True)
-                        
-                        sauvegarder_donnees_externes()
-                        st.success(f"Note enregistrée avec succès pour {eleve_selectionne} et synchronisée dans la Base Globale !")
+                            mois_actuel = datetime.today().strftime("%B")
+                            bg_note_entry = pd.DataFrame([{
+                                "Date": str(datetime.today().date()),
+                                "Année": "2025-2026",
+                                "Trimestre": trim_saisie,
+                                "Mois": mois_actuel,
+                                "Type Acteur": "Élève",
+                                "Nom Acteur": eleve_selectionne,
+                                "Classe": classe_autorisee,
+                                "Type Entrée": "Note",
+                                "Détail / Contenu": f"{matiere_saisie} ({type_eval}): {note_val if cycle_prof != 'Préscolaire' else appreciation_val}",
+                                "Appréciation": appreciation_val
+                            }])
+                            st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, bg_note_entry], ignore_index=True)
+                            
+                            sauvegarder_donnees_externes()
+                            st.success(f"Note enregistrée avec succès pour {eleve_selectionne} et synchronisée dans la Base Globale !")
 
         elif menu_prof == "📋 Fiche d'Appel":
             st.markdown("### Feuille d'Appel Journalière")
