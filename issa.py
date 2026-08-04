@@ -634,8 +634,8 @@ def generer_bulletin_pdf(eleve_nom, classe_nom, trimestre_sel):
                 d2_str = f"{d2_val:.2f}" if len(note_d2) > 0 else "-"
                 comp_str = f"{comp_val:.2f}" if len(note_comp) > 0 else "-"
 
-                # Calcul spécifique exigé pour collège : (((D1 + D2) / 2) + Composition) / 2
-                moy_mat = (((d1_val + d2_val) / 2.0) + comp_val) / 2.0
+                # Formule mise à jour exigée : ((((D1 + D2) / 2) + Composition) / 2 * Coef)
+                moy_mat = ((((d1_val + d2_val) / 2.0) + comp_val) / 2.0)
                 
                 tot = moy_mat * coef
                 total_points_sur_20 += tot
@@ -750,7 +750,7 @@ def assistant_ia_repondre(question):
         nb_bg = len(st.session_state.base_globale_db)
         return f"📑 **{nb_r} rapport(s)** journalier(s) enregistrés et **{nb_bg} entrées** centralisées dans la Base Globale de suivi."
     elif "bulletin" in q or "note" in q or "barème" in q:
-        return "📝 Le système applique un barème adapté : pour le préscolaire et l'élémentaire, la saisie comporte uniquement les compositions du 1er, 2ème et 3ème trimestre sans coefficient, avec barème personnalisable par le professeur ; pour le collège, les semestres comportent Devoir 1, Devoir 2 et Composition avec coefficients."
+        return "📝 Élémentaire et Préscolaire : La saisie des notes repose désormais exclusivement sur trois trimestres (Composition 1er trimestre, Composition 2ème trimestre, Composition 3ème trimestre), sans coefficient, tout en permettant au professeur de définir librement le barème de notation. Collège : Devoir 1, Devoir 2 et Composition pour chaque semestre avec coefficients et formule (((D1 + D2) / 2) + Composition) / 2 * Coef."
     else:
         return "🤖 **IA Administration École Président Nelson Mandela :** Je suis là pour vous assister ! Posez-moi des questions sur la base globale, les effectifs, emplois du temps ou les rapports."
 
@@ -879,31 +879,34 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             p_prenom = st.text_input("Prénom")
             p_pass = st.text_input("Mot de passe", type="password")
             
-            classes_dispo_admin = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"]
-            p_classe_session = st.selectbox("Classe de session (définie par l'administration)", classes_dispo_admin)
-            
             btn_p_login = st.form_submit_button("Se connecter")
 
             if btn_p_login:
                 match_prof = False
+                mat_princ = ""
+                cls_attrib = ""
                 for _, row in st.session_state.prof_credentials.iterrows():
                     if (str(row["Nom"]).strip().lower() == p_nom.strip().lower() and 
                         str(row["Prénom"]).strip().lower() == p_prenom.strip().lower() and 
                         str(row["Mot de passe"]).strip() == p_pass.strip()):
                         match_prof = True
+                        mat_princ = row.get("Matière Principale", "")
+                        cls_attrib = row.get("Classe Attribuée", "")
                         break
                 if match_prof:
                     st.session_state.prof_logged = True
                     st.session_state.prof_nom_connecte = f"{p_prenom.strip()} {p_nom.strip()}"
-                    st.session_state.prof_classe_autorisee = p_classe_session
+                    st.session_state.prof_matiere_principale = mat_princ
+                    st.session_state.prof_classe_autorisee = cls_attrib
                     st.success("Connexion réussie !")
                     st.rerun()
                 else:
                     st.error("Identifiants incorrects. Veuillez vérifier votre nom, prénom et mot de passe.")
     else:
         prof_connecte = st.session_state.prof_nom_connecte
+        matiere_principale = st.session_state.get("prof_matiere_principale", "")
         classe_autorisee = st.session_state.prof_classe_autorisee
-        st.success(f"Connecté en tant que : **{prof_connecte}** | Classe assignée de session : **{classe_autorisee}**")
+        st.success(f"Connecté en tant que : **{prof_connecte}** | Matière : **{matiere_principale}** | Classe assignée : **{classe_autorisee}**")
         if st.button("Se déconnecter"):
             st.session_state.prof_logged = False
             st.session_state.prof_nom_connecte = ""
@@ -921,11 +924,10 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         if menu_prof == "📋 Fiche d'Appel":
             st.markdown("### Feuille d'Appel Journalière")
-            st.info(f"📌 Classe assignée de session : **{classe_autorisee}**")
+            classes_dispo_prof = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"]
+            cls_appel = st.selectbox("Choisir la classe", classes_dispo_prof)
             if not st.session_state.eleves_db.empty:
                 date_jour = st.date_input("Date", value=datetime.today())
-                cls_appel = classe_autorisee
-                st.write(f"**Classe concernée :** {cls_appel}")
                 eleves_cibles = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_appel]["Nom Complet"].tolist()
 
                 if eleves_cibles:
@@ -964,14 +966,14 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "📝 Saisie des Notes par Fiche Matière":
             st.markdown("### Fiche de Matière — Saisie des Notes et Appréciations")
-            st.info(f"📌 Classe assignée de session : **{classe_autorisee}**")
             
             cols_requis = ["Classe", "Élève", "Matière", "Type Évaluation", "Coefficient", "Note", "Barème", "Trimestre", "Appréciation"]
             for col in cols_requis:
                 if col not in st.session_state.notes_db.columns:
                     st.session_state.notes_db[col] = None
 
-            cls_n = classe_autorisee
+            classes_dispo_prof = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"]
+            cls_n = st.selectbox("Choisir la classe", classes_dispo_prof)
             
             row_c = st.session_state.classes_db[st.session_state.classes_db["Classe"] == cls_n]
             cycle_sel = row_c["Cycle"].values[0] if not row_c.empty else "Collège"
@@ -991,17 +993,20 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                     type_eval_sel = st.selectbox("Type d'Évaluation", ["Composition 1er trimestre", "Composition 2ème trimestre", "Composition 3ème trimestre"])
 
             if cycle_sel in ["Préscolaire", "Élémentaire"]:
-                bareme_sel = st.number_input("Définir le barème de notation (ex: 10, 20, 5...)", min_value=1, max_value=100, value=10)
+                bareme_sel = st.number_input("Définir le barème de notation libre (ex: 10, 20, 5...)", min_value=1, max_value=100, value=10)
                 coef_val = 1 
-                st.info(f"📌 Cycle Élémentaire / Préscolaire : Uniquement les compositions de trimestres, sans coefficient et avec barème personnalisable sur **{bareme_sel}**.")
+                st.info(f"📌 Cycle Élémentaire / Préscolaire : Saisie des notes reposant exclusivement sur trois trimestres (sans coefficient), avec barème librement définissable sur **{bareme_sel}**.")
             else:
                 bareme_sel = 20
-                coef_val = st.number_input("Coefficient prédéfini par le professeur", min_value=1, max_value=10, value=3)
-                st.info("📌 Cycle Collège : Devoir 1, Devoir 2 et Composition pour chaque semestre avec coefficients prédéfinis. Formule : (((D1 + D2) / 2) + Composition) / 2 * Coef.")
+                coef_val = st.number_input("Coefficient prédéfini ou personnalisable", min_value=1, max_value=10, value=3)
+                st.info("📌 Cycle Collège : Devoir 1, Devoir 2 et Composition pour chaque semestre avec coefficients. Formule : ((((D1 + D2) / 2) + Composition) / 2 * Coef).")
 
-            mode_mat = st.radio("Saisie Matière :", ["Saisir directement la matière", "Choisir parmi les matières prédéfinies"], horizontal=True)
+            mode_mat = st.radio("Saisie Matière :", ["Utiliser ma matière principale", "Saisir une autre matière", "Choisir parmi les matières prédéfinies"], horizontal=True)
             
-            if mode_mat == "Saisir directement la matière":
+            if mode_mat == "Utiliser ma matière principale":
+                matiere_sel = matiere_principale if matiere_principale else "Mathématiques"
+                st.write(f"**Matière :** {matiere_sel}")
+            elif mode_mat == "Saisir une autre matière":
                 matiere_sel = st.text_input("Saisir le nom de la Matière", value="", placeholder="ex: Mathématiques, Arabe, Éveil...")
             else:
                 mats_filt = st.session_state.matieres_def[st.session_state.matieres_def["Cycle"] == cycle_sel]["Matière"].tolist()
@@ -1097,10 +1102,9 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "⚠️ Conduite":
             st.markdown("### Suivi de Conduite")
-            st.info(f"📌 Classe assignée de session : **{classe_autorisee}**")
+            classes_dispo_prof = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"]
             with st.form("form_cond_prof"):
-                cls_c = classe_autorisee
-                st.write(f"**Classe concernée :** {cls_c}")
+                cls_c = st.selectbox("Choisir la classe", classes_dispo_prof)
                 eleves_c = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_c]["Nom Complet"].tolist()
                 el_c = st.selectbox("Élève", eleves_c if eleves_c else ["--"])
                 type_s = st.selectbox("Type", ["Avertissement", "Blâme", "Retenue", "Félicitations", "Encouragement"])
@@ -1126,10 +1130,9 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "📖 Travail fait et à faire":
             st.markdown("### Travail fait et à faire")
-            st.info(f"📌 Classe assignée de session : **{classe_autorisee}**")
+            classes_dispo_prof = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"]
             with st.form("form_cahier"):
-                cls_ct = classe_autorisee
-                st.write(f"**Classe concernée :** {cls_ct}")
+                cls_ct = st.selectbox("Choisir la classe", classes_dispo_prof)
                 mat_ct = st.text_input("Matière")
                 contenu = st.text_area("Contenu de la séance")
                 travail = st.text_area("Travail à faire")
@@ -1142,11 +1145,10 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "📑 Cahier de texte":
             st.markdown("### Cahier de texte")
-            st.info(f"📌 Classe assignée de session : **{classe_autorisee}**")
             st.caption("Ce rapport sera directement transmis à la direction et enregistré dans la base globale.")
+            classes_dispo_prof = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"]
             with st.form("form_rap_prof"):
-                cls_r = classe_autorisee
-                st.write(f"**Classe concernée :** {cls_r}")
+                cls_r = st.selectbox("Choisir la classe", classes_dispo_prof)
                 mat_r = st.text_input("Matière")
                 bilan = st.text_area("Bilan du cours")
                 diff = st.text_area("Difficultés ou remarques")
@@ -1382,13 +1384,35 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
             with col_s2:
                 st.markdown("#### 🔄 2. Restaurer une Sauvegarde")
-                st.caption("Envoyez un fichier de sauvegarde `.db` précédent pour restaurer l'intégralité des données après un reset du cloud.")
+                st.caption("Envoyez un fichier de sauvegarde `.db` précédent pour restaurer l'intégralité des données (et synchroniser automatiquement les sessions) après un reset du cloud.")
                 uploaded_db_file = st.file_uploader("Sélectionner le fichier .db de sauvegarde", type=["db"])
                 if uploaded_db_file is not None:
                     if st.button("⚠️ Confirmer et restaurer cette base de données"):
                         with open(DB_FILE, "wb") as f_out:
                             f_out.write(uploaded_db_file.getbuffer())
-                        st.success("Base de données restaurée avec succès ! Rechargez la page pour appliquer les changements.")
+                        
+                        # Synchronisation et adaptation complète de toutes les données chargées après la restauration
+                        restored_data = charger_donnees_externes()
+                        for k, v in restored_data.items():
+                            if isinstance(v, dict) and "data" in v and "columns" in v:
+                                st.session_state[k] = pd.DataFrame(**v)
+                            elif isinstance(v, dict):
+                                st.session_state[k] = v
+                        
+                        # Assurer la persistance cohérente de la table des élèves
+                        if "eleves_db" in st.session_state and not st.session_state.eleves_db.empty:
+                            if "Prénom" not in st.session_state.eleves_db.columns or "Nom" not in st.session_state.eleves_db.columns:
+                                prenoms, noms = [], []
+                                for _, r in st.session_state.eleves_db.iterrows():
+                                    nc = str(r.get("Nom Complet", ""))
+                                    parts = nc.split(" ", 1)
+                                    prenoms.append(parts[0] if len(parts) > 0 else "")
+                                    noms.append(parts[1] if len(parts) > 1 else "")
+                                st.session_state.eleves_db["Prénom"] = prenoms
+                                st.session_state.eleves_db["Nom"] = noms
+                            st.session_state.eleves_db = st.session_state.eleves_db.sort_values(by="Nom").reset_index(drop=True)
+
+                        st.success("Base de données restaurée, synchronisée et adaptée avec succès ! Toutes les données sont à jour.")
                         st.balloons()
 
         elif adm_tab == "📑 Bulletins PDF (Par Élève & Par Classe)":
@@ -1564,7 +1588,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                                     key=f"btn_excel_cycle_{cyc}"
                                 )
                         else:
-                            st.info("Aucun élève dans ce cycle.")
+                            st.info("Aucun élève enregistré dans ce niveau. (Vérifiez l'ajout d'élèves et l'association des classes dans la gestion des classes).")
 
             with t_cls:
                 st.markdown("### 🏫 Répartition des Élèves par Classe")
@@ -1597,7 +1621,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                                     key=f"btn_excel_classe_{cl}"
                                 )
                         else:
-                            st.info("Aucun élève dans cette classe.")
+                            st.info(f"Aucun élève trouvé dans la classe {cl}.")
 
         elif adm_tab == "🗄️ Base Globale & Suivi Annuel/Trimestriel/Mensuel":
             st.subheader("🗄️ Base Globale Centrale — Traçabilité Annuelle, Trimestrielle & Mensuelle")
