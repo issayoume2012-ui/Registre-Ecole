@@ -1208,7 +1208,7 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
             
             notes_el = st.session_state.notes_db[
                 (st.session_state.notes_db["Élève"] == eleve) & 
-                (st.session_state.notes_db["Trimestre"] == tri_p]
+                (st.session_state.notes_db["Trimestre"] == tri_p)
 
             if not notes_el.empty:
                 if cycle_eleve == "Collège":
