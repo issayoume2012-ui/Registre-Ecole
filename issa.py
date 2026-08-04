@@ -879,23 +879,22 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             p_prenom = st.text_input("Prénom")
             p_pass = st.text_input("Mot de passe", type="password")
             
-            classes_dispo_admin = st.session_state.classes_db["Classe"].tolist() if not st.session_state.classes_db.empty else ["6ème A"]
-            p_classe_session = st.selectbox("Classe de session (définie par l'administration)", classes_dispo_admin)
-            
             btn_p_login = st.form_submit_button("Se connecter")
 
             if btn_p_login:
                 match_prof = False
+                classe_trouvee = ""
                 for _, row in st.session_state.prof_credentials.iterrows():
                     if (str(row["Nom"]).strip().lower() == p_nom.strip().lower() and 
                         str(row["Prénom"]).strip().lower() == p_prenom.strip().lower() and 
                         str(row["Mot de passe"]).strip() == p_pass.strip()):
                         match_prof = True
+                        classe_trouvee = str(row.get("Classe Attribuée", ""))
                         break
                 if match_prof:
                     st.session_state.prof_logged = True
                     st.session_state.prof_nom_connecte = f"{p_prenom.strip()} {p_nom.strip()}"
-                    st.session_state.prof_classe_autorisee = p_classe_session
+                    st.session_state.prof_classe_autorisee = classe_trouvee
                     st.success("Connexion réussie !")
                     st.rerun()
                 else:
@@ -903,7 +902,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
     else:
         prof_connecte = st.session_state.prof_nom_connecte
         classe_autorisee = st.session_state.prof_classe_autorisee
-        st.success(f"Connecté en tant que : **{prof_connecte}** | Classe assignée de session : **{classe_autorisee}**")
+        st.success(f"Connecté en tant que : **{prof_connecte}** | Classe assignée : **{classe_autorisee}**")
         if st.button("Se déconnecter"):
             st.session_state.prof_logged = False
             st.session_state.prof_nom_connecte = ""
@@ -920,7 +919,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         if menu_prof == "📋 Fiche d'Appel":
             st.markdown("### Feuille d'Appel Journalière")
-            st.info(f"📌 Classe assignée de session : **{classe_autorisee}**")
+            st.info(f"📌 Classe assignée (accès restreint) : **{classe_autorisee}**")
             if not st.session_state.eleves_db.empty:
                 date_jour = st.date_input("Date", value=datetime.today())
                 cls_appel = classe_autorisee
@@ -963,7 +962,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "⚠️ Conduite":
             st.markdown("### Suivi de Conduite")
-            st.info(f"📌 Classe assignée de session : **{classe_autorisee}**")
+            st.info(f"📌 Classe assignée (accès restreint) : **{classe_autorisee}**")
             with st.form("form_cond_prof"):
                 cls_c = classe_autorisee
                 st.write(f"**Classe concernée :** {cls_c}")
@@ -992,7 +991,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "📖 Travail fait et à faire":
             st.markdown("### Travail fait et à faire")
-            st.info(f"📌 Classe assignée de session : **{classe_autorisee}**")
+            st.info(f"📌 Classe assignée (accès restreint) : **{classe_autorisee}**")
             with st.form("form_cahier"):
                 cls_ct = classe_autorisee
                 st.write(f"**Classe concernée :** {cls_ct}")
@@ -1008,7 +1007,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "📑 Cahier de texte":
             st.markdown("### Cahier de texte")
-            st.info(f"📌 Classe assignée de session : **{classe_autorisee}**")
+            st.info(f"📌 Classe assignée (accès restreint) : **{classe_autorisee}**")
             st.caption("Ce rapport sera directement transmis à la direction et enregistré dans la base globale.")
             with st.form("form_rap_prof"):
                 cls_r = classe_autorisee
