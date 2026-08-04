@@ -1799,4 +1799,4 @@ elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
             data=pdf_gen,
             file_name=f"rapport_general_cpnm_{datetime.today().strftime('%Y%m%d')}.pdf",
             mime="application/pdf"
-        )s
+        )
