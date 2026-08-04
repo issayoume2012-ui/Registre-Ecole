@@ -1646,7 +1646,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                                 "Classe": row_ed.get("Classe", ""),
                                 "Photo": None
                             }])
-                            st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, nouv_ L], ignore_index=True)
+                            st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, nouv_L], ignore_index=True)
                     
                     sauvegarder_donnees_externes()
                     st.success("Synchronisation des listes par niveau effectuée et enregistrée avec succès dans SQLite !")
