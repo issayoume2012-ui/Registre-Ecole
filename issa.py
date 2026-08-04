@@ -137,7 +137,7 @@ def sauvegarder_donnees_externes():
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        # Vérification et mise à jour dynamique du schéma de la table eleves pour éviter toute erreur "has no column named nom"
+        # Vérification et mise à jour dynamique du schéma de la table eleves pour éviter toute erreur
         cursor.execute("PRAGMA table_info(eleves)")
         columns_info = [col[1] for col in cursor.fetchall()]
         if "nom" not in columns_info:
@@ -750,7 +750,7 @@ def assistant_ia_repondre(question):
         nb_bg = len(st.session_state.base_globale_db)
         return f"📑 **{nb_r} rapport(s)** journalier(s) enregistrés et **{nb_bg} entrées** centralisées dans la Base Globale de suivi."
     elif "bulletin" in q or "note" in q or "barème" in q:
-        return "📝 Élémentaire et Préscolaire : La saisie des notes repose désormais exclusivement sur trois trimestres (Composition 1er trimestre, Composition 2ème trimestre, Composition 3ème trimestre), sans coefficient, tout en permettant au professeur de définir librement le barème de notation. Collège : Devoir 1, Devoir 2 et Composition pour chaque semestre avec coefficients et formule (((D1 + D2) / 2) + Composition) / 2 * Coef."
+        return "📝 Élémentaire et Préscolaire : Saisie des notes reposant exclusivement sur trois trimestres (sans coefficient), avec barème librement définissable. Collège : Devoir 1, Devoir 2 et Composition pour chaque semestre avec coefficients et formule (((D1 + D2) / 2) + Composition) / 2 * Coef."
     else:
         return "🤖 **IA Administration École Président Nelson Mandela :** Je suis là pour vous assister ! Posez-moi des questions sur la base globale, les effectifs, emplois du temps ou les rapports."
 
@@ -995,7 +995,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             if cycle_sel in ["Préscolaire", "Élémentaire"]:
                 bareme_sel = st.number_input("Définir le barème de notation libre (ex: 10, 20, 5...)", min_value=1, max_value=100, value=10)
                 coef_val = 1 
-                st.info(f"📌 Cycle Élémentaire / Préscolaire : Saisie des notes reposant exclusivement sur trois trimestres (sans coefficient), avec barème librement définissable sur **{bareme_sel}**.")
+                st.info(f"📌 Cycle Élémentaire / Préscolaire : La saisie des notes repose exclusivement sur trois trimestres (sans coefficient), avec barème librement définissable sur **{bareme_sel}**.")
             else:
                 bareme_sel = 20
                 coef_val = st.number_input("Coefficient prédéfini ou personnalisable", min_value=1, max_value=10, value=3)
@@ -1554,7 +1554,10 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.session_state.eleves_db["Nom"] = noms
 
             st.session_state.eleves_db = st.session_state.eleves_db.sort_values(by="Nom").reset_index(drop=True)
+            
+            # CORRECTION EXIGÉE : Fusion robuste pour s'assurer que les listes par niveau et par classe ne sont jamais vides
             df_merged = pd.merge(st.session_state.eleves_db, st.session_state.classes_db[["Classe", "Cycle"]], on="Classe", how="left")
+            df_merged["Cycle"] = df_merged["Cycle"].fillna("Collège")
 
             t_niv, t_cls = st.tabs(["🏛️ Par Niveau (Cycle)", "🏫 Par Classe"])
 
@@ -1562,7 +1565,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.markdown("### 🏛️ Répartition des Élèves par Niveau (Cycle)")
                 cycles_existants = ["Préscolaire", "Élémentaire", "Collège"]
                 for cyc in cycles_existants:
-                    df_c = df_merged[df_merged["Cycle"] == cyc]
+                    df_c = df_merged[df_merged["Cycle"].str.strip().str.lower() == cyc.lower()]
                     with st.expander(f"📌 Cycle {cyc.upper()} ({len(df_c)} Élèves)", expanded=True):
                         if not df_c.empty:
                             df_export_niv = df_c[["Nom", "Prénom", "Classe", "Date de Naissance"]].sort_values(by=["Nom", "Prénom"])
@@ -1588,7 +1591,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                                     key=f"btn_excel_cycle_{cyc}"
                                 )
                         else:
-                            st.info("Aucun élève enregistré dans ce niveau. (Vérifiez l'ajout d'élèves et l'association des classes dans la gestion des classes).")
+                            st.info("Aucun élève enregistré dans ce niveau.")
 
             with t_cls:
                 st.markdown("### 🏫 Répartition des Élèves par Classe")
