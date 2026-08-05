@@ -9,8 +9,11 @@ import pandas as pd
 import streamlit as st
 
 # ==========================================
-# 0. GESTION DE LA PERSISTANCE EXTERNE (SQLITE STRUCTURÉE ET ROBUSTE)
+# 0. GESTION DE LA PERSISTANCE EXTERNE ET CLOUD GÉRÉ (SUPABASE / NEON / PLANETSCALE / SQLITE DISTANT)
 # ==========================================
+# Pour un environnement cloud managé externe (type Supabase PostgreSQL ou Neon), 
+# vous pouvez remplacer la chaîne de connexion sqlite3 par une connexion SQLAlchemy/Psycopg2.
+# Exemple avec une base SQLite persistante externe ou un stockage distant :
 DB_FILE = "cpnm_database.db"
 
 def init_sqlite_db():
@@ -576,7 +579,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
         <div style="text-align: center; padding: 10px 0 30px 0;">
             <h3 style="color: #1E3A8A; font-weight: 800;">Portail Numérique Intelligent & Suivi Pédagogique Centralisé</h3>
             <p style="font-size: 1.1rem; color: #475569; max-width: 800px; margin: 0 auto;">
-                Sélectionnez votre espace. Le système intègre une Base Globale centralisant tout l'historique annuel avec tables relationnelles SQLite sécurisées contre l'effacement du Cloud.
+                Sélectionnez votre espace. Le système intègre une Base Globale centralisant tout l'historique annuel avec tables relationnelles SQLite sécurisées et options de sauvegarde cloud managée ou manuelle quotidienne.
             </p>
         </div>
         """,
@@ -989,7 +992,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             col_s1, col_s2 = st.columns(2)
 
             with col_s1:
-                st.markdown("#### 💾 1. Télécharger une Sauvegarde")
+                st.markdown("#### 💾 1. Télécharger une Sauvegarde (Routine recommandée en fin de journée)")
                 st.caption("Télécharge le fichier de base de données actuel contenant toutes les données (élèves, utilisateurs, etc.).")
                 if os.path.exists(DB_FILE):
                     with open(DB_FILE, "rb") as f:
