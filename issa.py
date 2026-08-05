@@ -1107,7 +1107,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             cls_adm = st.selectbox("Choisir la classe", st.session_state.classes_db["Classe"].tolist(), key="adm_cls_bul")
             per_adm = st.selectbox("Choisir la période", st.session_state.periodes_db["Période"].tolist(), key="adm_per_bul")
 
-            eleves_ ds_cls = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_adm]["Nom Complet"].tolist()
+            eleves_ds_cls = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_adm]["Nom Complet"].tolist()
 
             if eleves_ds_cls:
                 st.markdown("#### 1. Télécharger le bulletin d'un élève spécifique")
