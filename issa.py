@@ -528,6 +528,13 @@ if "notes_db" not in st.session_state:
             ]
         )
 
+# Normalisation robuste pour s'assurer que la colonne "Periode" existe toujours sans KeyError
+if "Periode" not in st.session_state.notes_db.columns:
+    if "Période" in st.session_state.notes_db.columns:
+        st.session_state.notes_db = st.session_state.notes_db.rename(columns={"Période": "Periode"})
+    else:
+        st.session_state.notes_db["Periode"] = "1er Semestre"
+
 if "viescolaire_db" not in st.session_state:
     if "viescolaire_db" in saved_data:
         st.session_state.viescolaire_db = pd.DataFrame(**saved_data["viescolaire_db"])
@@ -802,7 +809,7 @@ def generer_pdf_bulletin(bul_data):
     pdf.set_font("Arial", "B", 9)
     pdf.cell(0, 5, "BILAN DE LA VIE SCOLAIRE ET DISCIPLINE", 0, 1, "L")
     pdf.set_font("Arial", "", 9)
-    pdf.cell(0, 5, f"Absences justifiées : {bul_data['abs_just']} | Absences non justifiées : {bul_data['abs_non_just']} | Retards : {bul_data['retards']} | Heures perdues : {bul_data['heures_perdues']}h", 1, 1, "L")
+    pdf.cell(0, 5, f"Absences justifiées : {bul_data['abs_just']} | Absences non justifiées : {bul_data['abs_non_just']} | Retards : {bul_data['retards']} | Heures perdues : {bul_data['retards']}h", 1, 1, "L")
     pdf.cell(0, 5, f"Observations / Appréciation générale : {bul_data['observations']}", 1, 1, "L")
     pdf.cell(0, 5, f"Décision du Conseil de Classe : {bul_data['decision']}", 1, 1, "L")
     pdf.ln(10)
