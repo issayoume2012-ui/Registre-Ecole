@@ -11,7 +11,6 @@ import streamlit as st
 
 # ==========================================
 # 0. GESTION DE LA PERSISTANCE EXTERNE, CLOUD GÉRÉ & SÉCURITÉ MOTS DE PASSE
-# (Référence : Garantie d'assurance sur le plan sécurité, pérennisation et conservation des données en cas de bug, de redémarrage ou de réinitialisation)[cite: 6]
 # ==========================================
 try:
     import bcrypt
@@ -97,7 +96,6 @@ def init_sqlite_db():
         )
     """)
 
-    # Table dédiée à la traçabilité et l'Event Sourcing (« chaque usage »)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS audit_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -127,10 +125,6 @@ def enregistrer_log_action(acteur: str, action: str, details: str):
         pass
 
 def routine_sauvegarde_automatisee_fin_journee():
-    """
-    Externalisation des Backups : Pousse réellement les fichiers de backup vers un stockage externe sécurisé 
-    (type AWS S3, Google Cloud Storage, ou Cloudflare R2).
-    """
     backup_dir = "backups_securises"
     if not os.path.exists(backup_dir):
         os.makedirs(backup_dir)
@@ -155,6 +149,27 @@ def charger_donnees_externes():
             cursor = conn.cursor()
             cursor.execute("SELECT key, value FROM app_data")
             rows = cursor.fetchall()
+            
+            # Synchronisation croisée avec les tables relationnelles dédiées si les clés JSON manquent
+            cursor.execute("SELECT prenom, nom, date_naissance, classe, photo FROM eleves")
+            eleves_rows = cursor.fetchall()
+            if eleves_rows:
+                eleves_list = []
+                for r in eleves_rows:
+                    p, n, dn, cl, ph = r
+                    nom_complet = f"{p} {n}".strip() if p or n else ""
+                    eleves_list.append({"Nom Complet": nom_complet, "Prénom": p or "", "Nom": n or "", "Date de Naissance": dn or "", "Classe": cl or "", "Photo": ph})
+                data["eleves_db_sql"] = pd.DataFrame(eleves_list).to_dict(orient="split")
+
+            cursor.execute("SELECT prenom, nom, matiere_principale, classe_attribuee, mot_de_passe FROM professeurs")
+            prof_rows = cursor.fetchall()
+            if prof_rows:
+                prof_list = []
+                for r in prof_rows:
+                    pr, no, mat, cla, pwd = r
+                    prof_list.append({"Nom": no or "", "Prénom": pr or "", "Mot de passe": pwd or "", "Matière Principale": mat or "", "Classe Attribuée": cla or ""})
+                data["prof_credentials_sql"] = pd.DataFrame(prof_list).to_dict(orient="split")
+
             conn.close()
             for key, val_json in rows:
                 data[key] = json.loads(val_json)
@@ -165,16 +180,20 @@ def charger_donnees_externes():
 def sauvegarder_donnees_externes(action_label="SAUVEGARDE_DONNEES"):
     """Sauvegarde toutes les bases de données de session dans la base SQLite externe et trace l'action."""
     if "eleves_db" in st.session_state and not st.session_state.eleves_db.empty:
-        if "Prénom" not in st.session_state.eleves_db.columns or "Nom" not in st.session_state.eleves_db.columns:
-            prenoms = []
-            noms = []
-            for _, r in st.session_state.eleves_db.iterrows():
+        prenoms = []
+        noms = []
+        for _, r in st.session_state.eleves_db.iterrows():
+            if "Prénom" in st.session_state.eleves_db.columns and "Nom" in st.session_state.eleves_db.columns:
+                prenoms.append(str(r.get("Prénom", "")))
+                noms.append(str(r.get("Nom", "")))
+            else:
                 nc = str(r.get("Nom Complet", ""))
                 parts = nc.split(" ", 1)
                 prenoms.append(parts[0] if len(parts) > 0 else "")
                 noms.append(parts[1] if len(parts) > 1 else "")
-            st.session_state.eleves_db["Prénom"] = prenoms
-            st.session_state.eleves_db["Nom"] = noms
+        st.session_state.eleves_db["Prénom"] = prenoms
+        st.session_state.eleves_db["Nom"] = noms
+        st.session_state.eleves_db["Nom Complet"] = [f"{p} {n}".strip() for p, n in zip(prenoms, noms)]
 
     data_to_save = {
         "admin_credentials": st.session_state.admin_credentials.to_dict(orient="split"),
@@ -202,19 +221,6 @@ def sauvegarder_donnees_externes(action_label="SAUVEGARDE_DONNEES"):
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        cursor.execute("PRAGMA table_info(eleves)")
-        columns_info = [col[1] for col in cursor.fetchall()]
-        if "nom" not in columns_info:
-            cursor.execute("ALTER TABLE eleves ADD COLUMN nom TEXT")
-        if "prenom" not in columns_info:
-            cursor.execute("ALTER TABLE eleves ADD COLUMN prenom TEXT")
-        if "date_naissance" not in columns_info:
-            cursor.execute("ALTER TABLE eleves ADD COLUMN date_naissance TEXT")
-        if "classe" not in columns_info:
-            cursor.execute("ALTER TABLE eleves ADD COLUMN classe TEXT")
-        if "photo" not in columns_info:
-            cursor.execute("ALTER TABLE eleves ADD COLUMN photo TEXT")
-
         for key, value in data_to_save.items():
             cursor.execute("""
                 INSERT INTO app_data (key, value) VALUES (?, ?)
@@ -343,7 +349,7 @@ st.markdown(
 )
 
 # ==========================================
-# 2. INITIALISATION EXHAUSTIVE DES DONNÉES
+# 2. INITIALISATION EXHAUSTIVE DES DONNÉES & SYNCHRONISATION SESSION
 # ==========================================
 if "espace_actif" not in st.session_state:
     st.session_state.espace_actif = "🏠 Accueil"
@@ -352,10 +358,7 @@ if "authenticated_admin" not in st.session_state:
     st.session_state.authenticated_admin = False
 
 if "edt_documents" not in st.session_state:
-    if "edt_documents" in saved_data:
-        st.session_state.edt_documents = saved_data["edt_documents"]
-    else:
-        st.session_state.edt_documents = {}
+    st.session_state.edt_documents = saved_data.get("edt_documents", {})
 
 if "admin_credentials" not in st.session_state:
     if "admin_credentials" in saved_data:
@@ -396,6 +399,8 @@ if "prof_white_list" not in st.session_state:
 if "prof_credentials" not in st.session_state:
     if "prof_credentials" in saved_data:
         st.session_state.prof_credentials = pd.DataFrame(**saved_data["prof_credentials"])
+    elif "prof_credentials_sql" in saved_data:
+        st.session_state.prof_credentials = pd.DataFrame(**saved_data["prof_credentials_sql"])
     else:
         st.session_state.prof_credentials = pd.DataFrame([
             {"Nom": "Diallo", "Prénom": "Ibrahima", "Mot de passe": hacher_mot_de_passe("prof123"), "Matière Principale": "Mathématiques", "Classe Attribuée": "6ème A"},
@@ -435,6 +440,8 @@ if "classes_db" not in st.session_state:
 if "eleves_db" not in st.session_state:
     if "eleves_db" in saved_data:
         st.session_state.eleves_db = pd.DataFrame(**saved_data["eleves_db"])
+    elif "eleves_db_sql" in saved_data:
+        st.session_state.eleves_db = pd.DataFrame(**saved_data["eleves_db_sql"])
     else:
         st.session_state.eleves_db = pd.DataFrame(
             columns=["Nom Complet", "Prénom", "Nom", "Date de Naissance", "Classe", "Photo"],
@@ -1342,14 +1349,10 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             if uploaded_backup is not None:
                 if st.button("⚠️ Confirmer et restaurer cette base de données"):
                     try:
-                        # Écrasement sécurisé du fichier SQLite local
                         with open(DB_FILE, "wb") as f_out:
                             f_out.write(uploaded_backup.getbuffer())
                         
-                        # Synchronisation post-restauration : rechargement complet des données en mémoire
                         saved_data = charger_donnees_externes()
-                        
-                        # Réinitialisation stricte des états de session pour éviter les données obsolètes (Split-Brain)
                         st.session_state.clear()
                         st.session_state.espace_actif = "🔒 Espace Administration (Sécurisé)"
                         st.session_state.authenticated_admin = True
@@ -1384,7 +1387,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.markdown("#### Administrateurs Autorisés & Définition de Mot de Passe")
                 st.info("Vous pouvez modifier ci-dessous les informations des administrateurs. Pour définir ou modifier un mot de passe d'accès, saisissez le nouveau mot de passe souhaité dans la colonne dédiée.")
                 
-                # Interface dédiée pour définir/modifier un mot de passe administrateur proprement
                 with st.form("form_nouveau_mdp_admin"):
                     st.markdown("##### 🔑 Ajouter ou Mettre à Jour un Administrateur / Définir son Mot de Passe")
                     adm_nouveau_email = st.text_input("E-mail de l'administrateur", value="nouveau.admin@cpnm.sn")
@@ -1397,7 +1399,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     if btn_ajout_admin:
                         if adm_nouveau_email and adm_nouveau_pass_clair:
                             pwd_hache = hacher_mot_de_passe(adm_nouveau_pass_clair)
-                            # Vérifier si l'email existe déjà pour le mettre à jour, sinon l'ajouter
                             df_adm = st.session_state.admin_white_list.copy()
                             existing_idx = df_adm[df_adm["Email"].str.strip().str.lower() == adm_nouveau_email.strip().lower()].index
                             
@@ -1429,7 +1430,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.markdown("#### Liste Actuelle des Administrateurs Autorisés")
                 edited_admin_wl = st.data_editor(st.session_state.admin_white_list, num_rows="dynamic", use_container_width=True, key="ed_admin_wl")
                 
-                # Vérification de l'intégrité de l'adresse principale de l'ayant droit dans la liste modifiée
                 has_principal = any(str(r.get("Email", "")).strip().lower() == ADMIN_EMAIL.lower() for _, r in edited_admin_wl.iterrows())
                 if not has_principal:
                     st.warning(f"⚠️ L'adresse principale obligatoire ({ADMIN_EMAIL}) a été retirée. Elle est automatiquement réintégrée pour préserver les droits de l'ayant droit.")
