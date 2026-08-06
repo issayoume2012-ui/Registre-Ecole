@@ -41,7 +41,7 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
 def init_sqlite_db():
-    """Initialise la base de données SQLite avec de vraies tables relationnelles structurées et la table d'audit log (Event Sourcing)."""
+    """Initialise la base de données SQLite avec de vraies tables relationnelles structurées et gère les migrations de colonnes."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     
@@ -74,6 +74,30 @@ def init_sqlite_db():
             mot_de_passe TEXT
         )
     """)
+    
+    # Migration sécurisée : vérifie si la colonne 'email' existe dans 'professeurs' (pour les bases existantes)
+    cursor.execute("PRAGMA table_info(professeurs)")
+    colonnes_prof = [col[1] for col in cursor.fetchall()]
+    if "email" not in colonnes_prof:
+        try:
+            cursor.execute("ALTER TABLE professeurs ADD COLUMN email TEXT")
+        except Exception:
+            pass
+    if "matiere_principale" not in colonnes_prof:
+        try:
+            cursor.execute("ALTER TABLE professeurs ADD COLUMN matiere_principale TEXT")
+        except Exception:
+            pass
+    if "classe_attribuee" not in colonnes_prof:
+        try:
+            cursor.execute("ALTER TABLE professeurs ADD COLUMN classe_attribuee TEXT")
+        except Exception:
+            pass
+    if "mot_de_passe" not in colonnes_prof:
+        try:
+            cursor.execute("ALTER TABLE professeurs ADD COLUMN mot_de_passe TEXT")
+        except Exception:
+            pass
     
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS absences (
@@ -528,6 +552,7 @@ if "notes_db" not in st.session_state:
             ]
         )
 
+# Normalisation robuste pour s'assurer que la colonne "Periode" existe toujours sans KeyError
 if "Periode" not in st.session_state.notes_db.columns:
     if "Période" in st.session_state.notes_db.columns:
         st.session_state.notes_db = st.session_state.notes_db.rename(columns={"Période": "Periode"})
