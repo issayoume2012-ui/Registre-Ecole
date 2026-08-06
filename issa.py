@@ -198,7 +198,6 @@ def sauvegarder_donnees_externes(action_label="SAUVEGARDE_DONNEES"):
         st.session_state.eleves_db["Nom"] = noms
         st.session_state.eleves_db["Nom Complet"] = [f"{p} {n}".strip() for p, n in zip(prenoms, noms)]
 
-    # Synchronisation et harmonisation automatique des listes de profs
     if "prof_credentials" in st.session_state and not st.session_state.prof_credentials.empty:
         sync_wl_list = []
         for _, r in st.session_state.prof_credentials.iterrows():
@@ -412,7 +411,6 @@ if "prof_credentials" not in st.session_state:
             {"Nom": "Ndiaye", "Prénom": "Cheikh", "Email": "c.ndiaye@cpnm.sn", "Mot de passe": hacher_mot_de_passe("prof789"), "Matière Principale": "Histoire-Géographie", "Classe Attribuée": "5ème A"}
         ])
 
-# FUSION ET HARMONISATION AUTOMATIQUE DE LA LISTE BLANCHE DES PROFS DEPUIS LES CREDENTIALS
 if "prof_white_list" not in st.session_state:
     if "prof_white_list" in saved_data:
         st.session_state.prof_white_list = pd.DataFrame(**saved_data["prof_white_list"])
@@ -1041,7 +1039,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 
                 input_val = p_email_or_name.strip().lower()
 
-                # Validation conjointe Base Professeurs & Liste Blanche Professeurs
                 for _, row in st.session_state.prof_credentials.iterrows():
                     db_email = str(row.get("Email", "")).strip().lower()
                     db_nom = str(row.get("Nom", "")).strip().lower()
@@ -1059,7 +1056,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             nom_complet_prof = f"{row.get('Prénom', '')} {row.get('Nom', '')}".strip()
                             break
                 
-                # Vérification de secours via la liste blanche des profs si non trouvé dans credentials
                 if not match_prof and "prof_white_list" in st.session_state:
                     for _, row in st.session_state.prof_white_list.iterrows():
                         db_email = str(row.get("Email", "")).strip().lower()
@@ -1114,7 +1110,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         st.markdown("---")
         
-        # Navigation unifiée et harmonisée pour le professeur
         menu_prof = st.radio(
             "Navigation Espace Professeur :", 
             [
@@ -1137,16 +1132,16 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             else:
                 col_sp1, col_sp2, col_sp3 = st.columns(3)
                 with col_sp1:
-                    periode_sel = st.selectbox("Période active", periodes_possibles)
+                    periode_sel = st.selectbox("Période active", periodes_possibles, key="prof_per_sel")
                 with col_sp2:
                     matieres_possibles = st.session_state.coefficients_db[st.session_state.coefficients_db["Classe"] == classe_autorisee]["Matière"].tolist()
                     if not matieres_possibles:
                         matieres_possibles = [matiere_principale, "Français"]
                     
                     default_idx = matieres_possibles.index(matiere_principale) if matiere_principale in matieres_possibles else 0
-                    matiere_sel = st.selectbox("Matière enseignée", matieres_possibles, index=default_idx)
+                    matiere_sel = st.selectbox("Matière enseignée", matieres_possibles, index=default_idx, key="prof_mat_sel")
                 with col_sp3:
-                    bareme_sel = st.number_input("Barème de notation", min_value=5, max_value=100, value=20)
+                    bareme_sel = st.number_input("Barème de notation", min_value=5, max_value=100, value=20, key="prof_bar_sel")
 
                 eleves_classe = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == classe_autorisee]["Nom Complet"].tolist()
 
@@ -1169,7 +1164,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         with h_col4: st.markdown("**Composition**")
                         st.markdown("<hr style='margin: 5px 0 15px 0;'>", unsafe_allow_html=True)
 
-                        for el in eleves_classe:
+                        for idx_el, el in enumerate(eleves_classe):
                             ex_row = notes_actuelles[notes_actuelles["Eleve"] == el]
                             d1_val = float(ex_row.iloc[0]["Devoir1"]) if not ex_row.empty and not pd.isna(ex_row.iloc[0]["Devoir1"]) else 0.0
                             d2_val = float(ex_row.iloc[0]["Devoir2"]) if not ex_row.empty and not pd.isna(ex_row.iloc[0]["Devoir2"]) else 0.0
@@ -1179,11 +1174,11 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             with col_e1:
                                 st.write(f"👤 {el}")
                             with col_e2:
-                                nd1 = st.number_input(f"D1 {el}", 0.0, float(bareme_sel), d1_val, key=f"d1_{el}", label_visibility="collapsed")
+                                nd1 = st.number_input(f"D1 {el}", 0.0, float(bareme_sel), d1_val, key=f"d1_{classe_autorisee}_{matiere_sel}_{periode_sel}_{idx_el}", label_visibility="collapsed")
                             with col_e3:
-                                nd2 = st.number_input(f"D2 {el}", 0.0, float(bareme_sel), d2_val, key=f"d2_{el}", label_visibility="collapsed")
+                                nd2 = st.number_input(f"D2 {el}", 0.0, float(bareme_sel), d2_val, key=f"d2_{classe_autorisee}_{matiere_sel}_{periode_sel}_{idx_el}", label_visibility="collapsed")
                             with col_e4:
-                                ncomp = st.number_input(f"Comp {el}", 0.0, float(bareme_sel), comp_val, key=f"comp_{el}", label_visibility="collapsed")
+                                ncomp = st.number_input(f"Comp {el}", 0.0, float(bareme_sel), comp_val, key=f"comp_{classe_autorisee}_{matiere_sel}_{periode_sel}_{idx_el}", label_visibility="collapsed")
 
                             d1_20 = convertir_sur_20(nd1, bareme_sel)
                             d2_20 = convertir_sur_20(nd2, bareme_sel)
@@ -1230,12 +1225,12 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                     st.markdown("#### Pointage des Élèves")
                     with st.form("form_appel_harmonise"):
                         res_appel = {}
-                        for el in eleves_cibles:
+                        for idx_el, el in enumerate(eleves_cibles):
                             c1, c2 = st.columns([3, 3])
                             with c1: 
                                 st.write(f"👤 {el}")
                             with c2: 
-                                res_appel[el] = st.radio("Statut", ["Présent", "Absent", "Retard"], key=f"st_{el}", horizontal=True, label_visibility="collapsed")
+                                res_appel[el] = st.radio("Statut", ["Présent", "Absent", "Retard"], key=f"st_{classe_autorisee}_{idx_el}", horizontal=True, label_visibility="collapsed")
                         
                         st.markdown("<br>", unsafe_allow_html=True)
                         if st.form_submit_button("✅ Valider l'Appel Journalier"):
@@ -1269,21 +1264,21 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 
                 col_vs_1, col_vs_2 = st.columns(2)
                 with col_vs_1:
-                    periode_vs = st.selectbox("Période de vie scolaire", periodes_vs_possibles)
+                    periode_vs = st.selectbox("Période de vie scolaire", periodes_vs_possibles, key="vs_per_prof")
                 with col_vs_2:
-                    el_vs = st.selectbox("Sélectionner l'élève", eleves_vs)
+                    el_vs = st.selectbox("Sélectionner l'élève", eleves_vs, key="vs_el_prof")
 
                 with st.form("form_viescolaire_prof_harmonise"):
                     c_vs1, c_vs2, c_vs3, c_vs4 = st.columns(4)
-                    with c_vs1: abs_j = st.number_input("Absences justifiées", 0, 50, 0)
-                    with c_vs2: abs_nj = st.number_input("Absences non justifiées", 0, 50, 0)
-                    with c_vs3: ret = st.number_input("Retards", 0, 50, 0)
-                    with c_vs4: hp = st.number_input("Heures perdues", 0, 100, 0)
+                    with c_vs1: abs_j = st.number_input("Absences justifiées", 0, 50, 0, key="prof_abs_j")
+                    with c_vs2: abs_nj = st.number_input("Absences non justifiées", 0, 50, 0, key="prof_abs_nj")
+                    with c_vs3: ret = st.number_input("Retards", 0, 50, 0, key="prof_ret")
+                    with c_vs4: hp = st.number_input("Heures perdues", 0, 100, 0, key="prof_hp")
 
-                    obs = st.text_area("Observations personnalisées sur l'élève")
+                    obs = st.text_area("Observations personnalisées sur l'élève", key="prof_obs_vs")
                     decision = st.selectbox("Proposition de décision / Sanction", [
                         "Félicitations", "Tableau d'honneur", "Encouragements", "Avertissement travail", "Avertissement conduite", "Blâme"
-                    ])
+                    ], key="prof_dec_vs")
 
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.form_submit_button("💾 Enregistrer le Suivi de Vie Scolaire"):
@@ -1319,12 +1314,12 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             with st.form("form_cahier_harmonise"):
                 col_ct1, col_ct2 = st.columns(2)
                 with col_ct1:
-                    mat_ct = st.text_input("Matière enseignée", value=matiere_principale)
+                    mat_ct = st.text_input("Matière enseignée", value=matiere_principale, key="prof_mat_ct")
                 with col_ct2:
-                    date_ct = st.date_input("Date de la séance", value=datetime.today())
+                    date_ct = st.date_input("Date de la séance", value=datetime.today(), key="prof_date_ct")
 
-                contenu = st.text_area("Contenu détaillé de la séance / Leçon du jour")
-                travail = st.text_area("Travail à faire pour la prochaine séance")
+                contenu = st.text_area("Contenu détaillé de la séance / Leçon du jour", key="prof_cont_ct")
+                travail = st.text_area("Travail à faire pour la prochaine séance", key="prof_trav_ct")
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.form_submit_button("📢 Publier dans le Cahier de Texte"):
@@ -1401,7 +1396,7 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
         st.subheader("📊 Consultation des Notes et Bulletins")
         
         periodes_parent = obtenir_periodes_pour_classe(classe)
-        periode_consult = st.selectbox("Choisir la période", periodes_parent)
+        periode_consult = st.selectbox("Choisir la période", periodes_parent, key="par_per_sel")
 
         bul_el = calculer_bulletin_eleve(classe, eleve, periode_consult)
         
@@ -1563,7 +1558,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 
                 if not edited_prof_merged.equals(st.session_state.prof_credentials):
                     st.session_state.prof_credentials = edited_prof_merged
-                    # Synchronisation automatique de la liste blanche des profs associée
                     sync_wl_list = []
                     for _, r in edited_prof_merged.iterrows():
                         sync_wl_list.append({
@@ -1659,318 +1653,193 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             "Appréciation": bg_appreciation
                         }])
                         st.session_state.base_globale_db = pd.concat([st.session_state.base_globale_db, new_row_bg], ignore_index=True)
-                        sauvegarder_donnees_externes("MAJ_BASE_GLOBALE")
-                        enregistrer_log_action(ADMIN_EMAIL, "BASE_GLOBALE", "Ajout d'une entrée manuelle")
-                        st.success("Entrée ajoutée avec succès à la base globale et synchronisée !")
+                        sauvegarder_donnees_externes("AJOUT_BASE_GLOBALE")
+                        st.success("Entrée ajoutée à la base globale avec succès !")
 
             st.markdown("---")
-            st.markdown("#### 🔍 Filtres de Suivi (Annuel, Trimestriel, Mensuel)")
+            st.markdown("#### 🔍 Filtres et Consultation de la Base Globale")
+            df_bg = st.session_state.base_globale_db
+            if not df_bg.empty:
+                col_f1, col_f2 = st.columns(2)
+                with col_f1:
+                    filtre_type = st.selectbox("Filtrer par Type d'Entrée", ["Tous"] + df_bg["Type Entrée"].unique().tolist())
+                with col_f2:
+                    filtre_cls = st.selectbox("Filtrer par Classe", ["Toutes"] + df_bg["Classe"].unique().tolist())
 
-            if not st.session_state.base_globale_db.empty:
-                df_bg = st.session_state.base_globale_db.copy()
+                df_affichee = df_bg.copy()
+                if filtre_type != "Tous":
+                    df_affichee = df_affichee[df_affichee["Type Entrée"] == filtre_type]
+                if filtre_cls != "Toutes":
+                    df_affichee = df_affichee[df_affichee["Classe"] == filtre_cls]
 
-                col_bg1, col_bg2, col_bg3 = st.columns(3)
-                with col_bg1:
-                    annees_disp = ["Toutes"] + sorted(list(df_bg["Année"].dropna().unique()))
-                    f_annee = st.selectbox("Filtrer par Année", annees_disp)
-                with col_bg2:
-                    trims_disp = ["Toutes"] + sorted(list(df_bg["Trimestre"].dropna().unique()))
-                    f_trim = st.selectbox("Filtrer par Trimestre", trims_disp)
-                with col_bg3:
-                    mois_disp = ["Tous"] + sorted(list(df_bg["Mois"].dropna().unique()))
-                    f_mois = st.selectbox("Filtrer par Mois", mois_disp)
+                st.dataframe(df_affichee, use_container_width=True)
 
-                if f_annee != "Toutes":
-                    df_bg = df_bg[df_bg["Année"] == f_annee]
-                if f_trim != "Toutes":
-                    df_bg = df_bg[df_bg["Trimestre"] == f_trim]
-                if f_mois != "Tous":
-                    df_bg = df_bg[df_bg["Mois"] == f_mois]
-
-                st.metric("Nombre d'enregistrements filtrés", len(df_bg))
-                
-                edited_bg = st.data_editor(df_bg, num_rows="dynamic", use_container_width=True, key="editor_base_globale")
-                if not edited_bg.equals(df_bg):
-                    st.session_state.base_globale_db = edited_bg
-                    sauvegarder_donnees_externes("MAJ_BASE_GLOBALE_EDIT")
-                    st.success("Base globale mise à jour !")
-
-                st.markdown("---")
-                st.markdown("#### 📥 Téléchargement de la Base Globale (PDF & Excel)")
-
-                col_dl_bg1, col_dl_bg2 = st.columns(2)
-                with col_dl_bg1:
-                    pdf_bg = FPDF(orientation='L', unit='mm', format='A4')
-                    pdf_bg.add_page()
-                    pdf_bg.set_font("Arial", "B", 12)
-                    pdf_bg.cell(0, 6, "ÉCOLE PRÉSIDENT NELSON MANDELA - BASE GLOBALE & SUIVI", 0, 1, "C")
-                    pdf_bg.set_font("Arial", "", 9)
-                    pdf_bg.cell(0, 5, f"Contact : {ADMIN_EMAIL} | Filtres - Année: {f_annee} | Trimestre: {f_trim} | Mois: {f_mois}", 0, 1, "C")
-                    pdf_bg.line(10, 22, 287, 22)
-                    pdf_bg.ln(5)
-
-                    pdf_bg.set_font("Arial", "B", 8)
-                    pdf_bg.set_fill_color(30, 58, 138)
-                    pdf_bg.set_text_color(255, 255, 255)
-
-                    bg_widths = [22, 22, 35, 25, 25, 35, 22, 30, 40]
-                    bg_headers = ["Date", "Année", "Trimestre", "Mois", "Acteur", "Nom", "Classe", "Type", "Détail"]
-
-                    for i, h in enumerate(bg_headers):
-                        pdf_bg.cell(bg_widths[i], 7, h, 1, 0, "C", True)
-                    pdf_bg.ln()
-
-                    pdf_bg.set_font("Arial", "", 7)
-                    pdf_bg.set_text_color(0, 0, 0)
-                    fill_bg = False
-                    pdf_bg.set_fill_color(240, 244, 248)
-
-                    for _, r in edited_bg.iterrows():
-                        pdf_bg.cell(bg_widths[0], 6, str(r.get("Date", ""))[:10], 1, 0, "C", fill_bg)
-                        pdf_bg.cell(bg_widths[1], 6, str(r.get("Année", ""))[:10], 1, 0, "C", fill_bg)
-                        pdf_bg.cell(bg_widths[2], 6, str(r.get("Trimestre", ""))[:15], 1, 0, "C", fill_bg)
-                        pdf_bg.cell(bg_widths[3], 6, str(r.get("Mois", ""))[:12], 1, 0, "C", fill_bg)
-                        pdf_bg.cell(bg_widths[4], 6, str(r.get("Type Acteur", ""))[:12], 1, 0, "C", fill_bg)
-                        pdf_bg.cell(bg_widths[5], 6, str(r.get("Nom Acteur", ""))[:15], 1, 0, "L", fill_bg)
-                        pdf_bg.cell(bg_widths[6], 6, str(r.get("Classe", ""))[:10], 1, 0, "C", fill_bg)
-                        pdf_bg.cell(bg_widths[7], 6, str(r.get("Type Entrée", ""))[:15], 1, 0, "C", fill_bg)
-                        pdf_bg.cell(bg_widths[8], 6, str(r.get("Détail / Contenu", ""))[:20], 1, 0, "L", fill_bg)
-                        pdf_bg.ln()
-                        fill_bg = not fill_bg
-
-                    pdf_bg_bytes = bytes(pdf_bg.output())
-                    st.download_button(
-                        label="📄 Télécharger la Base Globale en PDF",
-                        data=pdf_bg_bytes,
-                        file_name="base_globale_suivi.pdf",
-                        mime="application/pdf"
-                    )
-
-                with col_dl_bg2:
-                    excel_bg_bytes = export_table_excel(edited_bg, "base_globale.xlsx")
-                    st.download_button(
-                        label="📊 Télécharger la Base Globale en Excel",
-                        data=excel_bg_bytes,
-                        file_name="base_globale_suivi.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+                excel_bg = export_table_excel(df_affichee, "base_globale.xlsx")
+                st.download_button(
+                    label="📥 Télécharger la Base Globale (Excel)",
+                    data=excel_bg,
+                    file_name="base_globale_cpnm.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
             else:
-                st.info("Aucune donnée enregistrée dans la base globale pour le moment.")
+                st.info("Aucune donnée enregistrée dans la base globale.")
 
         elif adm_tab == "📑 Bulletins & Téléchargement PDF (Classe & Élèves)":
-            st.subheader("📑 Génération et Téléchargement des Bulletins en PDF")
+            st.subheader("📑 Édition et Téléchargement des Bulletins (PDF)")
             
-            cls_adm = st.selectbox("Choisir la classe", st.session_state.classes_db["Classe"].tolist(), key="adm_cls_bul")
-            
-            periodes_adm = obtenir_periodes_pour_classe(cls_adm)
-            per_adm = st.selectbox("Choisir la période", periodes_adm, key="adm_per_bul")
+            classes_bul = st.session_state.classes_db["Classe"].tolist()
+            if classes_bul:
+                c_sel_bul = st.selectbox("Sélectionner la classe", classes_bul, key="bul_adm_cls")
+                periodes_bul = obtenir_periodes_pour_classe(c_sel_bul)
+                p_sel_bul = st.selectbox("Sélectionner la période", periodes_bul, key="bul_adm_per")
 
-            eleves_ds_cls = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_adm]["Nom Complet"].tolist()
+                eleves_bul_list = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == c_sel_bul]["Nom Complet"].tolist()
 
-            if eleves_ds_cls:
-                st.markdown("#### 1. Télécharger le bulletin d'un élève spécifique")
-                el_specifique = st.selectbox("Choisir l'élève", eleves_ds_cls)
-                if st.button("📄 Générer le bulletin PDF de l'élève"):
-                    bul_spec = calculer_bulletin_eleve(cls_adm, el_specifique, per_adm)
-                    pdf_bytes_el = generer_pdf_bulletin(bul_spec)
-                    st.download_button(
-                        label=f"📥 Télécharger le bulletin de {el_specifique} (PDF)",
-                        data=pdf_bytes_el,
-                        file_name=f"bulletin_{el_specifique.replace(' ', '_')}.pdf",
-                        mime="application/pdf"
-                    )
-
-                st.markdown("---")
-                st.markdown("#### 2. Télécharger les bulletins de toute la classe")
-                if st.button("📦 Générer les bulletins de tous les élèves de la classe"):
-                    pdf_all = FPDF()
-                    for el in eleves_ds_cls:
-                        bul_e = calculer_bulletin_eleve(cls_adm, el, per_adm)
-                        pdf_all.add_page()
-                        pdf_all.set_font("Arial", "B", 12)
-                        pdf_all.cell(0, 6, f"BULLETIN DE NOTES - {per_adm.upper()}", 0, 1, "C")
-                        pdf_all.set_font("Arial", "B", 10)
-                        pdf_all.cell(100, 6, f"Élève : {bul_e['eleve']}", 0, 0, "L")
-                        pdf_all.cell(90, 6, f"Classe : {bul_e['classe']}", 0, 1, "R")
-                        pdf_all.cell(100, 6, f"Moyenne Générale : {bul_e['moyenne_generale']} / 20", 0, 0, "L")
-                        pdf_all.cell(90, 6, f"Rang : {bul_e['rang']}", 0, 1, "R")
-                        pdf_all.ln(5)
+                if eleves_bul_list:
+                    el_sel_bul = st.selectbox("Sélectionner l'élève", eleves_bul_list, key="bul_adm_el")
+                    
+                    if st.button("Générer et Prévisualiser le Bulletin"):
+                        bul_gen = calculer_bulletin_eleve(c_sel_bul, el_sel_bul, p_sel_bul)
+                        st.markdown(f"#### Aperçu : {el_sel_bul} | Moyenne Générale : **{bul_gen['moyenne_generale']} / 20** | Rang : **{bul_gen['rang']}**")
                         
-                        pdf_all.set_font("Arial", "B", 9)
-                        pdf_all.cell(80, 6, "Matière", 1, 0, "C", True)
-                        pdf_all.cell(20, 6, "Coef", 1, 0, "C", True)
-                        pdf_all.cell(30, 6, "Moyenne", 1, 0, "C", True)
-                        pdf_all.cell(60, 6, "Appréciation", 1, 1, "C", True)
-                        
-                        pdf_all.set_font("Arial", "", 9)
-                        for lig in bul_e["lignes"]:
-                            pdf_all.cell(80, 6, str(lig["Matiere"]), 1, 0, "L")
-                            pdf_all.cell(20, 6, str(lig["Coefficient"]), 1, 0, "C")
-                            pdf_all.cell(30, 6, str(lig["MoyenneMatiere"]), 1, 0, "C")
-                            pdf_all.cell(60, 6, str(lig["Appreciation"]), 1, 1, "C")
-
-                    pdf_bytes_all = bytes(pdf_all.output())
-                    st.download_button(
-                        label=f"📥 Télécharger tous les bulletins de la classe {cls_adm} (PDF)",
-                        data=pdf_bytes_all,
-                        file_name=f"bulletins_classe_{cls_adm.replace(' ', '_')}.pdf",
-                        mime="application/pdf"
-                    )
+                        pdf_bytes = generer_pdf_bulletin(bul_gen)
+                        st.download_button(
+                            label="📥 Télécharger ce Bulletin (PDF)",
+                            data=pdf_bytes,
+                            file_name=f"bulletin_{el_sel_bul.replace(' ', '_')}_{p_sel_bul.replace(' ', '_')}.pdf",
+                            mime="application/pdf"
+                        )
+                else:
+                    st.warning("Aucun élève trouvé dans cette classe.")
             else:
-                st.warning("Aucun élève dans cette classe.")
+                st.warning("Aucune classe configurée.")
 
         elif adm_tab == "📊 Statistiques de Classe & Classement Général":
-            st.subheader("📊 Statistiques de Classe & Ordre de Mérite")
-            cls_stat = st.selectbox("Classe", st.session_state.classes_db["Classe"].tolist(), key="stat_cls")
+            st.subheader("📊 Statistiques de Classe & Classement Général")
             
-            periodes_stat = obtenir_periodes_pour_classe(cls_stat)
-            per_stat = st.selectbox("Période", periodes_stat, key="stat_per")
+            classes_stat = st.session_state.classes_db["Classe"].tolist()
+            if classes_stat:
+                cls_st = st.selectbox("Classe à analyser", classes_stat, key="stat_cls")
+                pers_st = obtenir_periodes_pour_classe(cls_st)
+                per_st = st.selectbox("Période d'analyse", pers_st, key="stat_per")
 
-            eleves_st = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_stat]["Nom Complet"].tolist()
-            if eleves_st:
-                recap_classe = []
-                for el in eleves_st:
-                    b_info = calculer_bulletin_eleve(cls_stat, el, per_stat)
-                    recap_classe.append({
-                        "Élève": el,
-                        "Moyenne Générale": b_info["moyenne_generale"],
-                        "Rang": b_info["rang"],
-                        "Décision": b_info["decision"]
-                    })
-                df_recap = pd.DataFrame(recap_classe).sort_values(by="Moyenne Générale", ascending=False).reset_index(drop=True)
+                eleves_st = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_st]["Nom Complet"].tolist()
                 
-                moy_classes = df_recap["Moyenne Générale"].tolist()
-                meilleure = max(moy_classes) if moy_classes else 0.0
-                plus_faible = min(moy_classes) if moy_classes else 0.0
-                moy_gen_classe = round(sum(moy_classes) / len(moy_classes), 2) if moy_classes else 0.0
+                if eleves_st:
+                    classement_data = []
+                    for el in eleves_st:
+                        b_data = calculer_bulletin_eleve(cls_st, el, per_st)
+                        classement_data.append({
+                            "Élève": el,
+                            "Moyenne Générale": b_data["moyenne_generale"],
+                            "Rang": b_data["rang"],
+                            "Décision": b_data["decision"]
+                        })
+                    
+                    df_classement = pd.DataFrame(classement_data)
+                    df_classement = df_classement.sort_values(by="Moyenne Générale", ascending=False).reset_index(drop=True)
+                    
+                    st.markdown(f"#### Classement Général de la classe : **{cls_st}** ({per_st})")
+                    st.dataframe(df_classement, use_container_width=True)
 
-                c_k1, c_k2, c_k3 = st.columns(3)
-                with c_k1: st.metric("Moyenne Générale de la Classe", f"{moy_gen_classe} / 20")
-                with c_k2: st.metric("Meilleure Moyenne", f"{meilleure} / 20")
-                with c_k3: st.metric("Plus Faible Moyenne", f"{plus_faible} / 20")
-
-                st.markdown("#### Tableau Récapitulatif par Ordre de Mérite")
-                st.dataframe(df_recap, use_container_width=True)
+                    excel_cls = export_table_excel(df_classement, f"classement_{cls_st}.xlsx")
+                    st.download_button(
+                        label="📥 Télécharger le Classement (Excel)",
+                        data=excel_cls,
+                        file_name=f"classement_{cls_st.replace(' ', '_')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                else:
+                    st.warning("Aucun élève dans cette classe.")
+            else:
+                st.warning("Aucune classe disponible.")
 
         elif adm_tab == "⚙️ Configuration des Coefficients & Périodes":
             st.subheader("⚙️ Configuration des Coefficients & Périodes")
             
-            st.markdown("#### Gestion des Périodes")
-            edited_periodes = st.data_editor(st.session_state.periodes_db, num_rows="dynamic", use_container_width=True)
-            if st.button("💾 Enregistrer les périodes"):
-                st.session_state.periodes_db = edited_periodes
-                sauvegarder_donnees_externes("MAJ_PERIODES")
-                st.success("Périodes mises à jour et synchronisées en ligne !")
+            tab_cfg1, tab_cfg2 = st.tabs(["📊 Coefficients par Matière et Classe", "⏳ Périodes & Statuts"])
 
-            st.markdown("---")
-            st.markdown("#### Configuration des Coefficients par Classe")
-            edited_coefs = st.data_editor(st.session_state.coefficients_db, num_rows="dynamic", use_container_width=True)
-            if st.button("💾 Enregistrer les coefficients"):
-                st.session_state.coefficients_db = edited_coefs
-                sauvegarder_donnees_externes("MAJ_COEFS")
-                st.success("Coefficients mis à jour et synchronisés en ligne !")
+            with tab_cfg1:
+                st.markdown("#### Éditeur des Coefficients")
+                edited_coefs = st.data_editor(st.session_state.coefficients_db, num_rows="dynamic", use_container_width=True, key="ed_coefs")
+                if not edited_coefs.equals(st.session_state.coefficients_db):
+                    st.session_state.coefficients_db = edited_coefs
+                    sauvegarder_donnees_externes("MAJ_COEFS")
+                    st.success("Coefficients mis à jour avec succès !")
+
+            with tab_cfg2:
+                st.markdown("#### Éditeur des Périodes Trimestrielles / Semestrielles")
+                edited_periods = st.data_editor(st.session_state.periodes_db, num_rows="dynamic", use_container_width=True, key="ed_periods")
+                if not edited_periods.equals(st.session_state.periodes_db):
+                    st.session_state.periodes_db = edited_periods
+                    sauvegarder_donnees_externes("MAJ_PERIODES")
+                    st.success("Périodes mises à jour avec succès !")
 
         elif adm_tab == "📂 Liste par Classe et par Cycle":
-            st.subheader("📂 Liste des Élèves par Niveau (Classe) et par Cycle avec Téléchargement PDF / Excel")
-            st.info("Filtrez les élèves ci-dessous par cycle ou par classe spécifique.")
+            st.subheader("📂 Listes Officielles par Classe et par Cycle")
+            
+            cycles_list = ["Tous", "Élémentaire", "Collège"]
+            cy_sel = st.selectbox("Filtrer par Cycle", cycles_list)
 
-            if not st.session_state.eleves_db.empty:
-                df_sync = st.session_state.eleves_db.copy()
-                df_sync["Cycle"] = df_sync["Classe"].apply(lambda c: obtenir_cycle_classe(str(c)))
+            df_e = st.session_state.eleves_db.copy()
+            df_e["Cycle"] = df_e["Classe"].apply(obtenir_cycle_classe)
 
-                col_f1, col_f2 = st.columns(2)
-                with col_f1:
-                    cycles_dispo = ["Tous"] + sorted(list(df_sync["Cycle"].unique()))
-                    filtre_cycle = st.selectbox("Filtrer par Cycle", cycles_dispo)
+            if cy_sel != "Tous":
+                df_e = df_e[df_e["Cycle"] == cy_sel]
 
-                if filtre_cycle != "Tous":
-                    df_sync = df_sync[df_sync["Cycle"] == filtre_cycle]
+            st.dataframe(df_e[["Nom Complet", "Classe", "Cycle", "Date de Naissance"]], use_container_width=True)
 
-                with col_f2:
-                    classes_dispo = ["Toutes"] + sorted(list(df_sync["Classe"].unique()))
-                    filtre_classe = st.selectbox("Filtrer par Classe", classes_dispo)
-
-                if filtre_classe != "Toutes":
-                    df_sync = df_sync[df_sync["Classe"] == filtre_classe]
-
-                st.metric("Nombre d'élèves correspondants", len(df_sync))
-                st.dataframe(df_sync[["Nom Complet", "Prénom", "Nom", "Classe", "Cycle", "Date de Naissance"]], use_container_width=True)
-
-                st.markdown("---")
-                st.markdown("#### 📥 Options de Téléchargement")
-                
-                col_dl1, col_dl2 = st.columns(2)
-                with col_dl1:
-                    titre_fic = f"Cycle_{filtre_cycle}_Classe_{filtre_classe}".replace(" ", "_")
-                    pdf_bytes_liste = generer_pdf_liste_eleves(df_sync, f"Cycle: {filtre_cycle} | Classe: {filtre_classe}")
-                    st.download_button(
-                        label="📄 Télécharger la Liste en PDF",
-                        data=pdf_bytes_liste,
-                        file_name=f"liste_eleves_{titre_fic}.pdf",
-                        mime="application/pdf"
-                    )
-                with col_dl2:
-                    excel_bytes_liste = export_table_excel(df_sync[["Nom Complet", "Prénom", "Nom", "Classe", "Cycle", "Date de Naissance"]], "liste_eleves.xlsx")
-                    st.download_button(
-                        label="📊 Télécharger la Liste en Excel",
-                        data=excel_bytes_liste,
-                        file_name=f"liste_eleves_{titre_fic}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-            else:
-                st.warning("Aucun élève enregistré pour le moment.")
+            pdf_liste = generer_pdf_liste_eleves(df_e, f"Cycle_{cy_sel}")
+            st.download_button(
+                label="📥 Télécharger cette Liste en PDF",
+                data=pdf_liste,
+                file_name=f"liste_eleves_{cy_sel}.pdf",
+                mime="application/pdf"
+            )
 
         elif adm_tab == "👨‍🎓 Élèves":
-            st.subheader("Gestion des Élèves")
-            edited_eleves = st.data_editor(st.session_state.eleves_db, num_rows="dynamic", use_container_width=True)
+            st.subheader("👨‍🎓 Gestion des Élèves")
+            edited_eleves = st.data_editor(st.session_state.eleves_db, num_rows="dynamic", use_container_width=True, key="ed_eleves")
             if not edited_eleves.equals(st.session_state.eleves_db):
                 st.session_state.eleves_db = edited_eleves
                 sauvegarder_donnees_externes("MAJ_ELEVES")
-                st.success("Base des élèves mise à jour et synchronisée avec la base externe avec succès !")
+                st.success("Base des élèves mise à jour et synchronisée avec succès !")
 
         elif adm_tab == "🏫 Classes et Cycles":
-            st.subheader("Gestion des Classes et Cycles")
-            edited_classes = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True)
+            st.subheader("🏫 Gestion des Classes et Cycles")
+            edited_classes = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True, key="ed_classes")
             if not edited_classes.equals(st.session_state.classes_db):
                 st.session_state.classes_db = edited_classes
                 sauvegarder_donnees_externes("MAJ_CLASSES")
-                st.success("Base des classes mise à jour et synchronisée en ligne !")
+                st.success("Classes et cycles mis à jour avec succès !")
 
 elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
-    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Rapports Globaux et Consolidation Annuelle</div>', unsafe_allow_html=True)
-    
-    st.markdown(f"### 🤖 Assistant IA - Interrogation de l'Établissement (Contact: {ADMIN_EMAIL})")
-    question_ia = st.text_input("Posez une question sur les statistiques (ex: 'Combien d'élèves y a-t-il ?')", key="input_ia")
-    if question_ia:
-        reponse_ia = assistant_ia_repondre(question_ia)
-        st.info(f"**Assistant IA :** {reponse_ia}")
+    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Administration XXL, Statistiques & Assistant IA</div>', unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.subheader("📊 Exports et Rapports Consolidés")
-    
-    col_ex1, col_ex2 = st.columns(2)
-    with col_ex1:
-        if st.button("📥 Exporter la Base Élèves (Excel)"):
-            excel_bytes = export_table_excel(st.session_state.eleves_db, "eleves.xlsx")
-            st.download_button("Télécharger le fichier Excel des Élèves", data=excel_bytes, file_name="eleves_cpnm.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    tab_r1, tab_r2 = st.tabs(["🤖 Assistant Pédagogique Intelligent (IA)", "📊 Indicateurs Clés de l'Établissement"])
 
-    with col_ex2:
-        if st.button("📥 Exporter la Base Notes (Excel)"):
-            excel_bytes_notes = export_table_excel(st.session_state.notes_db, "notes.xlsx")
-            st.download_button("Télécharger le fichier Excel des Notes", data=excel_bytes_notes, file_name="notes_cpnm.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    with tab_r1:
+        st.subheader("🤖 Assistant Virtuel de l'École Président Nelson Mandela")
+        st.write("Posez vos questions sur les effectifs, les classes ou le suivi général.")
+        
+        user_q = st.text_input("Votre question :", value="Combien d'élèves sont inscrits ?")
+        if st.button("Interroger l'Assistant IA"):
+            reponse_ia = assistant_ia_repondre(user_q)
+            st.info(reponse_ia)
 
-    st.markdown("---")
-    if st.button("📄 Générer et Télécharger le Rapport Général Consolidé (PDF)"):
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 7, "RAPPORT GÉNÉRAL CONSOLIDÉ DE L'ÉTABLISSEMENT", 0, 1, "C")
-        pdf.set_font("Arial", "I", 8)
-        pdf.cell(0, 5, f"Contact Admin : {ADMIN_EMAIL}", 0, 1, "C")
-        pdf.ln(4)
-        pdf.set_font("Arial", "", 10)
-        pdf.cell(0, 6, f"Total Élèves : {len(st.session_state.eleves_db)}", 0, 1, "L")
-        pdf.cell(0, 6, f"Total Classes : {len(st.session_state.classes_db)}", 0, 1, "L")
-        pdf.cell(0, 6, f"Total Professeurs : {len(st.session_state.prof_credentials)}", 0, 1, "L")
-        pdf_gen = bytes(pdf.output())
-        st.download_button("📥 Télécharger le Rapport Général PDF", data=pdf_gen, file_name="rapport_general.pdf", mime="application/pdf")
+    with tab_r2:
+        st.subheader("📊 Tableau de Bord & Indicateurs Globaux")
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        with col_m1: st.metric("Total Élèves", len(st.session_state.eleves_db))
+        with col_m2: st.metric("Total Classes", len(st.session_state.classes_db))
+        with col_m3: st.metric("Professeurs", len(st.session_state.prof_credentials))
+        with col_m4: st.metric("Absences Signalées", len(st.session_state.absences_db))
+
+        st.markdown("---")
+        st.markdown("#### 📈 Répartition des Élèves par Classe")
+        if not st.session_state.eleves_db.empty:
+            repartition = st.session_state.eleves_db["Classe"].value_counts().reset_index()
+            repartition.columns = ["Classe", "Nombre d'Élèves"]
+            st.bar_chart(repartition.set_index("Classe"))
+        else:
+            st.info("Aucune donnée d'élève disponible.")
