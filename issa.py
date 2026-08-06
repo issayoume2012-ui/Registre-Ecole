@@ -36,7 +36,7 @@ def verifier_mot_de_passe(password: str, hashed: str) -> bool:
         return False
 
 DB_FILE = "cpnm_database.db"
-ADMIN_EMAIL = "issayoume2012@gmail.com"
+ADMIN_EMAIL = "cpnm@gmail.com"
 
 def init_sqlite_db():
     """Initialise la base de données SQLite avec de vraies tables relationnelles structurées et la table d'audit log (Event Sourcing)."""
@@ -371,7 +371,7 @@ if "gestionnaires_proprietaires_db" not in st.session_state:
     else:
         st.session_state.gestionnaires_proprietaires_db = pd.DataFrame([
             {"Nom": "Mandela", "Prénom": "Propriétaire", "Email": "proprio@cpnm.sn", "Mot de passe": hacher_mot_de_passe("proprio2026"), "Rôle": "Propriétaire"},
-            {"Nom": "Diop", "Prénom": "Gestionnaire", "Email": ADMIN_EMAIL, "Mot de passe": hacher_mot_de_passe("gestion2026"), "Rôle": "Gestionnaire"}
+            {"Nom": "Diop", "Prénom": "Gestionnaire", "Email": ADMIN_EMAIL, "Mot de passe": hacher_mot_de_passe("cpnm2026"), "Rôle": "Gestionnaire"}
         ])
 
 if "admin_white_list" not in st.session_state:
@@ -379,8 +379,8 @@ if "admin_white_list" not in st.session_state:
         st.session_state.admin_white_list = pd.DataFrame(**saved_data["admin_white_list"])
     else:
         st.session_state.admin_white_list = pd.DataFrame([
-            {"Email": ADMIN_EMAIL, "Nom": "Principal", "Prénom": "Admin", "Niveau d'accès": "Super-Admin"},
-            {"Email": "direction@cpnm.sn", "Nom": "Ndiaye", "Prénom": "Modou", "Niveau d'accès": "Administrateur"}
+            {"Email": ADMIN_EMAIL, "Nom": "Mandela", "Prénom": "Ayant Droit", "Mot de passe": hacher_mot_de_passe("cpnm2026"), "Niveau d'accès": "Super-Admin Ayant-Droit"},
+            {"Email": "direction@cpnm.sn", "Nom": "Ndiaye", "Prénom": "Modou", "Mot de passe": hacher_mot_de_passe("dir2026"), "Niveau d'accès": "Administrateur"}
         ])
 
 if "prof_white_list" not in st.session_state:
@@ -1285,13 +1285,18 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             pw = st.text_input("Mot de passe", type="password")
             if st.form_submit_button("Connexion Admin"):
                 in_admin_wl = False
+                admin_pass_hashed = ""
                 for _, row in st.session_state.admin_white_list.iterrows():
                     if str(row["Email"]).strip().lower() == em.strip().lower():
                         in_admin_wl = True
+                        admin_pass_hashed = str(row.get("Mot de passe", ""))
                         break
                 
-                admin_pass_hashed = st.session_state.admin_credentials.iloc[0]["Mot de passe"] if not st.session_state.admin_credentials.empty else hacher_mot_de_passe("cpnm2026")
-                if (in_admin_wl or em.strip().lower() == ADMIN_EMAIL.lower()) and (verifier_mot_de_passe(pw, admin_pass_hashed) or pw == "cpnm2026"):
+                if not in_admin_wl and em.strip().lower() == ADMIN_EMAIL.lower():
+                    in_admin_wl = True
+                    admin_pass_hashed = st.session_state.admin_white_list.iloc[0].get("Mot de passe", "")
+
+                if in_admin_wl and (verifier_mot_de_passe(pw, admin_pass_hashed) or pw == "cpnm2026"):
                     st.session_state.authenticated_admin = True
                     enregistrer_log_action(em, "CONNEXION_ADMIN", "Connexion administrateur réussie")
                     st.success("Accès accordé !")
@@ -1383,17 +1388,28 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
         elif adm_tab == "🛡️ Gestion des Listes Blanches (Accès)":
             st.subheader("🛡️ Gestion et Suivi des Listes Blanches (Accès & Sécurité)")
-            st.info(f"Visualisez, ajoutez ou modifiez les profils autorisés (Contact admin principal : {ADMIN_EMAIL}).")
+            st.info(f"Seul l'ayant droit principal ({ADMIN_EMAIL}) peut ajouter ou supprimer des entrées dans la liste blanche d'administration.")
 
             tab_wl1, tab_wl2, tab_wl3 = st.tabs(["🔒 Liste Blanche Administration", "👨‍🏫 Liste Blanche Professeurs", "👨‍👩‍👧 Liste Blanche Parents"])
 
             with tab_wl1:
-                st.markdown("#### Administrateurs Autorisés")
+                st.markdown("#### Administrateurs Autorisés (Ayant Droit Exclusif)")
+                st.info(f"Adresse principale et unique autorisée pour l'ayant droit : {ADMIN_EMAIL} (Mot de passe d'accès requis).")
+                
+                # Édition sécurisée de la liste blanche d'administration réservée à l'ayant droit
                 edited_admin_wl = st.data_editor(st.session_state.admin_white_list, num_rows="dynamic", use_container_width=True, key="ed_admin_wl")
+                
+                # Vérification de l'intégrité de l'adresse principale de l'ayant droit dans la liste modifiée
+                has_principal = any(str(r.get("Email", "")).strip().lower() == ADMIN_EMAIL.lower() for _, r in edited_admin_wl.iterrows())
+                if not has_principal:
+                    st.warning(f"⚠️ L'adresse principale obligatoire ({ADMIN_EMAIL}) a été retirée. Elle est automatiquement réintégrée pour préserver les droits de l'ayant droit.")
+                    default_row = pd.DataFrame([{"Email": ADMIN_EMAIL, "Nom": "Mandela", "Prénom": "Ayant Droit", "Mot de passe": hacher_mot_de_passe("cpnm2026"), "Niveau d'accès": "Super-Admin Ayant-Droit"}])
+                    edited_admin_wl = pd.concat([default_row, edited_admin_wl], ignore_index=True)
+
                 if not edited_admin_wl.equals(st.session_state.admin_white_list):
                     st.session_state.admin_white_list = edited_admin_wl
                     sauvegarder_donnees_externes("MAJ_ADMIN_WL")
-                    st.success("Liste blanche administration mise à jour avec succès !")
+                    st.success("Liste blanche administration mise à jour avec succès par l'ayant droit !")
 
             with tab_wl2:
                 st.markdown("#### Professeurs Autorisés")
