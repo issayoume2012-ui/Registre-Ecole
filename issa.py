@@ -993,46 +993,34 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
         st.session_state.prof_classe_autorisee = ""
 
     if not st.session_state.prof_logged:
-        st.info(f"Veuillez vous identifier. Support technique : {ADMIN_EMAIL}")
+        st.info("Veuillez vous identifier avec votre Nom, Prénom et Mot de passe.")
         with st.form("form_login_prof"):
-            p_email = st.text_input("E-mail professionnel", value=ADMIN_EMAIL)
+            p_prenom = st.text_input("Prénom")
+            p_nom = st.text_input("Nom")
             p_pass = st.text_input("Mot de passe", type="password")
             
             btn_p_login = st.form_submit_button("Se connecter")
 
             if btn_p_login:
-                in_whitelist = False
-                prof_info = None
-                for _, row in st.session_state.prof_white_list.iterrows():
-                    if str(row["Email"]).strip().lower() == p_email.strip().lower():
-                        in_whitelist = True
-                        prof_info = row
+                match_prof = False
+                classe_trouvee = "6ème A"
+                for _, row in st.session_state.prof_credentials.iterrows():
+                    if (str(row["Nom"]).strip().lower() == p_nom.strip().lower() and 
+                        str(row["Prénom"]).strip().lower() == p_prenom.strip().lower() and 
+                        verifier_mot_de_passe(p_pass, str(row["Mot de passe"]))):
+                        match_prof = True
+                        classe_trouvee = str(row.get("Classe Attribuée", ""))
                         break
                 
-                if not in_whitelist and p_email.strip().lower() != ADMIN_EMAIL.lower():
-                    st.error("Accès refusé : votre e-mail ne figure pas dans la liste blanche des professeurs.")
+                if match_prof or (p_nom.strip().lower() == "admin" and p_pass == "cpnm2026"):
+                    st.session_state.prof_logged = True
+                    st.session_state.prof_nom_connecte = f"{p_prenom} {p_nom}"
+                    st.session_state.prof_classe_autorisee = classe_trouvee if match_prof else "6ème A"
+                    enregistrer_log_action(st.session_state.prof_nom_connecte, "CONNEXION_PROF", f"Connexion réussie pour la classe {st.session_state.prof_classe_autorisee}")
+                    st.success("Connexion réussie !")
+                    st.rerun()
                 else:
-                    if p_email.strip().lower() == ADMIN_EMAIL.lower() and not in_whitelist:
-                        prof_info = {"Prénom": "Admin", "Nom": "Principal", "Email": ADMIN_EMAIL}
-                    
-                    match_prof = False
-                    classe_trouvee = "6ème A"
-                    for _, row in st.session_state.prof_credentials.iterrows():
-                        if (str(row["Nom"]).strip().lower() == str(prof_info["Nom"]).strip().lower() and 
-                            str(row["Prénom"]).strip().lower() == str(prof_info["Prénom"]).strip().lower() and 
-                            verifier_mot_de_passe(p_pass, str(row["Mot de passe"]))):
-                            match_prof = True
-                            classe_trouvee = str(row.get("Classe Attribuée", ""))
-                            break
-                    if match_prof or p_pass == "cpnm2026":
-                        st.session_state.prof_logged = True
-                        st.session_state.prof_nom_connecte = f"{prof_info.get('Prénom', 'Admin')} {prof_info.get('Nom', 'Principal')}"
-                        st.session_state.prof_classe_autorisee = classe_trouvee
-                        enregistrer_log_action(st.session_state.prof_nom_connecte, "CONNEXION_PROF", f"Connexion réussie pour la classe {classe_trouvee}")
-                        st.success("Connexion réussie !")
-                        st.rerun()
-                    else:
-                        st.error("Mot de passe incorrect.")
+                    st.error("Nom, prénom ou mot de passe incorrect.")
     else:
         prof_connecte = st.session_state.prof_nom_connecte
         classe_autorisee = st.session_state.prof_classe_autorisee
@@ -1312,7 +1300,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
         st.markdown("---")
         adm_tab = st.selectbox("Gestion Administrative :", [
             "🔄 Sauvegarde & Restauration (Sécurité & Sync)",
-            "🛡️ Gestion des Listes Blanches (Accès)",
+            "🛡️ Gestion des Listes Blanches (Accès & Sécurité Mots de Passe)",
             "📅 Gestion Emplois du Temps (Lundi-Samedi / 08h-19h)",
             "🗄️ Base Globale & Suivi Annuel/Trimestriel/Mensuel",
             "📑 Bulletins & Téléchargement PDF (Classe & Élèves)",
@@ -1386,17 +1374,59 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             except Exception:
                 st.info("Table d'audit non disponible.")
 
-        elif adm_tab == "🛡️ Gestion des Listes Blanches (Accès)":
-            st.subheader("🛡️ Gestion et Suivi des Listes Blanches (Accès & Sécurité)")
-            st.info(f"Seul l'ayant droit principal ({ADMIN_EMAIL}) peut ajouter ou supprimer des entrées dans la liste blanche d'administration.")
+        elif adm_tab == "🛡️ Gestion des Listes Blanches (Accès & Sécurité Mots de Passe)":
+            st.subheader("🛡️ Gestion des Listes Blanches et Définition Sécurisée des Mots de Passe Administrateur")
+            st.info(f"Définissez et mettez à jour les mots de passe d'accès à la plateforme pour les administrateurs. Les mots de passe saisis en clair sont automatiquement hachés avec bcrypt.")
 
             tab_wl1, tab_wl2, tab_wl3 = st.tabs(["🔒 Liste Blanche Administration", "👨‍🏫 Liste Blanche Professeurs", "👨‍👩‍👧 Liste Blanche Parents"])
 
             with tab_wl1:
-                st.markdown("#### Administrateurs Autorisés (Ayant Droit Exclusif)")
-                st.info(f"Adresse principale et unique autorisée pour l'ayant droit : {ADMIN_EMAIL} (Mot de passe d'accès requis).")
+                st.markdown("#### Administrateurs Autorisés & Définition de Mot de Passe")
+                st.info("Vous pouvez modifier ci-dessous les informations des administrateurs. Pour définir ou modifier un mot de passe d'accès, saisissez le nouveau mot de passe souhaité dans la colonne dédiée.")
                 
-                # Édition sécurisée de la liste blanche d'administration réservée à l'ayant droit
+                # Interface dédiée pour définir/modifier un mot de passe administrateur proprement
+                with st.form("form_nouveau_mdp_admin"):
+                    st.markdown("##### 🔑 Ajouter ou Mettre à Jour un Administrateur / Définir son Mot de Passe")
+                    adm_nouveau_email = st.text_input("E-mail de l'administrateur", value="nouveau.admin@cpnm.sn")
+                    adm_nouveau_nom = st.text_input("Nom", value="NomAdmin")
+                    adm_nouveau_prenom = st.text_input("Prénom", value="PrénomAdmin")
+                    adm_nouveau_pass_clair = st.text_input("Définir le Mot de Passe d'accès (en clair)", type="password")
+                    adm_niveau_acces = st.selectbox("Niveau d'accès", ["Administrateur", "Super-Admin Ayant-Droit"])
+                    
+                    btn_ajout_admin = st.form_submit_button("Enregistrer / Mettre à jour l'administrateur")
+                    if btn_ajout_admin:
+                        if adm_nouveau_email and adm_nouveau_pass_clair:
+                            pwd_hache = hacher_mot_de_passe(adm_nouveau_pass_clair)
+                            # Vérifier si l'email existe déjà pour le mettre à jour, sinon l'ajouter
+                            df_adm = st.session_state.admin_white_list.copy()
+                            existing_idx = df_adm[df_adm["Email"].str.strip().str.lower() == adm_nouveau_email.strip().lower()].index
+                            
+                            if not existing_idx.empty:
+                                df_adm.loc[existing_idx, "Nom"] = adm_nouveau_nom
+                                df_adm.loc[existing_idx, "Prénom"] = adm_nouveau_prenom
+                                df_adm.loc[existing_idx, "Mot de passe"] = pwd_hache
+                                df_adm.loc[existing_idx, "Niveau d'accès"] = adm_niveau_acces
+                                st.success(f"Mot de passe et informations mis à jour avec succès pour l'administrateur {adm_nouveau_email} !")
+                            else:
+                                nouvelle_ligne = pd.DataFrame([{
+                                    "Email": adm_nouveau_email,
+                                    "Nom": adm_nouveau_nom,
+                                    "Prénom": adm_nouveau_prenom,
+                                    "Mot de passe": pwd_hache,
+                                    "Niveau d'accès": adm_niveau_acces
+                                }])
+                                df_adm = pd.concat([df_adm, nouvelle_ligne], ignore_index=True)
+                                st.success(f"Nouvel administrateur {adm_nouveau_email} ajouté avec son mot de passe haché avec succès !")
+                            
+                            st.session_state.admin_white_list = df_adm
+                            sauvegarder_donnees_externes("AJOUT_MODIF_ADMIN_MDP")
+                            enregistrer_log_action(ADMIN_EMAIL, "GESTION_ADMIN_MDP", f"Mise à jour du mot de passe admin pour {adm_nouveau_email}")
+                            st.rerun()
+                        else:
+                            st.error("Veuillez renseigner un e-mail et un mot de passe valides.")
+
+                st.markdown("---")
+                st.markdown("#### Liste Actuelle des Administrateurs Autorisés")
                 edited_admin_wl = st.data_editor(st.session_state.admin_white_list, num_rows="dynamic", use_container_width=True, key="ed_admin_wl")
                 
                 # Vérification de l'intégrité de l'adresse principale de l'ayant droit dans la liste modifiée
@@ -1409,7 +1439,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 if not edited_admin_wl.equals(st.session_state.admin_white_list):
                     st.session_state.admin_white_list = edited_admin_wl
                     sauvegarder_donnees_externes("MAJ_ADMIN_WL")
-                    st.success("Liste blanche administration mise à jour avec succès par l'ayant droit !")
+                    st.success("Liste blanche administration mise à jour avec succès !")
 
             with tab_wl2:
                 st.markdown("#### Professeurs Autorisés")
