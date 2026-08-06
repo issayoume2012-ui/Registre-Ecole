@@ -34,14 +34,9 @@ def verifier_mot_de_passe(password: str, hashed: str) -> bool:
     except Exception:
         return False
 
-# Configuration de la base de données distante / externe (Supabase / PostgreSQL ou fichier persistant externe)
-# Astuce : Vous pouvez remplacer DB_FILE par une chaîne de connexion PostgreSQL (ex: via psycopg2 ou SQLAlchemy vers Supabase)
-# ou utiliser un volume persistant externe monté sur le chemin. Par défaut, nous utilisons une structure robuste connectée au cloud géré.
 DB_FILE = "cpnm_database.db"
 ADMIN_EMAIL = "cpnm@gmail.com"
 
-# --- INTÉGRATION SUPABASE / BASE DE DONNÉES EN LIGNE (OPTIONNEL / RECOMMANDÉ) ---
-# Si vous disposez d'une base de données Supabase (PostgreSQL), vous pouvez renseigner vos identifiants ci-dessous :
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
@@ -151,15 +146,6 @@ routine_sauvegarde_automatisee_fin_journee()
 def charger_donnees_externes():
     """Charge les données depuis la base de données externe en ligne (Supabase/SQLite externe)."""
     data = {}
-    
-    # Synchronisation optionnelle avec Supabase si les clés sont configurées
-    if SUPABASE_URL and SUPABASE_KEY:
-        try:
-            # Exemple de logique de chargement distant depuis Supabase REST API si configuré
-            pass
-        except Exception:
-            pass
-
     if os.path.exists(DB_FILE):
         try:
             conn = sqlite3.connect(DB_FILE)
@@ -272,8 +258,6 @@ saved_data = charger_donnees_externes()
 # ==========================================
 # 0. BIS. GESTION DES POLICES UNICODE
 # ==========================================
-FONT_PATH = "DejaVuSans.ttf"
-
 @st.cache_resource
 def telecharger_polices():
     fonts = {
@@ -1006,7 +990,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
 # ==========================================
 
 elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres":
-    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Espace Enseignants & Saisie des Notes</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Espace Enseignants & Saisie Pédagogique Harmonisée</div>', unsafe_allow_html=True)
 
     if "prof_logged" not in st.session_state:
         st.session_state.prof_logged = False
@@ -1014,108 +998,153 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
         st.session_state.prof_nom_connecte = ""
     if "prof_classe_autorisee" not in st.session_state:
         st.session_state.prof_classe_autorisee = ""
+    if "prof_matiere_principale" not in st.session_state:
+        st.session_state.prof_matiere_principale = ""
 
     if not st.session_state.prof_logged:
-        st.info("Veuillez vous identifier avec votre Nom, Prénom et Mot de passe.")
-        with st.form("form_login_prof"):
-            p_prenom = st.text_input("Prénom")
-            p_nom = st.text_input("Nom")
-            p_pass = st.text_input("Mot de passe", type="password")
+        st.info("Veuillez vous authentifier en tant qu'enseignant (Nom, Prénom et Mot de passe).")
+        with st.form("form_login_prof_harmonise"):
+            col_lf1, col_lf2 = st.columns(2)
+            with col_lf1:
+                p_prenom = st.text_input("Prénom de l'enseignant")
+                p_nom = st.text_input("Nom de l'enseignant")
+            with col_lf2:
+                p_pass = st.text_input("Mot de passe sécurisé", type="password")
             
-            btn_p_login = st.form_submit_button("Se connecter")
+            btn_p_login = st.form_submit_button("Se connecter à l'Espace Professeur")
 
             if btn_p_login:
                 match_prof = False
                 classe_trouvee = "6ème A"
+                matiere_trouvee = "Mathématiques"
+                
                 for _, row in st.session_state.prof_credentials.iterrows():
                     if (str(row["Nom"]).strip().lower() == p_nom.strip().lower() and 
                         str(row["Prénom"]).strip().lower() == p_prenom.strip().lower() and 
                         verifier_mot_de_passe(p_pass, str(row["Mot de passe"]))):
                         match_prof = True
-                        classe_trouvee = str(row.get("Classe Attribuée", ""))
+                        classe_trouvee = str(row.get("Classe Attribuée", "6ème A"))
+                        matiere_trouvee = str(row.get("Matière Principale", "Mathématiques"))
                         break
                 
                 if match_prof or (p_nom.strip().lower() == "admin" and p_pass == "cpnm2026"):
                     st.session_state.prof_logged = True
-                    st.session_state.prof_nom_connecte = f"{p_prenom} {p_nom}"
-                    st.session_state.prof_classe_autorisee = classe_trouvee if match_prof else "6ème A"
-                    enregistrer_log_action(st.session_state.prof_nom_connecte, "CONNEXION_PROF", f"Connexion réussie pour la classe {st.session_state.prof_classe_autorisee}")
+                    st.session_state.prof_nom_connecte = f"{p_prenom} {p_nom}".strip() if p_prenom or p_nom else "Admin Professeur"
+                    st.session_state.prof_classe_autorisee = classe_trouvee
+                    st.session_state.prof_matiere_principale = matiere_trouvee
+                    enregistrer_log_action(st.session_state.prof_nom_connecte, "CONNEXION_PROF", f"Connexion réussie pour la classe {classe_trouvee}")
                     st.success("Connexion réussie !")
                     st.rerun()
                 else:
-                    st.error("Nom, prénom ou mot de passe incorrect.")
+                    st.error("Identifiants incorrects ou non répertoriés dans la base des professeurs.")
     else:
         prof_connecte = st.session_state.prof_nom_connecte
         classe_autorisee = st.session_state.prof_classe_autorisee
-        st.success(f"Connecté en tant que : **{prof_connecte}** | Classe assignée : **{classe_autorisee}**")
-        if st.button("Se déconnecter"):
+        matiere_principale = st.session_state.prof_matiere_principale
+
+        st.markdown(
+            f"""
+            <div style="background-color: #E2E8F0; padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h4 style="color: #1E3A8A; margin: 0;">Enseignant : {prof_connecte}</h4>
+                    <p style="margin: 5px 0 0 0; color: #475569; font-size: 0.95rem;">
+                        Classe assignée : <b>{classe_autorisee}</b> | Matière principale : <b>{matiere_principale}</b> (Cycle : {obtenir_cycle_classe(classe_autorisee)})
+                    </p>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        if st.button("Se déconnecter de l'espace professeur"):
             st.session_state.prof_logged = False
             st.session_state.prof_nom_connecte = ""
             st.session_state.prof_classe_autorisee = ""
+            st.session_state.prof_matiere_principale = ""
             st.rerun()
 
         st.markdown("---")
-        menu_prof = st.radio("Menu Professeur :", [
-            "📝 Saisie des Notes & Évaluations",
-            "📋 Fiche d'Appel", 
-            "⚠️ Conduite & Vie Scolaire", 
-            "📑 Cahier de texte"
-        ], horizontal=True)
+        
+        # Navigation unifiée et harmonisée pour le professeur
+        menu_prof = st.radio(
+            "Navigation Espace Professeur :", 
+            [
+                "📝 Saisie des Notes & Évaluations",
+                "📋 Feuille d'Appel Journalière", 
+                "⚠️ Conduite & Vie Scolaire", 
+                "📑 Cahier de Texte & Pédagogie"
+            ], 
+            horizontal=True
+        )
 
         if menu_prof == "📝 Saisie des Notes & Évaluations":
-            st.markdown("### Module de Saisie des Notes (CI au CM2 & 6e à 3e)")
-            
+            st.markdown("### 📝 Module Harmonisé de Saisie des Notes")
+            st.info(f"Saisie des notes pour votre classe assignée : **{classe_autorisee}**.")
+
             periodes_possibles = obtenir_periodes_pour_classe(classe_autorisee)
             
             if not periodes_possibles:
                 st.warning("⚠️ Aucune période disponible pour cette classe.")
             else:
-                periode_sel = st.selectbox("Choisir la période active", periodes_possibles)
-                classe_sel = classe_autorisee
-                st.info(f"📌 Classe assignée : **{classe_sel}** (Cycle : {obtenir_cycle_classe(classe_sel)})")
+                col_sp1, col_sp2, col_sp3 = st.columns(3)
+                with col_sp1:
+                    periode_sel = st.selectbox("Période active", periodes_possibles)
+                with col_sp2:
+                    matieres_possibles = st.session_state.coefficients_db[st.session_state.coefficients_db["Classe"] == classe_autorisee]["Matière"].tolist()
+                    if not matieres_possibles:
+                        matieres_possibles = [matiere_principale, "Français"]
+                    
+                    default_idx = matieres_possibles.index(matiere_principale) if matiere_principale in matieres_possibles else 0
+                    matiere_sel = st.selectbox("Matière enseignée", matieres_possibles, index=default_idx)
+                with col_sp3:
+                    bareme_sel = st.number_input("Barème de notation", min_value=5, max_value=100, value=20)
 
-                matieres_possibles = st.session_state.coefficients_db[st.session_state.coefficients_db["Classe"] == classe_sel]["Matière"].tolist()
-                if not matieres_possibles:
-                    matieres_possibles = ["Mathématiques", "Français"]
-                
-                matiere_sel = st.selectbox("Choisir la matière", matieres_possibles)
-                bareme_sel = st.number_input("Barème de notation", min_value=5, max_value=100, value=20)
-
-                eleves_classe = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == classe_sel]["Nom Complet"].tolist()
+                eleves_classe = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == classe_autorisee]["Nom Complet"].tolist()
 
                 if eleves_classe:
-                    st.markdown(f"#### Saisie des notes pour {matiere_sel} ({periode_sel})")
+                    st.markdown(f"#### Grille de notation : {matiere_sel} ({periode_sel}) — Barème / {bareme_sel}")
                     
                     notes_actuelles = st.session_state.notes_db[
-                        (st.session_state.notes_db["Classe"] == classe_sel) & 
+                        (st.session_state.notes_db["Classe"] == classe_autorisee) & 
                         (st.session_state.notes_db["Matière"] == matiere_sel) & 
                         (st.session_state.notes_db["Periode"] == periode_sel)
                     ]
 
-                    with st.form("form_saisie_notes"):
+                    with st.form("form_saisie_notes_harmonise"):
                         saisie_data = []
+                        
+                        # En-têtes visuels du tableau de saisie
+                        h_col1, h_col2, h_col3, h_col4 = st.columns([3, 2, 2, 2])
+                        with h_col1: st.markdown("**Élève**")
+                        with h_col2: st.markdown("**Devoir 1**")
+                        with h_col3: st.markdown("**Devoir 2**")
+                        with h_col4: st.markdown("**Composition**")
+                        st.markdown("<hr style='margin: 5px 0 15px 0;'>", unsafe_allow_html=True)
+
                         for el in eleves_classe:
                             ex_row = notes_actuelles[notes_actuelles["Eleve"] == el]
+                            # Valeurs par défaut stockées sur /20 ramenées au barème pour l'affichage si besoin, ou brut
                             d1_val = float(ex_row.iloc[0]["Devoir1"]) if not ex_row.empty and not pd.isna(ex_row.iloc[0]["Devoir1"]) else 0.0
                             d2_val = float(ex_row.iloc[0]["Devoir2"]) if not ex_row.empty and not pd.isna(ex_row.iloc[0]["Devoir2"]) else 0.0
                             comp_val = float(ex_row.iloc[0]["Composition"]) if not ex_row.empty and not pd.isna(ex_row.iloc[0]["Composition"]) else 0.0
 
                             col_e1, col_e2, col_e3, col_e4 = st.columns([3, 2, 2, 2])
                             with col_e1:
-                                st.write(el)
+                                st.write(f"👤 {el}")
                             with col_e2:
-                                nd1 = st.number_input(f"Devoir 1 (sur {bareme_sel})", 0.0, float(bareme_sel), d1_val, key=f"d1_{el}")
+                                nd1 = st.number_input(f"D1 {el}", 0.0, float(bareme_sel), d1_val, key=f"d1_{el}", label_visibility="collapsed")
                             with col_e3:
-                                nd2 = st.number_input(f"Devoir 2 (sur {bareme_sel})", 0.0, float(bareme_sel), d2_val, key=f"d2_{el}")
+                                nd2 = st.number_input(f"D2 {el}", 0.0, float(bareme_sel), d2_val, key=f"d2_{el}", label_visibility="collapsed")
                             with col_e4:
-                                ncomp = st.number_input(f"Composition (sur {bareme_sel})", 0.0, float(bareme_sel), comp_val, key=f"comp_{el}")
+                                ncomp = st.number_input(f"Comp {el}", 0.0, float(bareme_sel), comp_val, key=f"comp_{el}", label_visibility="collapsed")
 
+                            # Normalisation automatique sur /20
                             d1_20 = convertir_sur_20(nd1, bareme_sel)
                             d2_20 = convertir_sur_20(nd2, bareme_sel)
                             comp_20 = convertir_sur_20(ncomp, bareme_sel)
 
                             saisie_data.append({
-                                "Classe": classe_sel,
+                                "Classe": classe_autorisee,
                                 "Matière": matiere_sel,
                                 "Periode": periode_sel,
                                 "Eleve": el,
@@ -1124,96 +1153,160 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                                 "Composition": comp_20
                             })
 
-                        if st.form_submit_button("Enregistrer les notes"):
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        if st.form_submit_button("💾 Enregistrer et Normaliser les Notes"):
                             st.session_state.notes_db = st.session_state.notes_db[
-                                ~((st.session_state.notes_db["Classe"] == classe_sel) & 
+                                ~((st.session_state.notes_db["Classe"] == classe_autorisee) & 
                                   (st.session_state.notes_db["Matière"] == matiere_sel) & 
                                   (st.session_state.notes_db["Periode"] == periode_sel))
                             ]
                             new_notes_df = pd.DataFrame(saisie_data)
                             st.session_state.notes_db = pd.concat([st.session_state.notes_db, new_notes_df], ignore_index=True)
-                            sauvegarder_donnees_externes("SAISIE_NOTES")
-                            enregistrer_log_action(prof_connecte, "SAISIE_NOTES", f"Mise à jour notes pour {matiere_sel} ({classe_sel})")
+                            
+                            # Sauvegarde persistante externe automatique
+                            sauvegarder_donnees_externes("SAISIE_NOTES_PROF")
+                            enregistrer_log_action(prof_connecte, "SAISIE_NOTES", f"Mise à jour notes pour {matiere_sel} ({classe_autorisee})")
                             st.success("Notes enregistrées, normalisées sur /20 et synchronisées dans la base externe avec succès !")
                 else:
-                    st.warning("Aucun élève dans cette classe.")
+                    st.warning("Aucun élève enregistré dans cette classe.")
 
-        elif menu_prof == "📋 Fiche d'Appel":
-            st.markdown("### Feuille d'Appel Journalière")
-            st.info(f"📌 Classe assignée : **{classe_autorisee}**")
+        elif menu_prof == "📋 Feuille d'Appel Journalière":
+            st.markdown("### 📋 Feuille d'Appel & Suivi des Présences")
+            st.info(f"Classe concernée : **{classe_autorisee}**")
+            
             if not st.session_state.eleves_db.empty:
-                date_jour = st.date_input("Date", value=datetime.today())
+                col_ap1, col_ap2 = st.columns([2, 2])
+                with col_ap1:
+                    date_jour = st.date_input("Date du jour", value=datetime.today())
+                
                 eleves_cibles = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == classe_autorisee]["Nom Complet"].tolist()
 
                 if eleves_cibles:
-                    with st.form("form_appel"):
+                    st.markdown("#### Pointage des Élèves")
+                    with st.form("form_appel_harmonise"):
                         res_appel = {}
                         for el in eleves_cibles:
-                            c1, c2 = st.columns([3, 2])
-                            with c1: st.write(el)
-                            with c2: res_appel[el] = st.radio("Statut", ["Présent", "Absent", "Retard"], key=f"st_{el}", horizontal=True, label_visibility="collapsed")
-                        if st.form_submit_button("Valider l'appel"):
+                            c1, c2 = st.columns([3, 3])
+                            with c1: 
+                                st.write(f"👤 {el}")
+                            with c2: 
+                                res_appel[el] = st.radio("Statut", ["Présent", "Absent", "Retard"], key=f"st_{el}", horizontal=True, label_visibility="collapsed")
+                        
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        if st.form_submit_button("✅ Valider l'Appel Journalier"):
                             nouveaux_abs = []
                             for el in eleves_cibles:
                                 if res_appel[el] != "Présent":
-                                    nouveaux_abs.append({"Date": str(date_jour), "Classe": classe_autorisee, "Élève": el, "Statut": res_appel[el], "Motif": "Non renseigné"})
+                                    nouveaux_abs.append({
+                                        "Date": str(date_jour), 
+                                        "Classe": classe_autorisee, 
+                                        "Élève": el, 
+                                        "Statut": res_appel[el], 
+                                        "Motif": "Non renseigné"
+                                    })
                             if nouveaux_abs:
                                 st.session_state.absences_db = pd.concat([st.session_state.absences_db, pd.DataFrame(nouveaux_abs)], ignore_index=True)
-                                sauvegarder_donnees_externes("SAISIE_APPEL")
-                                enregistrer_log_action(prof_connecte, "APPEL", f"Appel validé pour {classe_autorisee}")
-                            st.success("Appel enregistré et synchronisé dans la base distante !")
+                            
+                            sauvegarder_donnees_externes("SAISIE_APPEL_PROF")
+                            enregistrer_log_action(prof_connecte, "APPEL", f"Appel validé pour {classe_autorisee} à la date du {date_jour}")
+                            st.success("Appel enregistré, consigné dans les absences et synchronisé dans la base distante !")
+                else:
+                    st.warning("Aucun élève trouvé pour cette classe.")
 
         elif menu_prof == "⚠️ Conduite & Vie Scolaire":
-            st.markdown("### Module Vie Scolaire & Conseil de Classe (Saisie Professeur)")
-            cls_vs = classe_autorisee
-            eleves_vs = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == cls_vs]["Nom Complet"].tolist()
+            st.markdown("### ⚠️ Suivi de la Vie Scolaire & Discipline")
+            st.info(f"Évaluation du comportement et de l'assiduité pour la classe : **{classe_autorisee}**")
             
-            periodes_vs_possibles = obtenir_periodes_pour_classe(cls_vs)
-            periode_vs = st.selectbox("Période", periodes_vs_possibles)
-            el_vs = st.selectbox("Élève", eleves_vs if eleves_vs else ["--"])
+            eleves_vs = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == classe_autorisee]["Nom Complet"].tolist()
+            
+            if eleves_vs:
+                periodes_vs_possibles = obtenir_periodes_pour_classe(classe_autorisee)
+                
+                col_vs_1, col_vs_2 = st.columns(2)
+                with col_vs_1:
+                    periode_vs = st.selectbox("Période de vie scolaire", periodes_vs_possibles)
+                with col_vs_2:
+                    el_vs = st.selectbox("Sélectionner l'élève", eleves_vs)
 
-            with st.form("form_viescolaire_prof"):
-                c_vs1, c_vs2, c_vs3, c_vs4 = st.columns(4)
-                with c_vs1: abs_j = st.number_input("Absences justifiées", 0, 50, 0)
-                with c_vs2: abs_nj = st.number_input("Absences non justifiées", 0, 50, 0)
-                with c_vs3: ret = st.number_input("Retards", 0, 50, 0)
-                with c_vs4: hp = st.number_input("Heures perdues", 0, 100, 0)
+                with st.form("form_viescolaire_prof_harmonise"):
+                    c_vs1, c_vs2, c_vs3, c_vs4 = st.columns(4)
+                    with c_vs1: abs_j = st.number_input("Absences justifiées", 0, 50, 0)
+                    with c_vs2: abs_nj = st.number_input("Absences non justifiées", 0, 50, 0)
+                    with c_vs3: ret = st.number_input("Retards", 0, 50, 0)
+                    with c_vs4: hp = st.number_input("Heures perdues", 0, 100, 0)
 
-                obs = st.text_area("Observations personnalisées")
-                decision = st.selectbox("Décision du conseil de classe", [
-                    "Félicitations", "Tableau d'honneur", "Encouragements", "Avertissement travail", "Avertissement conduite", "Blâme"
-                ])
+                    obs = st.text_area("Observations personnalisées sur l'élève")
+                    decision = st.selectbox("Proposition de décision / Sanction", [
+                        "Félicitations", "Tableau d'honneur", "Encouragements", "Avertissement travail", "Avertissement conduite", "Blâme"
+                    ])
 
-                if st.form_submit_button("Enregistrer le suivi de vie scolaire"):
-                    if el_vs:
-                        st.session_state.viescolaire_db = st.session_state.viescolaire_db[
-                            ~((st.session_state.viescolaire_db["Classe"] == cls_vs) & 
-                              (st.session_state.viescolaire_db["Periode"] == periode_vs) & 
-                              (st.session_state.viescolaire_db["Eleve"] == el_vs))
-                        ]
-                        new_vs = pd.DataFrame([{
-                            "Classe": cls_vs, "Periode": periode_vs, "Eleve": el_vs,
-                            "AbsencesJustifiees": abs_j, "AbsencesNonJustifiees": abs_nj,
-                            "Retards": ret, "HeuresPerdues": hp, "Observations": obs, "DecisionConseil": decision
-                        }])
-                        st.session_state.viescolaire_db = pd.concat([st.session_state.viescolaire_db, new_vs], ignore_index=True)
-                        sauvegarder_donnees_externes("SAISIE_VIE_SCOLAIRE")
-                        enregistrer_log_action(prof_connecte, "VIE_SCOLAIRE", f"Suivi mis à jour pour {el_vs}")
-                        st.success("Suivi de vie scolaire enregistré et synchronisé en ligne avec succès !")
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.form_submit_button("💾 Enregistrer le Suivi de Vie Scolaire"):
+                        if el_vs:
+                            st.session_state.viescolaire_db = st.session_state.viescolaire_db[
+                                ~((st.session_state.viescolaire_db["Classe"] == classe_autorisee) & 
+                                  (st.session_state.viescolaire_db["Periode"] == periode_vs) & 
+                                  (st.session_state.viescolaire_db["Eleve"] == el_vs))
+                            ]
+                            new_vs = pd.DataFrame([{
+                                "Classe": classe_autorisee, 
+                                "Periode": periode_vs, 
+                                "Eleve": el_vs,
+                                "AbsencesJustifiees": abs_j, 
+                                "AbsencesNonJustifiees": abs_nj,
+                                "Retards": ret, 
+                                "HeuresPerdues": hp, 
+                                "Observations": obs, 
+                                "DecisionConseil": decision
+                            }])
+                            st.session_state.viescolaire_db = pd.concat([st.session_state.viescolaire_db, new_vs], ignore_index=True)
+                            
+                            sauvegarder_donnees_externes("SAISIE_VIE_SCOLAIRE_PROF")
+                            enregistrer_log_action(prof_connecte, "VIE_SCOLAIRE", f"Suivi mis à jour pour l'élève {el_vs}")
+                            st.success("Suivi de vie scolaire enregistré et synchronisé en ligne avec succès !")
+            else:
+                st.warning("Aucun élève disponible pour cette classe.")
 
-        elif menu_prof == "📑 Cahier de texte":
-            st.markdown("### Cahier de texte & Rapports")
-            with st.form("form_cahier"):
-                mat_ct = st.text_input("Matière")
-                contenu = st.text_area("Contenu de la séance")
-                travail = st.text_area("Travail à faire")
-                if st.form_submit_button("Publier"):
+        elif menu_prof == "📑 Cahier de Texte & Pédagogie":
+            st.markdown("### 📑 Cahier de Texte & Rapports Pédagogiques")
+            st.info(f"Consignez les séances de cours et travaux à faire pour la classe de **{classe_autorisee}**.")
+
+            with st.form("form_cahier_harmonise"):
+                col_ct1, col_ct2 = st.columns(2)
+                with col_ct1:
+                    mat_ct = st.text_input("Matière enseignée", value=matiere_principale)
+                with col_ct2:
+                    date_ct = st.date_input("Date de la séance", value=datetime.today())
+
+                contenu = st.text_area("Contenu détaillé de la séance / Leçon du jour")
+                travail = st.text_area("Travail à faire pour la prochaine séance")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.form_submit_button("📢 Publier dans le Cahier de Texte"):
                     if mat_ct and contenu:
-                        new_ct = pd.DataFrame([{"Professeur": prof_connecte, "Date": str(datetime.today().date()), "Classe": classe_autorisee, "Matière": mat_ct, "Contenu": contenu, "Travail à faire": travail}])
+                        new_ct = pd.DataFrame([{
+                            "Professeur": prof_connecte, 
+                            "Date": str(date_ct), 
+                            "Classe": classe_autorisee, 
+                            "Matière": mat_ct, 
+                            "Contenu": contenu, 
+                            "Travail à faire": travail
+                        }])
                         st.session_state.cahier_textes = pd.concat([st.session_state.cahier_textes, new_ct], ignore_index=True)
-                        sauvegarder_donnees_externes("CAHIER_TEXTE")
-                        enregistrer_log_action(prof_connecte, "CAHIER_TEXTE", f"Leçon publiée pour {mat_ct}")
-                        st.success("Leçon publiée et enregistrée sur le serveur externe.")
+                        
+                        sauvegarder_donnees_externes("CAHIER_TEXTE_PROF")
+                        enregistrer_log_action(prof_connecte, "CAHIER_TEXTE", f"Leçon publiée pour la matière {mat_ct}")
+                        st.success("Leçon publiée et enregistrée sur le serveur externe avec succès !")
+                    else:
+                        st.error("Veuillez renseigner au moins la matière et le contenu de la séance.")
+
+            st.markdown("---")
+            st.markdown("#### 📜 Historique des Publications de la Classe")
+            df_ct_classe = st.session_state.cahier_textes[st.session_state.cahier_textes["Classe"] == classe_autorisee]
+            if not df_ct_classe.empty:
+                st.dataframe(df_ct_classe[["Date", "Professeur", "Matière", "Contenu", "Travail à faire"]], use_container_width=True)
+            else:
+                st.info("Aucune entrée dans le cahier de texte pour cette classe.")
 
 elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élèves":
     st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Portail Parent & Consultation des Notes</div>', unsafe_allow_html=True)
