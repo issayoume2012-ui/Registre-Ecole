@@ -178,7 +178,7 @@ def sauvegarder_donnees_externes(action_label="SAUVEGARDE_DONNEES"):
         "rapports_journaliers_prof": st.session_state.rapports_journaliers_prof.fillna("").to_dict(orient="split"),
         "absences_db": st.session_state.absences_db.fillna("").to_dict(orient="split"),
         "matieres_def": st.session_state.matieres_def.fillna("").to_dict(orient="split"),
-        "coefficients_db": st.session_state.coefficients_db.fillna(0.0).to_dict(orient="split"),
+        "coefficients_db": st.session_state.coefficients_db.fillna(1.0).to_dict(orient="split"),
         "periodes_db": st.session_state.periodes_db.fillna("").to_dict(orient="split"),
         "notes_db": st.session_state.notes_db.fillna(0.0).to_dict(orient="split"),
         "viescolaire_db": st.session_state.viescolaire_db.fillna("").to_dict(orient="split"),
@@ -462,31 +462,34 @@ if "matieres_def" not in st.session_state:
         st.session_state.matieres_def = pd.DataFrame(**saved_data["matieres_def"])
     else:
         st.session_state.matieres_def = pd.DataFrame([
-            {"Matière": "Mathématiques", "Cycle": "Collège"},
-            {"Matière": "Français", "Cycle": "Collège"},
-            {"Matière": "Histoire-Géographie", "Cycle": "Collège"},
-            {"Matière": "SVT", "Cycle": "Collège"},
-            {"Matière": "Anglais", "Cycle": "Collège"},
-            {"Matière": "Physique-Chimie", "Cycle": "Collège"},
-            {"Matière": "Lecture / Langage", "Cycle": "Élémentaire"},
-            {"Matière": "Calcul / Mathématiques", "Cycle": "Élémentaire"},
-            {"Matière": "Éveil / Science", "Cycle": "Élémentaire"},
-            {"Matière": "Éducation Civique", "Cycle": "Élémentaire"}
+            {"Matière": "Mathématiques", "Cycle": "Collège", "Coefficient": 4},
+            {"Matière": "Français", "Cycle": "Collège", "Coefficient": 5},
+            {"Matière": "Histoire-Géographie", "Cycle": "Collège", "Coefficient": 2},
+            {"Matière": "SVT", "Cycle": "Collège", "Coefficient": 2},
+            {"Matière": "Anglais", "Cycle": "Collège", "Coefficient": 2},
+            {"Matière": "Physique-Chimie", "Cycle": "Collège", "Coefficient": 2},
+            {"Matière": "Lecture / Langage", "Cycle": "Élémentaire", "Coefficient": 4},
+            {"Matière": "Calcul / Mathématiques", "Cycle": "Élémentaire", "Coefficient": 4},
+            {"Matière": "Éveil / Science", "Cycle": "Élémentaire", "Coefficient": 2},
+            {"Matière": "Éducation Civique", "Cycle": "Élémentaire", "Coefficient": 1}
         ])
 
+# COEFFICIENTS HARMONISÉS SELON LE BARÈME DES PROFESSEURS
 if "coefficients_db" not in st.session_state:
     if "coefficients_db" in saved_data:
         st.session_state.coefficients_db = pd.DataFrame(**saved_data["coefficients_db"])
     else:
         st.session_state.coefficients_db = pd.DataFrame([
-            {"Classe": "6ème A", "Matière": "Mathématiques", "Coefficient": 3},
-            {"Classe": "6ème A", "Matière": "Français", "Coefficient": 3},
+            {"Classe": "6ème A", "Matière": "Mathématiques", "Coefficient": 4},
+            {"Classe": "6ème A", "Matière": "Français", "Coefficient": 5},
             {"Classe": "6ème A", "Matière": "Histoire-Géographie", "Coefficient": 2},
             {"Classe": "6ème A", "Matière": "SVT", "Coefficient": 2},
             {"Classe": "6ème A", "Matière": "Anglais", "Coefficient": 2},
-            {"Classe": "CP", "Matière": "Lecture / Langage", "Coefficient": 2},
-            {"Classe": "CP", "Matière": "Calcul / Mathématiques", "Coefficient": 2},
-            {"Classe": "CP", "Matière": "Éveil / Science", "Coefficient": 1}
+            {"Classe": "6ème A", "Matière": "Physique-Chimie", "Coefficient": 2},
+            {"Classe": "CP", "Matière": "Lecture / Langage", "Coefficient": 4},
+            {"Classe": "CP", "Matière": "Calcul / Mathématiques", "Coefficient": 4},
+            {"Classe": "CP", "Matière": "Éveil / Science", "Coefficient": 2},
+            {"Classe": "CP", "Matière": "Éducation Civique", "Coefficient": 1}
         ])
 
 if "periodes_db" not in st.session_state:
@@ -638,6 +641,22 @@ def obtenir_appreciation(moyenne):
     else:
         return "Faible"
 
+def obtenir_coefficient_matiere(classe, matiere):
+    """Recherche dynamique du coefficient défini par le professeur."""
+    if "coefficients_db" in st.session_state and not st.session_state.coefficients_db.empty:
+        c_db = st.session_state.coefficients_db
+        res = c_db[(c_db["Classe"] == classe) & (c_db["Matière"] == matiere)]
+        if not res.empty and pd.notna(res.iloc[0].get("Coefficient")):
+            return float(res.iloc[0]["Coefficient"])
+            
+    if "matieres_def" in st.session_state and not st.session_state.matieres_def.empty:
+        m_def = st.session_state.matieres_def
+        res = m_def[m_def["Matière"] == matiere]
+        if not res.empty and "Coefficient" in m_def.columns and pd.notna(res.iloc[0].get("Coefficient")):
+            return float(res.iloc[0]["Coefficient"])
+            
+    return 1.0
+
 def calculer_bulletin_eleve(classe, eleve, periode):
     cycle_classe = obtenir_cycle_classe(classe)
     
@@ -697,10 +716,8 @@ def calculer_bulletin_eleve(classe, eleve, periode):
 
     # Dictionnaire de recherche des coefficients
     coeffs_dict = {}
-    if "coefficients_db" in st.session_state and not st.session_state.coefficients_db.empty:
-        c_db = st.session_state.coefficients_db[st.session_state.coefficients_db["Classe"] == classe]
-        for _, r_c in c_db.iterrows():
-            coeffs_dict[r_c["Matière"]] = float(r_c["Coefficient"]) if pd.notna(r_c.get("Coefficient")) else 1.0
+    for mat in liste_matieres:
+        coeffs_dict[mat] = obtenir_coefficient_matiere(classe, mat)
 
     for mat in liste_matieres:
         coef = coeffs_dict.get(mat, 1.0)
@@ -1209,7 +1226,8 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 eleves_classe = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == classe_autorisee]["Nom Complet"].tolist()
 
                 if eleves_classe:
-                    st.markdown(f"#### Grille de notation : {matiere_sel} ({periode_sel}) — Barème / {bareme_sel}")
+                    coef_actuel = obtenir_coefficient_matiere(classe_autorisee, matiere_sel)
+                    st.markdown(f"#### Grille de notation : {matiere_sel} ({periode_sel}) — Barème / {bareme_sel} — Coefficient : **{coef_actuel}**")
                     
                     notes_actuelles = pd.DataFrame()
                     if not st.session_state.notes_db.empty:
