@@ -3,14 +3,14 @@ from datetime import datetime
 import io
 import json
 import os
-import sqlite3
 import urllib.request
 from fpdf import FPDF
 import pandas as pd
 import streamlit as st
+from supabase import create_client, Client
 
 # ==========================================
-# 0. GESTION DE LA PERSISTANCE EXTERNE CLOUD & SÉCURITÉ MOTS DE PASSE
+# 0. GESTION DE LA PERSISTANCE SUPABASE & SÉCURITÉ MOTS DE PASSE
 # ==========================================
 try:
     import bcrypt
@@ -34,178 +34,83 @@ def verifier_mot_de_passe(password: str, hashed: str) -> bool:
     except Exception:
         return False
 
-DB_FILE = "cpnm_database.db"
 ADMIN_EMAIL = "cpnm@gmail.com"
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
-def init_sqlite_db():
-    """Initialise la base de données SQLite avec de vraies tables relationnelles structurées et gère les migrations de colonnes."""
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS app_data (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS eleves (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            prenom TEXT,
-            nom TEXT,
-            date_naissance TEXT,
-            classe TEXT,
-            photo TEXT
-        )
-    """)
+@st.cache_resource
+def init_supabase() -> Client:
+    """Initialise le client SDK Supabase."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        st.warning("⚠️ Variables d'environnement SUPABASE_URL et SUPABASE_KEY non définies.")
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS professeurs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            prenom TEXT,
-            nom TEXT,
-            email TEXT,
-            matiere_principale TEXT,
-            classe_attribuee TEXT,
-            mot_de_passe TEXT
-        )
-    """)
-    
-    # Migration sécurisée : vérifie si la colonne 'email' existe dans 'professeurs' (pour les bases existantes)
-    cursor.execute("PRAGMA table_info(professeurs)")
-    colonnes_prof = [col[1] for col in cursor.fetchall()]
-    if "email" not in colonnes_prof:
-        try:
-            cursor.execute("ALTER TABLE professeurs ADD COLUMN email TEXT")
-        except Exception:
-            pass
-    if "matiere_principale" not in colonnes_prof:
-        try:
-            cursor.execute("ALTER TABLE professeurs ADD COLUMN matiere_principale TEXT")
-        except Exception:
-            pass
-    if "classe_attribuee" not in colonnes_prof:
-        try:
-            cursor.execute("ALTER TABLE professeurs ADD COLUMN classe_attribuee TEXT")
-        except Exception:
-            pass
-    if "mot_de_passe" not in colonnes_prof:
-        try:
-            cursor.execute("ALTER TABLE professeurs ADD COLUMN mot_de_passe TEXT")
-        except Exception:
-            pass
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS absences (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT,
-            classe TEXT,
-            eleve TEXT,
-            statut TEXT,
-            motif TEXT
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            classe TEXT,
-            matiere TEXT,
-            periode TEXT,
-            eleve TEXT,
-            devoir1 REAL,
-            devoir2 REAL,
-            composition REAL,
-            moyenne REAL
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS audit_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            horodatage TEXT,
-            acteur TEXT,
-            action TEXT,
-            details TEXT
-        )
-    """)
-    
-    conn.commit()
-    conn.close()
-
-init_sqlite_db()
+supabase = init_supabase()
 
 def enregistrer_log_action(acteur: str, action: str, details: str):
-    """Consigne chaque action utilisateur dans la table de logs (Event Sourcing / Audit Trail)."""
+    """Consigne chaque action utilisateur dans la table audit_logs via Supabase SDK."""
     try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
         horodatage = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        cursor.execute("INSERT INTO audit_logs (horodatage, acteur, action, details) VALUES (?, ?, ?, ?)",
-                       (horodatage, acteur, action, details))
-        conn.commit()
-        conn.close()
+        supabase.table("audit_logs").insert({
+            "horodatage": horodatage,
+            "acteur": acteur,
+            "action": action,
+            "details": details
+        }).execute()
     except Exception:
         pass
 
-def routine_sauvegarde_automatisee_fin_journee():
-    backup_dir = "backups_securises"
-    if not os.path.exists(backup_dir):
-        os.makedirs(backup_dir)
-    date_str = datetime.today().strftime('%Y-%m-%d')
-    backup_path = os.path.join(backup_dir, f"backup_cpnm_{date_str}.db")
-    if os.path.exists(DB_FILE):
-        try:
-            import shutil
-            shutil.copyfile(DB_FILE, backup_path)
-            enregistrer_log_action("SYSTEM", "SAUVEGARDE_AUTOMATIQUE", f"Backup créé vers {backup_path}")
-        except Exception:
-            pass
-
-routine_sauvegarde_automatisee_fin_journee()
-
 def charger_donnees_externes():
-    """Charge les données depuis la base de données externe en ligne (SQLite externe)."""
+    """Charge les données depuis Supabase via SDK."""
     data = {}
-    if os.path.exists(DB_FILE):
-        try:
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            cursor.execute("SELECT key, value FROM app_data")
-            rows = cursor.fetchall()
-            
-            cursor.execute("SELECT prenom, nom, date_naissance, classe, photo FROM eleves")
-            eleves_rows = cursor.fetchall()
-            if eleves_rows:
-                eleves_list = []
-                for r in eleves_rows:
-                    p, n, dn, cl, ph = r
-                    nom_complet = f"{p} {n}".strip() if p or n else ""
-                    eleves_list.append({"Nom Complet": nom_complet, "Prénom": p or "", "Nom": n or "", "Date de Naissance": dn or "", "Classe": cl or "", "Photo": ph})
-                data["eleves_db_sql"] = pd.DataFrame(eleves_list).to_dict(orient="split")
+    try:
+        # Chargement de app_data
+        app_data_res = supabase.table("app_data").select("key, value").execute()
+        if app_data_res.data:
+            for row in app_data_res.data:
+                data[row["key"]] = json.loads(row["value"])
 
-            cursor.execute("SELECT prenom, nom, email, matiere_principale, classe_attribuee, mot_de_passe FROM professeurs")
-            prof_rows = cursor.fetchall()
-            if prof_rows:
-                prof_list = []
-                for r in prof_rows:
-                    pr, no, em, mat, cla, pwd = r
-                    prof_list.append({"Nom": no or "", "Prénom": pr or "", "Email": em or "", "Mot de passe": pwd or "", "Matière Principale": mat or "", "Classe Attribuée": cla or ""})
-                data["prof_credentials_sql"] = pd.DataFrame(prof_list).to_dict(orient="split")
+        # Chargement des élèves
+        eleves_res = supabase.table("eleves").select("prenom, nom, date_naissance, classe, photo").execute()
+        if eleves_res.data:
+            eleves_list = []
+            for r in eleves_res.data:
+                p, n, dn, cl, ph = r.get("prenom"), r.get("nom"), r.get("date_naissance"), r.get("classe"), r.get("photo")
+                nom_complet = f"{p} {n}".strip() if p or n else ""
+                eleves_list.append({
+                    "Nom Complet": nom_complet,
+                    "Prénom": p or "",
+                    "Nom": n or "",
+                    "Date de Naissance": dn or "",
+                    "Classe": cl or "",
+                    "Photo": ph
+                })
+            data["eleves_db_sql"] = pd.DataFrame(eleves_list).to_dict(orient="split")
 
-            conn.close()
-            for key, val_json in rows:
-                data[key] = json.loads(val_json)
-        except Exception:
-            return {}
+        # Chargement des professeurs
+        prof_res = supabase.table("professeurs").select("prenom, nom, email, matiere_principale, classe_attribuee, mot_de_passe").execute()
+        if prof_res.data:
+            prof_list = []
+            for r in prof_res.data:
+                pr, no, em, mat, cla, pwd = r.get("prenom"), r.get("nom"), r.get("email"), r.get("matiere_principale"), r.get("classe_attribuee"), r.get("mot_de_passe")
+                prof_list.append({
+                    "Nom": no or "",
+                    "Prénom": pr or "",
+                    "Email": em or "",
+                    "Mot de passe": pwd or "",
+                    "Matière Principale": mat or "",
+                    "Classe Attribuée": cla or ""
+                })
+            data["prof_credentials_sql"] = pd.DataFrame(prof_list).to_dict(orient="split")
+
+    except Exception as e:
+        st.error(f"Erreur lors du chargement Supabase : {e}")
+        return {}
     return data
 
 def sauvegarder_donnees_externes(action_label="SAUVEGARDE_DONNEES"):
-    """Sauvegarde toutes les bases de données de session dans la base externe en ligne / SQLite et trace l'action."""
+    """Sauvegarde toutes les bases de données de session dans Supabase via SDK et trace l'action."""
     if "eleves_db" in st.session_state and not st.session_state.eleves_db.empty:
         prenoms = []
         noms = []
@@ -256,39 +161,67 @@ def sauvegarder_donnees_externes(action_label="SAUVEGARDE_DONNEES"):
         "edt_grid_db": {k: v.to_dict(orient="split") for k, v in st.session_state.edt_grid_db.items()},
         "edt_documents": {k: v for k, v in st.session_state.edt_documents.items()}
     }
+
     try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        
+        # Synchro app_data (upsert)
         for key, value in data_to_save.items():
-            cursor.execute("""
-                INSERT INTO app_data (key, value) VALUES (?, ?)
-                ON CONFLICT(key) DO UPDATE SET value=excluded.value
-            """, (key, json.dumps(value, ensure_ascii=False)))
-            
+            supabase.table("app_data").upsert({
+                "key": key,
+                "value": json.dumps(value, ensure_ascii=False)
+            }).execute()
+
+        # Synchro table eleves
         if "eleves_db" in st.session_state and not st.session_state.eleves_db.empty:
-            cursor.execute("DELETE FROM eleves")
-            for _, r in st.session_state.eleves_db.iterrows():
-                cursor.execute("INSERT INTO eleves (prenom, nom, date_naissance, classe, photo) VALUES (?, ?, ?, ?, ?)",
-                               (r.get("Prénom"), r.get("Nom"), r.get("Date de Naissance"), r.get("Classe"), r.get("Photo")))
+            supabase.table("eleves").delete().neq("id", 0).execute()
+            eleves_payload = [
+                {
+                    "prenom": r.get("Prénom"),
+                    "nom": r.get("Nom"),
+                    "date_naissance": r.get("Date de Naissance"),
+                    "classe": r.get("Classe"),
+                    "photo": r.get("Photo")
+                }
+                for _, r in st.session_state.eleves_db.iterrows()
+            ]
+            if eleves_payload:
+                supabase.table("eleves").insert(eleves_payload).execute()
 
+        # Synchro table professeurs
         if "prof_credentials" in st.session_state and not st.session_state.prof_credentials.empty:
-            cursor.execute("DELETE FROM professeurs")
-            for _, r in st.session_state.prof_credentials.iterrows():
-                cursor.execute("INSERT INTO professeurs (prenom, nom, email, matiere_principale, classe_attribuee, mot_de_passe) VALUES (?, ?, ?, ?, ?, ?)",
-                               (r.get("Prénom"), r.get("Nom"), r.get("Email"), r.get("Matière Principale"), r.get("Classe Attribuée"), r.get("Mot de passe")))
+            supabase.table("professeurs").delete().neq("id", 0).execute()
+            prof_payload = [
+                {
+                    "prenom": r.get("Prénom"),
+                    "nom": r.get("Nom"),
+                    "email": r.get("Email"),
+                    "matiere_principale": r.get("Matière Principale"),
+                    "classe_attribuee": r.get("Classe Attribuée"),
+                    "mot_de_passe": r.get("Mot de passe")
+                }
+                for _, r in st.session_state.prof_credentials.iterrows()
+            ]
+            if prof_payload:
+                supabase.table("professeurs").insert(prof_payload).execute()
 
+        # Synchro table absences
         if "absences_db" in st.session_state and not st.session_state.absences_db.empty:
-            cursor.execute("DELETE FROM absences")
-            for _, r in st.session_state.absences_db.iterrows():
-                cursor.execute("INSERT INTO absences (date, classe, eleve, statut, motif) VALUES (?, ?, ?, ?, ?)",
-                               (r.get("Date"), r.get("Classe"), r.get("Élève"), r.get("Statut"), r.get("Motif")))
+            supabase.table("absences").delete().neq("id", 0).execute()
+            absences_payload = [
+                {
+                    "date": r.get("Date"),
+                    "classe": r.get("Classe"),
+                    "eleve": r.get("Élève"),
+                    "statut": r.get("Statut"),
+                    "motif": r.get("Motif")
+                }
+                for _, r in st.session_state.absences_db.iterrows()
+            ]
+            if absences_payload:
+                supabase.table("absences").insert(absences_payload).execute()
 
-        conn.commit()
-        conn.close()
-        enregistrer_log_action("ADMIN", action_label, "Sauvegarde générale effectuée avec succès vers la base externe.")
+        enregistrer_log_action("ADMIN", action_label, "Sauvegarde générale effectuée avec succès vers Supabase.")
     except Exception as e:
-        st.error(f"Erreur lors de la sauvegarde externe : {e}")
+        st.error(f"Erreur lors de la sauvegarde Supabase : {e}")
 
 saved_data = charger_donnees_externes()
 
@@ -965,7 +898,7 @@ if st.session_state.espace_actif == "🏠 Accueil":
             <h3 style="color: #1E3A8A; font-weight: 800;">Portail Numérique Intelligent & Suivi Pédagogique Centralisé</h3>
             <p style="font-size: 1.1rem; color: #475569; max-width: 800px; margin: 0 auto;">
                 Sélectionnez votre espace. Le système intègre la gestion sécurisée par listes blanches harmonisées (Professeurs, Parents, Administration) 
-                et une assurance totale de pérennisation des données avec audit granulaire et persistance externe en ligne.
+                et une assurance totale de pérennisation des données avec audit granulaire et persistance externe en ligne via Supabase.
             </p>
         </div>
         """,
@@ -1237,7 +1170,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             
                             sauvegarder_donnees_externes("SAISIE_NOTES_PROF")
                             enregistrer_log_action(prof_connecte, "SAISIE_NOTES", f"Mise à jour notes pour {matiere_sel} ({classe_autorisee})")
-                            st.success("Notes enregistrées, normalisées sur /20 et synchronisées dans la base externe avec succès !")
+                            st.success("Notes enregistrées, normalisées sur /20 et synchronisées dans Supabase avec succès !")
                 else:
                     st.warning("Aucun élève enregistré dans cette classe.")
 
@@ -1280,7 +1213,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             
                             sauvegarder_donnees_externes("SAISIE_APPEL_PROF")
                             enregistrer_log_action(prof_connecte, "APPEL", f"Appel validé pour {classe_autorisee} à la date du {date_jour}")
-                            st.success("Appel enregistré, consigné dans les absences et synchronisé dans la base distante !")
+                            st.success("Appel enregistré, consigné dans les absences et synchronisé dans Supabase !")
                 else:
                     st.warning("Aucun élève trouvé pour cette classe.")
 
@@ -1367,7 +1300,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         
                         sauvegarder_donnees_externes("CAHIER_TEXTE_PROF")
                         enregistrer_log_action(prof_connecte, "CAHIER_TEXTE", f"Leçon publiée pour la matière {mat_ct}")
-                        st.success("Leçon publiée et enregistrée sur le serveur externe avec succès !")
+                        st.success("Leçon publiée et enregistrée sur Supabase avec succès !")
                     else:
                         st.error("Veuillez renseigner au moins la matière et le contenu de la séance.")
 
@@ -1486,7 +1419,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
         st.markdown("---")
         adm_tab = st.selectbox("Gestion Administrative :", [
-            "🔄 Sauvegarde & Restauration (Sécurité & Sync)",
+            "🔄 Sauvegarde & Restauration (Sécurité & Sync Supabase)",
             "🛡️ Gestion des Listes Blanches & Professeurs (Harmonisation)",
             "📅 Gestion Emplois du Temps (Lundi-Samedi / 08h-19h)",
             "🗄️ Base Globale & Suivi Annuel/Trimestriel/Mensuel",
@@ -1498,63 +1431,28 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             "🏫 Classes et Cycles"
         ])
 
-        if adm_tab == "🔄 Sauvegarde & Restauration (Sécurité & Sync)":
-            st.subheader("🔄 Gestion des Sauvegardes, Restaurations & Synchronisation Post-Restauration")
-            st.info("Ce module gère la sauvegarde manuelle, la restauration intégrale et la synchronisation avec la base de données externe en ligne (*Cloud Managed*).")
+        if adm_tab == "🔄 Sauvegarde & Restauration (Sécurité & Sync Supabase)":
+            st.subheader("🔄 Gestion des Sauvegardes, Restaurations & Synchronisation Supabase")
+            st.info("Ce module gère la sauvegarde manuelle et la synchronisation avec la base Supabase Cloud.")
 
             col_bk1, col_bk2 = st.columns(2)
             with col_bk1:
                 st.markdown("#### 💾 Sauvegarde Manuelle Immédiate")
                 if st.button("Générer une sauvegarde maintenant"):
                     sauvegarder_donnees_externes("SAUVEGARDE_MANUELLE")
-                    st.success("Sauvegarde externe vers le cloud/base distante effectuée et journalisée avec succès !")
-
-            with col_bk2:
-                st.markdown("#### 📥 Télécharger le fichier de Base de Données")
-                if os.path.exists(DB_FILE):
-                    with open(DB_FILE, "rb") as f:
-                        db_bytes = f.read()
-                    st.download_button(
-                        label="Télécharger cpnm_database.db",
-                        data=db_bytes,
-                        file_name="cpnm_database_backup.db",
-                        mime="application/octet-stream"
-                    )
+                    st.success("Sauvegarde externe vers Supabase Cloud effectuée et journalisée avec succès !")
 
             st.markdown("---")
-            st.markdown("#### ♻️ Restauration de la Base de Données & Synchronisation Post-Restauration")
-            uploaded_backup = st.file_uploader("Importer un fichier de sauvegarde (.db) pour restaurer l'état", type=["db"])
-            
-            if uploaded_backup is not None:
-                if st.button("⚠️ Confirmer et restaurer cette base de données"):
-                    try:
-                        with open(DB_FILE, "wb") as f_out:
-                            f_out.write(uploaded_backup.getbuffer())
-                        
-                        saved_data = charger_donnees_externes()
-                        st.session_state.clear()
-                        st.session_state.espace_actif = "🔒 Espace Administration (Sécurisé)"
-                        st.session_state.authenticated_admin = True
-                        st.cache_data.clear()
-                        
-                        enregistrer_log_action(ADMIN_EMAIL, "RESTAURATION_DB", "Restauration de la base de données effectuée et cache nettoyé.")
-                        st.success("Restauration réussie ! La base de données distante et les états locaux ont été synchronisés.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erreur critique lors de la restauration : {e}")
-
-            st.markdown("---")
-            st.markdown("#### 📜 Journal d'Audit des Actions (Event Sourcing)")
+            st.markdown("#### 📜 Journal d'Audit des Actions (Event Sourcing Supabase)")
             try:
-                conn_log = sqlite3.connect(DB_FILE)
-                df_logs = pd.read_sql_query("SELECT * FROM audit_logs ORDER BY id DESC LIMIT 100", conn_log)
-                conn_log.close()
-                if not df_logs.empty:
+                logs_res = supabase.table("audit_logs").select("*").order("id", desc=True).limit(100).execute()
+                if logs_res.data:
+                    df_logs = pd.DataFrame(logs_res.data)
                     st.dataframe(df_logs, use_container_width=True)
                 else:
                     st.info("Aucun journal d'audit enregistré pour l'instant.")
-            except Exception:
-                st.info("Table d'audit non disponible.")
+            except Exception as e:
+                st.info(f"Table d'audit non disponible : {e}")
 
         elif adm_tab == "🛡️ Gestion des Listes Blanches & Professeurs (Harmonisation)":
             st.subheader("🛡️ Refonte, Fusion & Gestion Harmonisée des Professeurs et Listes Blanches")
@@ -1574,7 +1472,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 if not edited_admin_wl.equals(st.session_state.admin_white_list):
                     st.session_state.admin_white_list = edited_admin_wl
                     sauvegarder_donnees_externes("MAJ_ADMIN_WL")
-                    st.success("Liste blanche administration mise à jour et enregistrée en ligne !")
+                    st.success("Liste blanche administration mise à jour et enregistrée sur Supabase !")
 
             with tab_wl2:
                 st.markdown("#### 👨‍🏫 Module de Refonte et Fusion des Professeurs")
@@ -1628,7 +1526,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     st.session_state.edt_grid_db[classe_edt_sel] = edited_edt
                     sauvegarder_donnees_externes("MAJ_EDT")
                     enregistrer_log_action(ADMIN_EMAIL, "MAJ_EDT", f"Mise à jour EDT pour {classe_edt_sel}")
-                    st.success(f"Emploi du temps de la classe {classe_edt_sel} enregistré et synchronisé en ligne avec succès !")
+                    st.success(f"Emploi du temps de la classe {classe_edt_sel} enregistré et synchronisé sur Supabase avec succès !")
 
                 st.markdown("---")
                 st.markdown("#### 📥 Options d'Exportation de l'Emploi du Temps")
