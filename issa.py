@@ -157,6 +157,11 @@ def sauvegarder_donnees_externes(action_label="SAUVEGARDE_DONNEES"):
     # Assurer que notes_db est réindexé de manière propre avant enregistrement
     if "notes_db" in st.session_state and isinstance(st.session_state.notes_db, pd.DataFrame):
         st.session_state.notes_db = st.session_state.notes_db.reset_index(drop=True)
+        # S'assurer de la synchronisation bidirectionnelle des colonnes de période
+        if "Periode" in st.session_state.notes_db.columns:
+            st.session_state.notes_db["Période"] = st.session_state.notes_db["Periode"]
+        elif "Période" in st.session_state.notes_db.columns:
+            st.session_state.notes_db["Periode"] = st.session_state.notes_db["Période"]
 
     # Nettoyage préventif des DataFrames pour éliminer tout NaN/None avant de convertir en dictionnaire
     data_to_save = {
@@ -501,11 +506,11 @@ if "notes_db" not in st.session_state:
         st.session_state.notes_db = pd.DataFrame(**saved_data["notes_db"])
     else:
         st.session_state.notes_db = pd.DataFrame(
-            columns=["Classe", "Matière", "Periode", "Eleve", "Devoir1", "Devoir2", "Composition"],
+            columns=["Classe", "Matière", "Periode", "Période", "Eleve", "Devoir1", "Devoir2", "Composition"],
             data=[
-                ["6ème A", "Mathématiques", "1er Semestre", "Mamadou Diallo", 14.0, 15.0, 13.5],
-                ["6ème A", "Français", "1er Semestre", "Mamadou Diallo", 12.0, 11.5, 13.0],
-                ["CP", "Calcul / Mathématiques", "1er Trimestre", "Fatou Sow", 16.0, 15.0, 17.0]
+                ["6ème A", "Mathématiques", "1er Semestre", "1er Semestre", "Mamadou Diallo", 14.0, 15.0, 13.5],
+                ["6ème A", "Français", "1er Semestre", "1er Semestre", "Mamadou Diallo", 12.0, 11.5, 13.0],
+                ["CP", "Calcul / Mathématiques", "1er Trimestre", "1er Trimestre", "Fatou Sow", 16.0, 15.0, 17.0]
             ]
         )
 
@@ -513,24 +518,24 @@ if "notes_db" not in st.session_state:
 if isinstance(st.session_state.notes_db, pd.DataFrame):
     st.session_state.notes_db = st.session_state.notes_db.reset_index(drop=True)
 
-# Normalisation robuste pour s'assurer que les colonnes "Periode" et "Période" existent toujours pour compatibilité
-if "Periode" not in st.session_state.notes_db.columns:
-    if "Période" in st.session_state.notes_db.columns:
-        st.session_state.notes_db["Periode"] = st.session_state.notes_db["Période"]
-    else:
-        st.session_state.notes_db["Periode"] = "1er Semestre"
-if "Période" not in st.session_state.notes_db.columns:
+# Normalisation robuste pour s'assurer que les colonnes "Periode" et "Période" existent toujours de façon miroir
+if "Periode" not in st.session_state.notes_db.columns and "Période" in st.session_state.notes_db.columns:
+    st.session_state.notes_db["Periode"] = st.session_state.notes_db["Période"]
+elif "Période" not in st.session_state.notes_db.columns and "Periode" in st.session_state.notes_db.columns:
     st.session_state.notes_db["Période"] = st.session_state.notes_db["Periode"]
+elif "Periode" not in st.session_state.notes_db.columns and "Période" not in st.session_state.notes_db.columns:
+    st.session_state.notes_db["Periode"] = "1er Semestre"
+    st.session_state.notes_db["Période"] = "1er Semestre"
 
 if "viescolaire_db" not in st.session_state:
     if "viescolaire_db" in saved_data:
         st.session_state.viescolaire_db = pd.DataFrame(**saved_data["viescolaire_db"])
     else:
         st.session_state.viescolaire_db = pd.DataFrame(
-            columns=["Classe", "Periode", "Eleve", "AbsencesJustifiees", "AbsencesNonJustifiees", "Retards", "HeuresPerdues", "Observations", "DecisionConseil"],
+            columns=["Classe", "Periode", "Période", "Eleve", "AbsencesJustifiees", "AbsencesNonJustifiees", "Retards", "HeuresPerdues", "Observations", "DecisionConseil"],
             data=[
-                ["6ème A", "1er Semestre", "Mamadou Diallo", 1, 0, 1, 2, "Elève sérieux et appliqué.", "Tableau d'honneur"],
-                ["CP", "1er Trimestre", "Fatou Sow", 0, 0, 0, 0, "Très bon trimestre.", "Félicitations"]
+                ["6ème A", "1er Semestre", "1er Semestre", "Mamadou Diallo", 1, 0, 1, 2, "Elève sérieux et appliqué.", "Tableau d'honneur"],
+                ["CP", "1er Trimestre", "1er Trimestre", "Fatou Sow", 0, 0, 0, 0, "Très bon trimestre.", "Félicitations"]
             ]
         )
 
@@ -638,14 +643,21 @@ def calculer_bulletin_eleve(classe, eleve, periode):
     if matieres_coeffs.empty:
         matieres_coeffs = pd.DataFrame({"Matière": ["Mathématiques", "Français"], "Coefficient": [2, 2]})
 
-    # Filtrage tolérant à la fois la colonne "Periode" et "Période"
+    # Synchronisation souple tolérant 'Periode' ou 'Période'
     notes_df = st.session_state.notes_db
-    col_per = "Periode" if "Periode" in notes_df.columns else "Période"
     
-    notes_classe_periode = notes_df[
-        (notes_df["Classe"] == classe) & 
-        (notes_df[col_per] == periode)
-    ]
+    if "Periode" in notes_df.columns:
+        notes_classe_periode = notes_df[
+            (notes_df["Classe"] == classe) & 
+            (notes_df["Periode"] == periode)
+        ]
+    elif "Période" in notes_df.columns:
+        notes_classe_periode = notes_df[
+            (notes_df["Classe"] == classe) & 
+            (notes_df["Période"] == periode)
+        ]
+    else:
+        notes_classe_periode = pd.DataFrame()
 
     lignes_bulletin = []
     total_points_global = 0.0
@@ -656,8 +668,8 @@ def calculer_bulletin_eleve(classe, eleve, periode):
         raw_coef = row_mat["Coefficient"]
         coef = float(raw_coef) if pd.notna(raw_coef) else 1.0
         
-        note_row = notes_classe_periode[notes_classe_periode["Eleve"] == eleve]
-        note_mat = note_row[note_row["Matière"] == mat]
+        note_row = notes_classe_periode[notes_classe_periode["Eleve"] == eleve] if not notes_classe_periode.empty else pd.DataFrame()
+        note_mat = note_row[note_row["Matière"] == mat] if not note_row.empty else pd.DataFrame()
 
         d1, d2, comp = 0.0, 0.0, 0.0
         if not note_mat.empty:
@@ -693,12 +705,12 @@ def calculer_bulletin_eleve(classe, eleve, periode):
     for el in tous_eleves:
         pts = 0.0
         coefs = 0.0
-        notes_el_p = notes_classe_periode[notes_classe_periode["Eleve"] == el]
+        notes_el_p = notes_classe_periode[notes_classe_periode["Eleve"] == el] if not notes_classe_periode.empty else pd.DataFrame()
         for _, row_mat in matieres_coeffs.iterrows():
             mat = row_mat["Matière"]
             raw_coef = row_mat["Coefficient"]
             coef = float(raw_coef) if pd.notna(raw_coef) else 1.0
-            n_m = notes_el_p[notes_el_p["Matière"] == mat]
+            n_m = notes_el_p[notes_el_p["Matière"] == mat] if not notes_el_p.empty else pd.DataFrame()
             if not n_m.empty:
                 d1_val = n_m.iloc[0]["Devoir1"]
                 d2_val = n_m.iloc[0]["Devoir2"]
@@ -719,12 +731,12 @@ def calculer_bulletin_eleve(classe, eleve, periode):
             break
 
     vs_df = st.session_state.viescolaire_db
-    vs_col_per = "Periode" if "Periode" in vs_df.columns else "Période"
-    vs_row = vs_df[
-        (vs_df["Classe"] == classe) & 
-        (vs_df[vs_col_per] == periode) & 
-        (vs_df["Eleve"] == eleve)
-    ]
+    vs_row = pd.DataFrame()
+    if "Periode" in vs_df.columns:
+        vs_row = vs_df[(vs_df["Classe"] == classe) & (vs_df["Periode"] == periode) & (vs_df["Eleve"] == eleve)]
+    elif "Période" in vs_df.columns:
+        vs_row = vs_df[(vs_df["Classe"] == classe) & (vs_df["Période"] == periode) & (vs_df["Eleve"] == eleve)]
+
     abs_just, abs_non_just, retards, heures_p, obs, decision = 0, 0, 0, 0, "RAS", "Encouragements"
     if not vs_row.empty:
         abs_just = int(vs_row.iloc[0]["AbsencesJustifiees"]) if pd.notna(vs_row.iloc[0]["AbsencesJustifiees"]) else 0
@@ -813,7 +825,7 @@ def generer_pdf_bulletin(bul_data):
     pdf.set_font("Arial", "B", 9)
     pdf.cell(0, 5, "BILAN DE LA VIE SCOLAIRE ET DISCIPLINE", 0, 1, "L")
     pdf.set_font("Arial", "", 9)
-    pdf.cell(0, 5, f"Absences justifiées : {bul_data['abs_just']} | Absences non justifiées : {bul_data['abs_non_just']} | Retards : {bul_data['retards']} | Heures perdues : {bul_data['retards']}h", 1, 1, "L")
+    pdf.cell(0, 5, f"Absences justifiées : {bul_data['abs_just']} | Absences non justifiées : {bul_data['abs_non_just']} | Retards : {bul_data['retards']} | Heures perdues : {bul_data['heures_perdues']}h", 1, 1, "L")
     pdf.cell(0, 5, f"Observations / Appréciation générale : {bul_data['observations']}", 1, 1, "L")
     pdf.cell(0, 5, f"Décision du Conseil de Classe : {bul_data['decision']}", 1, 1, "L")
     pdf.ln(10)
@@ -1159,14 +1171,20 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 if eleves_classe:
                     st.markdown(f"#### Grille de notation : {matiere_sel} ({periode_sel}) — Barème / {bareme_sel}")
                     
-                    notes_actuelles = st.session_state.notes_db[
-                        (st.session_state.notes_db["Classe"] == classe_autorisee) & 
-                        (st.session_state.notes_db["Matière"] == matiere_sel) & 
-                        (
-                            (st.session_state.notes_db["Periode"] == periode_sel) if "Periode" in st.session_state.notes_db.columns 
-                            else (st.session_state.notes_db["Période"] == periode_sel)
-                        )
-                    ]
+                    notes_actuelles = pd.DataFrame()
+                    if not st.session_state.notes_db.empty:
+                        df_temp = st.session_state.notes_db
+                        cond_cls = (df_temp["Classe"] == classe_autorisee)
+                        cond_mat = (df_temp["Matière"] == matiere_sel)
+                        
+                        if "Periode" in df_temp.columns and "Période" in df_temp.columns:
+                            cond_per = (df_temp["Periode"] == periode_sel) | (df_temp["Période"] == periode_sel)
+                        elif "Periode" in df_temp.columns:
+                            cond_per = (df_temp["Periode"] == periode_sel)
+                        else:
+                            cond_per = (df_temp["Période"] == periode_sel)
+
+                        notes_actuelles = df_temp[cond_cls & cond_mat & cond_per]
 
                     with st.form("form_saisie_notes_harmonise"):
                         saisie_data = []
@@ -1179,7 +1197,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         st.markdown("<hr style='margin: 5px 0 15px 0;'>", unsafe_allow_html=True)
 
                         for idx_el, el in enumerate(eleves_classe):
-                            ex_row = notes_actuelles[notes_actuelles["Eleve"] == el]
+                            ex_row = notes_actuelles[notes_actuelles["Eleve"] == el] if not notes_actuelles.empty else pd.DataFrame()
                             d1_val = float(ex_row.iloc[0]["Devoir1"]) if not ex_row.empty and pd.notna(ex_row.iloc[0]["Devoir1"]) else 0.0
                             d2_val = float(ex_row.iloc[0]["Devoir2"]) if not ex_row.empty and pd.notna(ex_row.iloc[0]["Devoir2"]) else 0.0
                             comp_val = float(ex_row.iloc[0]["Composition"]) if not ex_row.empty and pd.notna(ex_row.iloc[0]["Composition"]) else 0.0
@@ -1213,26 +1231,33 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         btn_sync = st.form_submit_button("🔄 Enregistrer et Synchroniser les Notes")
 
                         if btn_sync:
-                            # Réinitialisation préalable de l'index pour empêcher l'erreur duplicate labels sur reindex
+                            # 1. Réinitialisation systématique de l'index pour éviter duplicate labels
                             st.session_state.notes_db = st.session_state.notes_db.reset_index(drop=True)
-                            col_p = "Periode" if "Periode" in st.session_state.notes_db.columns else "Période"
+
+                            # 2. Construction du filtre de suppression tolérant
+                            df_temp = st.session_state.notes_db
+                            cond_cls = (df_temp["Classe"] == classe_autorisee)
+                            cond_mat = (df_temp["Matière"] == matiere_sel)
                             
-                            # Suppression sécurisée des anciennes notes pour réécriture propre
-                            mask_to_keep = ~(
-                                (st.session_state.notes_db["Classe"] == classe_autorisee) & 
-                                (st.session_state.notes_db["Matière"] == matiere_sel) & 
-                                (st.session_state.notes_db[col_p] == periode_sel)
-                            )
+                            if "Periode" in df_temp.columns and "Période" in df_temp.columns:
+                                cond_per = (df_temp["Periode"] == periode_sel) | (df_temp["Période"] == periode_sel)
+                            elif "Periode" in df_temp.columns:
+                                cond_per = (df_temp["Periode"] == periode_sel)
+                            else:
+                                cond_per = (df_temp["Période"] == periode_sel)
+
+                            mask_to_keep = ~(cond_cls & cond_mat & cond_per)
                             st.session_state.notes_db = st.session_state.notes_db[mask_to_keep].reset_index(drop=True)
-                            
+
+                            # 3. Insertion propre et concaténation
                             new_notes_df = pd.DataFrame(saisie_data)
                             st.session_state.notes_db = pd.concat([st.session_state.notes_db, new_notes_df], ignore_index=True)
-                            
-                            # Double affectation de compatibilité
-                            st.session_state.notes_db["Periode"] = st.session_state.notes_db[col_p]
-                            st.session_state.notes_db["Période"] = st.session_state.notes_db[col_p]
 
-                            # Sauvegarde externe dans la base Supabase Cloud
+                            # 4. Assurer la présence des deux colonnes 'Periode' et 'Période'
+                            st.session_state.notes_db["Periode"] = st.session_state.notes_db["Periode"].fillna(periode_sel)
+                            st.session_state.notes_db["Période"] = st.session_state.notes_db["Periode"]
+
+                            # 5. Sauvegarde et persistance
                             sauvegarder_donnees_externes("SAISIE_NOTES_PROF")
                             enregistrer_log_action(prof_connecte, "SAISIE_NOTES", f"Saisie & Synchronisation réussie pour {matiere_sel} ({classe_autorisee})")
                             st.success("✅ Enregistrement et synchronisation réussis ! Les notes sont publiées en temps réel dans l'espace parents et le bulletin.")
@@ -1312,13 +1337,20 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.form_submit_button("🔄 Enregistrer et Synchroniser la Vie Scolaire"):
                         if el_vs:
-                            col_vs_per = "Periode" if "Periode" in st.session_state.viescolaire_db.columns else "Période"
                             st.session_state.viescolaire_db = st.session_state.viescolaire_db.reset_index(drop=True)
-                            st.session_state.viescolaire_db = st.session_state.viescolaire_db[
-                                ~((st.session_state.viescolaire_db["Classe"] == classe_autorisee) & 
-                                  (st.session_state.viescolaire_db[col_vs_per] == periode_vs) & 
-                                  (st.session_state.viescolaire_db["Eleve"] == el_vs))
-                            ].reset_index(drop=True)
+                            df_vs = st.session_state.viescolaire_db
+                            
+                            cond_cls = (df_vs["Classe"] == classe_autorisee)
+                            cond_el = (df_vs["Eleve"] == el_vs)
+                            if "Periode" in df_vs.columns and "Période" in df_vs.columns:
+                                cond_per = (df_vs["Periode"] == periode_vs) | (df_vs["Période"] == periode_vs)
+                            elif "Periode" in df_vs.columns:
+                                cond_per = (df_vs["Periode"] == periode_vs)
+                            else:
+                                cond_per = (df_vs["Période"] == periode_vs)
+
+                            st.session_state.viescolaire_db = df_vs[~(cond_cls & cond_el & cond_per)].reset_index(drop=True)
+                            
                             new_vs = pd.DataFrame([{
                                 "Classe": classe_autorisee, 
                                 "Periode": periode_vs, 
