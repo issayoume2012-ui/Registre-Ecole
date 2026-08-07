@@ -1495,14 +1495,14 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.markdown("#### Administrateurs Autorisés & Définition de Mot de Passe")
                 edited_admin_wl = st.data_editor(st.session_state.admin_white_list, num_rows="dynamic", use_container_width=True, key="ed_admin_wl")
                 
-                has_principal = any(str(r.get("Email", "")).strip().lower() == ADMIN_EMAIL.lower() for _, r in edited_admin_wl.iterrows())
-                if not has_principal:
-                    default_row = pd.DataFrame([{"Email": ADMIN_EMAIL, "Nom": "Mandela", "Prénom": "Ayant Droit", "Mot de passe": hacher_mot_de_passe("cpnm2026"), "Niveau d'accès": "Super-Admin Ayant-Droit"}])
-                    edited_admin_wl = pd.concat([default_row, edited_admin_wl], ignore_index=True)
-
-                if not edited_admin_wl.equals(st.session_state.admin_white_list):
+                if st.button("💾 Enregistrer les modifications Admin", key="btn_save_admin_wl"):
+                    has_principal = any(str(r.get("Email", "")).strip().lower() == ADMIN_EMAIL.lower() for _, r in edited_admin_wl.iterrows())
+                    if not has_principal:
+                        default_row = pd.DataFrame([{"Email": ADMIN_EMAIL, "Nom": "Mandela", "Prénom": "Ayant Droit", "Mot de passe": hacher_mot_de_passe("cpnm2026"), "Niveau d'accès": "Super-Admin Ayant-Droit"}])
+                        edited_admin_wl = pd.concat([default_row, edited_admin_wl], ignore_index=True)
                     st.session_state.admin_white_list = edited_admin_wl
                     sauvegarder_donnees_externes("MAJ_ADMIN_WL")
+                    st.success("Modifications de la liste blanche administrateurs enregistrées avec succès !")
 
             with tab_wl2:
                 st.markdown("#### 👨‍🏫 Module de Refonte et Fusion des Professeurs")
@@ -1515,7 +1515,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     key="ed_prof_merged_unified"
                 )
                 
-                if not edited_prof_merged.equals(st.session_state.prof_credentials):
+                if st.button("💾 Enregistrer les modifications Professeurs", key="btn_save_prof_merged"):
                     st.session_state.prof_credentials = edited_prof_merged
                     sync_wl_list = []
                     for _, r in edited_prof_merged.iterrows():
@@ -1528,13 +1528,15 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                         })
                     st.session_state.prof_white_list = pd.DataFrame(sync_wl_list)
                     sauvegarder_donnees_externes("MAJ_PROF_FUSION_HARMONISEE")
+                    st.success("Données des professeurs et liste blanche mises à jour et synchronisées avec succès !")
 
             with tab_wl3:
                 st.markdown("#### Parents Autorisés (Suivi Élèves)")
                 edited_parents_wl = st.data_editor(st.session_state.parents_white_list, num_rows="dynamic", use_container_width=True, key="ed_parents_wl")
-                if not edited_parents_wl.equals(st.session_state.parents_white_list):
+                if st.button("💾 Enregistrer les modifications Parents", key="btn_save_parents_wl"):
                     st.session_state.parents_white_list = edited_parents_wl
                     sauvegarder_donnees_externes("MAJ_PARENTS_WL")
+                    st.success("Liste blanche parents sauvegardée !")
 
         elif adm_tab == "📅 Gestion Emplois du Temps (Lundi-Samedi / 08h-19h)":
             st.subheader("📅 Gestion et Modification des Emplois du Temps")
@@ -1718,16 +1720,18 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             with tab_cfg1:
                 st.markdown("#### Éditeur des Coefficients")
                 edited_coefs = st.data_editor(st.session_state.coefficients_db, num_rows="dynamic", use_container_width=True, key="ed_coefs")
-                if not edited_coefs.equals(st.session_state.coefficients_db):
+                if st.button("💾 Enregistrer les modifications Coefficients", key="btn_save_coefs"):
                     st.session_state.coefficients_db = edited_coefs
                     sauvegarder_donnees_externes("MAJ_COEFS")
+                    st.success("Coefficients mis à jour !")
 
             with tab_cfg2:
                 st.markdown("#### Éditeur des Périodes Trimestrielles / Semestrielles")
                 edited_periods = st.data_editor(st.session_state.periodes_db, num_rows="dynamic", use_container_width=True, key="ed_periods")
-                if not edited_periods.equals(st.session_state.periodes_db):
+                if st.button("💾 Enregistrer les modifications Périodes", key="btn_save_periods"):
                     st.session_state.periodes_db = edited_periods
                     sauvegarder_donnees_externes("MAJ_PERIODES")
+                    st.success("Périodes enregistrées !")
 
         elif adm_tab == "📂 Liste par Classe et par Cycle":
             st.subheader("📂 Listes Officielles par Classe et par Cycle")
@@ -1754,16 +1758,18 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
         elif adm_tab == "👨‍🎓 Élèves":
             st.subheader("👨‍🎓 Gestion des Élèves")
             edited_eleves = st.data_editor(st.session_state.eleves_db, num_rows="dynamic", use_container_width=True, key="ed_eleves")
-            if not edited_eleves.equals(st.session_state.eleves_db):
+            if st.button("💾 Enregistrer la Liste des Élèves", key="btn_save_eleves"):
                 st.session_state.eleves_db = edited_eleves
                 sauvegarder_donnees_externes("MAJ_ELEVES")
+                st.success("Liste des élèves mise à jour et synchronisée !")
 
         elif adm_tab == "🏫 Classes et Cycles":
             st.subheader("🏫 Gestion des Classes et Cycles")
             edited_classes = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True, key="ed_classes")
-            if not edited_classes.equals(st.session_state.classes_db):
+            if st.button("💾 Enregistrer les Classes", key="btn_save_classes"):
                 st.session_state.classes_db = edited_classes
                 sauvegarder_donnees_externes("MAJ_CLASSES")
+                st.success("Classes mises à jour avec succès !")
 
 elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
     st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Administration XXL, Statistiques & Assistant IA</div>', unsafe_allow_html=True)
