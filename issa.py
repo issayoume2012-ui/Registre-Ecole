@@ -221,7 +221,10 @@ def sauvegarder_donnees_externes(action_label="SAUVEGARDE_DONNEES"):
 
         enregistrer_log_action("ADMIN", action_label, "Sauvegarde générale effectuée avec succès vers Supabase.")
     except Exception as e:
-        st.error(f"Erreur lors de la sauvegarde Supabase : {e}")
+        if "row-level security" in str(e).lower() or "42501" in str(e):
+            st.error("⚠️ Erreur RLS Supabase : Veuillez exécuter dans Supabase l'instruction 'ALTER TABLE app_data DISABLE ROW LEVEL SECURITY;' ou définir une politique RLS autorisant INSERT/UPDATE.")
+        else:
+            st.error(f"Erreur lors de la sauvegarde Supabase : {e}")
 
 saved_data = charger_donnees_externes()
 
@@ -1472,7 +1475,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 if not edited_admin_wl.equals(st.session_state.admin_white_list):
                     st.session_state.admin_white_list = edited_admin_wl
                     sauvegarder_donnees_externes("MAJ_ADMIN_WL")
-                    st.success("Liste blanche administration mise à jour et enregistrée sur Supabase !")
 
             with tab_wl2:
                 st.markdown("#### 👨‍🏫 Module de Refonte et Fusion des Professeurs")
@@ -1497,9 +1499,7 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                             "Classe Attribuée": r.get("Classe Attribuée", "")
                         })
                     st.session_state.prof_white_list = pd.DataFrame(sync_wl_list)
-                    
                     sauvegarder_donnees_externes("MAJ_PROF_FUSION_HARMONISEE")
-                    st.success("Refonte et harmonisation des professeurs enregistrées et synchronisées avec succès !")
 
             with tab_wl3:
                 st.markdown("#### Parents Autorisés (Suivi Élèves)")
@@ -1507,7 +1507,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 if not edited_parents_wl.equals(st.session_state.parents_white_list):
                     st.session_state.parents_white_list = edited_parents_wl
                     sauvegarder_donnees_externes("MAJ_PARENTS_WL")
-                    st.success("Liste blanche parents mise à jour avec succès !")
 
         elif adm_tab == "📅 Gestion Emplois du Temps (Lundi-Samedi / 08h-19h)":
             st.subheader("📅 Gestion et Modification des Emplois du Temps")
@@ -1694,7 +1693,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 if not edited_coefs.equals(st.session_state.coefficients_db):
                     st.session_state.coefficients_db = edited_coefs
                     sauvegarder_donnees_externes("MAJ_COEFS")
-                    st.success("Coefficients mis à jour avec succès !")
 
             with tab_cfg2:
                 st.markdown("#### Éditeur des Périodes Trimestrielles / Semestrielles")
@@ -1702,7 +1700,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 if not edited_periods.equals(st.session_state.periodes_db):
                     st.session_state.periodes_db = edited_periods
                     sauvegarder_donnees_externes("MAJ_PERIODES")
-                    st.success("Périodes mises à jour avec succès !")
 
         elif adm_tab == "📂 Liste par Classe et par Cycle":
             st.subheader("📂 Listes Officielles par Classe et par Cycle")
@@ -1732,7 +1729,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             if not edited_eleves.equals(st.session_state.eleves_db):
                 st.session_state.eleves_db = edited_eleves
                 sauvegarder_donnees_externes("MAJ_ELEVES")
-                st.success("Base des élèves mise à jour et synchronisée avec succès !")
 
         elif adm_tab == "🏫 Classes et Cycles":
             st.subheader("🏫 Gestion des Classes et Cycles")
@@ -1740,7 +1736,6 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             if not edited_classes.equals(st.session_state.classes_db):
                 st.session_state.classes_db = edited_classes
                 sauvegarder_donnees_externes("MAJ_CLASSES")
-                st.success("Classes et cycles mis à jour avec succès !")
 
 elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
     st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Administration XXL, Statistiques & Assistant IA</div>', unsafe_allow_html=True)
