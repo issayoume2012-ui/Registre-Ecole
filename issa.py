@@ -513,7 +513,7 @@ if "notes_db" not in st.session_state:
             data=[
                 ["6ème A", "Mathématiques", "1er Semestre", "1er Semestre", "Mamadou Diallo", 14.0, 15.0, 13.5],
                 ["6ème A", "Français", "1er Semestre", "1er Semestre", "Mamadou Diallo", 12.0, 11.5, 13.0],
-                ["CP", "Calcul / Mathématiques", "1er Trimestre", "1er Trimestre", "Fatou Sow", 16.0, 15.0, 17.0]
+                ["CP", "Calcul / Mathématiques", "1er Trimestre", "1er Trimestre", "Fatou Sow", 0.0, 0.0, 17.0]
             ]
         )
 
@@ -623,20 +623,21 @@ def convertir_sur_20(note, bareme):
         return 0.0
     return round((float(note) * 20.0) / float(bareme), 2)
 
-def obtenir_appreciation(moyenne):
+def obtenir_appreciation(moyenne, cycle="Collège"):
     if pd.isna(moyenne):
         return "N/A"
-    if moyenne >= 18:
+    m = moyenne if cycle == "Collège" else moyenne * 2.0  # Normalisation sur 20 pour l'appréciation
+    if m >= 18:
         return "Excellent"
-    elif moyenne >= 16:
+    elif m >= 16:
         return "Très Bien"
-    elif moyenne >= 14:
+    elif m >= 14:
         return "Bien"
-    elif moyenne >= 12:
+    elif m >= 12:
         return "Assez Bien"
-    elif moyenne >= 10:
+    elif m >= 10:
         return "Passable"
-    elif moyenne >= 8:
+    elif m >= 8:
         return "Insuffisant"
     else:
         return "Faible"
@@ -701,7 +702,7 @@ def calculer_bulletin_eleve(classe, eleve, periode):
 
     # Fallback par défaut si vide
     if not matieres_set:
-        matieres_set = {"Mathématiques", "Français"}
+        matieres_set = {"Mathématiques", "Français"} if cycle_classe == "Collège" else {"Lecture / Langage", "Calcul / Mathématiques"}
 
     # Tri ordonné des matières pour un affichage cohérent
     liste_matieres = sorted(list(matieres_set))
@@ -739,8 +740,13 @@ def calculer_bulletin_eleve(classe, eleve, periode):
             d2 = float(d2_val) if pd.notna(d2_val) else 0.0
             comp = float(comp_val) if pd.notna(comp_val) else 0.0
 
-        moy_devoirs = (d1 + d2) / 2.0
-        moy_matiere = (moy_devoirs + comp) / 2.0
+        if cycle_classe == "Élémentaire":
+            # Pas de devoirs en élémentaire : seule la composition compte
+            moy_matiere = comp
+        else:
+            # Collège : moyenne devoirs + composition sur 2
+            moy_devoirs = (d1 + d2) / 2.0
+            moy_matiere = (moy_devoirs + comp) / 2.0
         
         total_points_global += moy_matiere * coef
         total_coefficients_global += coef
@@ -748,15 +754,20 @@ def calculer_bulletin_eleve(classe, eleve, periode):
         lignes_bulletin.append({
             "Matiere": mat,
             "Coefficient": coef,
-            "Devoir1": d1,
-            "Devoir2": d2,
+            "Devoir1": "-" if cycle_classe == "Élémentaire" else d1,
+            "Devoir2": "-" if cycle_classe == "Élémentaire" else d2,
             "Composition": comp,
             "MoyenneMatiere": round(moy_matiere, 2),
             "TotalPondere": round(moy_matiere * coef, 2),
-            "Appreciation": obtenir_appreciation(moy_matiere)
+            "Appreciation": obtenir_appreciation(moy_matiere, cycle_classe)
         })
 
-    moyenne_generale = round(total_points_global / total_coefficients_global, 2) if total_coefficients_global > 0 else 0.0
+    # Calcul de la moyenne générale (sur 20 au Collège, sur 10 en Élémentaire)
+    if total_coefficients_global > 0:
+        raw_moyenne = total_points_global / total_coefficients_global
+        moyenne_generale = round(raw_moyenne / 2.0, 2) if cycle_classe == "Élémentaire" else round(raw_moyenne, 2)
+    else:
+        moyenne_generale = 0.0
 
     tous_eleves = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == classe]["Nom Complet"].tolist()
     moyennes_classe = {}
@@ -774,10 +785,19 @@ def calculer_bulletin_eleve(classe, eleve, periode):
                 d1 = float(d1_val) if pd.notna(d1_val) else 0.0
                 d2 = float(d2_val) if pd.notna(d2_val) else 0.0
                 comp = float(comp_val) if pd.notna(comp_val) else 0.0
-                m_mat = ((d1 + d2) / 2.0 + comp) / 2.0
+                
+                if cycle_classe == "Élémentaire":
+                    m_mat = comp
+                else:
+                    m_mat = ((d1 + d2) / 2.0 + comp) / 2.0
+                
                 pts += m_mat * coef
                 coefs += coef
-        moyennes_classe[el] = round(pts / coefs, 2) if coefs > 0 else 0.0
+        if coefs > 0:
+            raw_m = pts / coefs
+            moyennes_classe[el] = round(raw_m / 2.0, 2) if cycle_classe == "Élémentaire" else round(raw_m, 2)
+        else:
+            moyennes_classe[el] = 0.0
 
     classement_trie = sorted(moyennes_classe.items(), key=lambda x: x[1], reverse=True)
     rang = "-"
@@ -806,6 +826,7 @@ def calculer_bulletin_eleve(classe, eleve, periode):
     return {
         "eleve": eleve,
         "classe": classe,
+        "cycle": cycle_classe,
         "periode": periode,
         "lignes": lignes_bulletin,
         "total_points": round(total_points_global, 2),
@@ -825,6 +846,8 @@ def generer_pdf_bulletin(bul_data):
     pdf = FPDF()
     pdf.add_page()
     
+    cycle = bul_data.get("cycle", "Collège")
+    
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 6, "RÉPUBLIQUE DU SÉNÉGAL", 0, 1, "C")
     pdf.set_font("Arial", "", 9)
@@ -837,7 +860,7 @@ def generer_pdf_bulletin(bul_data):
     pdf.ln(5)
 
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 6, f"BULLETIN DE NOTES - {bul_data['periode'].upper()}", 0, 1, "C")
+    pdf.cell(0, 6, f"BULLETIN DE NOTES - {bul_data['periode'].upper()} ({cycle.upper()})", 0, 1, "C")
     pdf.ln(3)
 
     pdf.set_font("Arial", "B", 10)
@@ -851,8 +874,12 @@ def generer_pdf_bulletin(bul_data):
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
     
-    col_widths = [65, 18, 18, 18, 22, 22, 27]
-    headers = ["Matière", "Coef", "Dev 1", "Dev 2", "Comp", "Moy/20", "Appréciation"]
+    if cycle == "Élémentaire":
+        col_widths = [85, 25, 30, 28, 22]
+        headers = ["Matière", "Coef", "Composition", "Moy/20", "Appréciation"]
+    else:
+        col_widths = [65, 18, 18, 18, 22, 22, 27]
+        headers = ["Matière", "Coef", "Dev 1", "Dev 2", "Comp", "Moy/20", "Appréciation"]
     
     for i, h in enumerate(headers):
         pdf.cell(col_widths[i], 7, h, 1, 0, "C", True)
@@ -866,17 +893,23 @@ def generer_pdf_bulletin(bul_data):
     for lig in bul_data["lignes"]:
         pdf.cell(col_widths[0], 6, str(lig["Matiere"])[:25], 1, 0, "L", fill)
         pdf.cell(col_widths[1], 6, str(lig["Coefficient"]), 1, 0, "C", fill)
-        pdf.cell(col_widths[2], 6, str(lig["Devoir1"]), 1, 0, "C", fill)
-        pdf.cell(col_widths[3], 6, str(lig["Devoir2"]), 1, 0, "C", fill)
-        pdf.cell(col_widths[4], 6, str(lig["Composition"]), 1, 0, "C", fill)
-        pdf.cell(col_widths[5], 6, str(lig["MoyenneMatiere"]), 1, 0, "C", fill)
-        pdf.cell(col_widths[6], 6, str(lig["Appreciation"])[:15], 1, 0, "C", fill)
+        if cycle == "Élémentaire":
+            pdf.cell(col_widths[2], 6, str(lig["Composition"]), 1, 0, "C", fill)
+            pdf.cell(col_widths[3], 6, str(lig["MoyenneMatiere"]), 1, 0, "C", fill)
+            pdf.cell(col_widths[4], 6, str(lig["Appreciation"])[:15], 1, 0, "C", fill)
+        else:
+            pdf.cell(col_widths[2], 6, str(lig["Devoir1"]), 1, 0, "C", fill)
+            pdf.cell(col_widths[3], 6, str(lig["Devoir2"]), 1, 0, "C", fill)
+            pdf.cell(col_widths[4], 6, str(lig["Composition"]), 1, 0, "C", fill)
+            pdf.cell(col_widths[5], 6, str(lig["MoyenneMatiere"]), 1, 0, "C", fill)
+            pdf.cell(col_widths[6], 6, str(lig["Appreciation"])[:15], 1, 0, "C", fill)
         pdf.ln()
         fill = not fill
 
     pdf.ln(4)
     pdf.set_font("Arial", "B", 10)
-    pdf.cell(0, 6, f"Moyenne Générale : {bul_data['moyenne_generale']} / 20", 1, 1, "L", True)
+    max_note = "/ 10" if cycle == "Élémentaire" else "/ 20"
+    pdf.cell(0, 6, f"Moyenne Générale : {bul_data['moyenne_generale']} {max_note}", 1, 1, "L", True)
     pdf.ln(3)
 
     pdf.set_font("Arial", "B", 9)
@@ -1166,6 +1199,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
         prof_connecte = st.session_state.prof_nom_connecte
         classe_autorisee = st.session_state.prof_classe_autorisee
         matiere_principale = st.session_state.prof_matiere_principale
+        cycle_actuel = obtenir_cycle_classe(classe_autorisee)
 
         st.markdown(
             f"""
@@ -1173,7 +1207,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 <div>
                     <h4 style="color: #1E3A8A; margin: 0;">Enseignant : {prof_connecte}</h4>
                     <p style="margin: 5px 0 0 0; color: #475569; font-size: 0.95rem;">
-                        Classe assignée : <b>{classe_autorisee}</b> | Matière principale : <b>{matiere_principale}</b> (Cycle : {obtenir_cycle_classe(classe_autorisee)})
+                        Classe assignée : <b>{classe_autorisee}</b> | Matière principale : <b>{matiere_principale}</b> (Cycle : {cycle_actuel})
                     </p>
                 </div>
             </div>
@@ -1203,7 +1237,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         if menu_prof == "📝 Saisie des Notes & Évaluations":
             st.markdown("### 📝 Module Harmonisé de Saisie des Notes")
-            st.info(f"Saisie des notes pour votre classe assignée : **{classe_autorisee}**.")
+            st.info(f"Saisie des notes pour votre classe assignée : **{classe_autorisee}** ({cycle_actuel}).")
 
             periodes_possibles = obtenir_periodes_pour_classe(classe_autorisee)
             
@@ -1217,7 +1251,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                     matieres_possibles = st.session_state.coefficients_db[st.session_state.coefficients_db["Classe"] == classe_autorisee]["Matière"].tolist()
                     
                     # Inclure les matières globales du cycle si nécessaire
-                    cycle_actuel = obtenir_cycle_classe(classe_autorisee)
                     mat_defs = st.session_state.matieres_def[st.session_state.matieres_def["Cycle"] == cycle_actuel]["Matière"].tolist() if "matieres_def" in st.session_state else []
                     
                     matieres_possibles = list(set(matieres_possibles + mat_defs + [matiere_principale]))
@@ -1225,7 +1258,8 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                     default_idx = matieres_possibles.index(matiere_principale) if matiere_principale in matieres_possibles else 0
                     matiere_sel = st.selectbox("Matière enseignée", matieres_possibles, index=default_idx, key="prof_mat_sel")
                 with col_sp3:
-                    bareme_sel = st.number_input("Barème de notation", min_value=5, max_value=100, value=20, key="prof_bar_sel")
+                    default_bareme = 60 if cycle_actuel == "Élémentaire" else 20
+                    bareme_sel = st.number_input("Barème de notation", min_value=5, max_value=100, value=default_bareme, key="prof_bar_sel")
 
                 eleves_classe = st.session_state.eleves_db[st.session_state.eleves_db["Classe"] == classe_autorisee]["Nom Complet"].tolist()
 
@@ -1251,11 +1285,16 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                     with st.form("form_saisie_notes_harmonise"):
                         saisie_data = []
                         
-                        h_col1, h_col2, h_col3, h_col4 = st.columns([3, 2, 2, 2])
-                        with h_col1: st.markdown("**Élève**")
-                        with h_col2: st.markdown("**Devoir 1**")
-                        with h_col3: st.markdown("**Devoir 2**")
-                        with h_col4: st.markdown("**Composition**")
+                        if cycle_actuel == "Élémentaire":
+                            h_col1, h_col2 = st.columns([4, 5])
+                            with h_col1: st.markdown("**Élève**")
+                            with h_col2: st.markdown(f"**Composition (sur {bareme_sel})**")
+                        else:
+                            h_col1, h_col2, h_col3, h_col4 = st.columns([3, 2, 2, 2])
+                            with h_col1: st.markdown("**Élève**")
+                            with h_col2: st.markdown(f"**Devoir 1 (sur {bareme_sel})**")
+                            with h_col3: st.markdown(f"**Devoir 2 (sur {bareme_sel})**")
+                            with h_col4: st.markdown(f"**Composition (sur {bareme_sel})**")
                         st.markdown("<hr style='margin: 5px 0 15px 0;'>", unsafe_allow_html=True)
 
                         for idx_el, el in enumerate(eleves_classe):
@@ -1264,18 +1303,26 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             d2_val = float(ex_row.iloc[0]["Devoir2"]) if not ex_row.empty and pd.notna(ex_row.iloc[0]["Devoir2"]) else 0.0
                             comp_val = float(ex_row.iloc[0]["Composition"]) if not ex_row.empty and pd.notna(ex_row.iloc[0]["Composition"]) else 0.0
 
-                            col_e1, col_e2, col_e3, col_e4 = st.columns([3, 2, 2, 2])
-                            with col_e1:
-                                st.write(f"👤 {el}")
-                            with col_e2:
-                                nd1 = st.number_input(f"D1 {el}", 0.0, float(bareme_sel), d1_val, key=f"d1_{classe_autorisee}_{matiere_sel}_{periode_sel}_{idx_el}", label_visibility="collapsed")
-                            with col_e3:
-                                nd2 = st.number_input(f"D2 {el}", 0.0, float(bareme_sel), d2_val, key=f"d2_{classe_autorisee}_{matiere_sel}_{periode_sel}_{idx_el}", label_visibility="collapsed")
-                            with col_e4:
-                                ncomp = st.number_input(f"Comp {el}", 0.0, float(bareme_sel), comp_val, key=f"comp_{classe_autorisee}_{matiere_sel}_{periode_sel}_{idx_el}", label_visibility="collapsed")
+                            if cycle_actuel == "Élémentaire":
+                                col_e1, col_e2 = st.columns([4, 5])
+                                with col_e1:
+                                    st.write(f"👤 {el}")
+                                with col_e2:
+                                    ncomp = st.number_input(f"Comp {el}", 0.0, float(bareme_sel), comp_val, key=f"comp_{classe_autorisee}_{matiere_sel}_{periode_sel}_{idx_el}", label_visibility="collapsed")
+                                nd1, nd2 = 0.0, 0.0
+                            else:
+                                col_e1, col_e2, col_e3, col_e4 = st.columns([3, 2, 2, 2])
+                                with col_e1:
+                                    st.write(f"👤 {el}")
+                                with col_e2:
+                                    nd1 = st.number_input(f"D1 {el}", 0.0, float(bareme_sel), d1_val, key=f"d1_{classe_autorisee}_{matiere_sel}_{periode_sel}_{idx_el}", label_visibility="collapsed")
+                                with col_e3:
+                                    nd2 = st.number_input(f"D2 {el}", 0.0, float(bareme_sel), d2_val, key=f"d2_{classe_autorisee}_{matiere_sel}_{periode_sel}_{idx_el}", label_visibility="collapsed")
+                                with col_e4:
+                                    ncomp = st.number_input(f"Comp {el}", 0.0, float(bareme_sel), comp_val, key=f"comp_{classe_autorisee}_{matiere_sel}_{periode_sel}_{idx_el}", label_visibility="collapsed")
 
-                            d1_20 = convertir_sur_20(nd1, bareme_sel)
-                            d2_20 = convertir_sur_20(nd2, bareme_sel)
+                            d1_20 = convertir_sur_20(nd1, bareme_sel) if cycle_actuel == "Collège" else 0.0
+                            d2_20 = convertir_sur_20(nd2, bareme_sel) if cycle_actuel == "Collège" else 0.0
                             comp_20 = convertir_sur_20(ncomp, bareme_sel)
 
                             saisie_data.append({
@@ -1474,7 +1521,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             else:
                 st.info("Aucune entrée dans le cahier de texte pour cette classe.")
 
-elif st.session_state.espace_actif == "👨‍氛围 Espace Parents / Élèves" or st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élèves":
+elif st.session_state.espace_actif in ["👨‍氛围 Espace Parents / Élèves", "👨‍👩‍👧 Espace Parents / Élèves"]:
     st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Portail Parent & Consultation des Notes</div>', unsafe_allow_html=True)
 
     if "parent_logged_eleve" not in st.session_state:
@@ -1512,8 +1559,9 @@ elif st.session_state.espace_actif == "👨‍氛围 Espace Parents / Élèves" 
     else:
         eleve = st.session_state["parent_logged_eleve"]
         classe = st.session_state["parent_logged_classe"]
+        cycle_par = obtenir_cycle_classe(classe)
         
-        st.success(f"Connecté pour l'élève : **{eleve}** (Classe : {classe})")
+        st.success(f"Connecté pour l'élève : **{eleve}** (Classe : {classe} - Cycle : {cycle_par})")
         if st.button("Se déconnecter"):
             st.session_state["parent_logged_eleve"] = ""
             st.rerun()
@@ -1526,15 +1574,18 @@ elif st.session_state.espace_actif == "👨‍氛围 Espace Parents / Élèves" 
 
         bul_el = calculer_bulletin_eleve(classe, eleve, periode_consult)
         
+        max_moy_txt = "/ 10" if cycle_par == "Élémentaire" else "/ 20"
+        
         col_res1, col_res2, col_res3 = st.columns(3)
-        with col_res1: st.metric("Moyenne Générale", f"{bul_el['moyenne_generale']} / 20")
+        with col_res1: st.metric("Moyenne Générale", f"{bul_el['moyenne_generale']} {max_moy_txt}")
         with col_res2: st.metric("Rang", bul_el['rang'])
         with col_res3: st.metric("Décision", bul_el['decision'])
 
         st.markdown("#### Détail des Notes par Matière")
         df_notes_affiche = pd.DataFrame(bul_el["lignes"])
         if not df_notes_affiche.empty:
-            st.dataframe(df_notes_affiche[["Matiere", "Coefficient", "Devoir1", "Devoir2", "Composition", "MoyenneMatiere", "Appreciation"]], use_container_width=True)
+            cols_to_show = ["Matiere", "Coefficient", "Composition", "MoyenneMatiere", "Appreciation"] if cycle_par == "Élémentaire" else ["Matiere", "Coefficient", "Devoir1", "Devoir2", "Composition", "MoyenneMatiere", "Appreciation"]
+            st.dataframe(df_notes_affiche[cols_to_show], use_container_width=True)
         else:
             st.info("Aucune note enregistrée pour cette période.")
 
@@ -1789,7 +1840,8 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                     
                     if st.button("Générer et Prévisualiser le Bulletin"):
                         bul_gen = calculer_bulletin_eleve(c_sel_bul, el_sel_bul, p_sel_bul)
-                        st.markdown(f"#### Aperçu : {el_sel_bul} | Moyenne Générale : **{bul_gen['moyenne_generale']} / 20** | Rang : **{bul_gen['rang']}**")
+                        max_note_txt = "/ 10" if bul_gen.get("cycle") == "Élémentaire" else "/ 20"
+                        st.markdown(f"#### Aperçu : {el_sel_bul} | Moyenne Générale : **{bul_gen['moyenne_generale']} {max_note_txt}** | Rang : **{bul_gen['rang']}**")
                         
                         pdf_bytes = generer_pdf_bulletin(bul_gen)
                         st.download_button(
@@ -1925,16 +1977,21 @@ elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
             st.info(reponse_ia)
 
     with tab_r2:
-        st.subheader("📊 Tableau de Bord & Indicateurs Globaux")
-        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-        with col_m1: st.metric("Total Élèves", len(st.session_state.eleves_db))
-        with col_m2: st.metric("Total Classes", len(st.session_state.classes_db))
-        with col_m3: st.metric("Professeurs", len(st.session_state.prof_credentials))
-        with col_m4: st.metric("Absences Signalées", len(st.session_state.absences_db))
+        st.subheader("📊 Indicateurs Globaux & Répartition")
+        
+        col_i1, col_i2, col_i3 = st.columns(3)
+        with col_i1:
+            st.metric("Nombre total d'élèves", len(st.session_state.eleves_db))
+        with col_i2:
+            st.metric("Nombre de classes", len(st.session_state.classes_db))
+        with col_i3:
+            st.metric("Corps enseignant", len(st.session_state.prof_credentials))
 
         st.markdown("---")
-        st.markdown("#### 📈 Répartition des Élèves par Classe")
+        st.markdown("#### Répartition des élèves par classe")
         if not st.session_state.eleves_db.empty:
-            repartition = st.session_state.eleves_db["Classe"].value_counts().reset_index()
-            repartition.columns = ["Classe", "Nombre d'Élèves"]
-            st.bar_chart(repartition.set_index("Classe"))
+            df_rep = st.session_state.eleves_db["Classe"].value_counts().reset_index()
+            df_rep.columns = ["Classe", "Nombre d'Élèves"]
+            st.bar_chart(df_rep.set_index("Classe"))
+        else:
+            st.info("Aucun élève enregistré.")
