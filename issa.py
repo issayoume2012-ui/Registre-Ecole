@@ -642,16 +642,20 @@ def obtenir_appreciation(moyenne):
         return "Faible"
 
 def obtenir_coefficient_matiere(classe, matiere):
-    """Recherche dynamique du coefficient défini par le professeur."""
+    """Recherche dynamique du coefficient défini dans l'espace Admin (par classe puis par cycle)."""
     if "coefficients_db" in st.session_state and not st.session_state.coefficients_db.empty:
         c_db = st.session_state.coefficients_db
         res = c_db[(c_db["Classe"] == classe) & (c_db["Matière"] == matiere)]
         if not res.empty and pd.notna(res.iloc[0].get("Coefficient")):
             return float(res.iloc[0]["Coefficient"])
             
+    cycle_classe = obtenir_cycle_classe(classe)
     if "matieres_def" in st.session_state and not st.session_state.matieres_def.empty:
         m_def = st.session_state.matieres_def
-        res = m_def[m_def["Matière"] == matiere]
+        if "Cycle" in m_def.columns:
+            res = m_def[(m_def["Matière"] == matiere) & (m_def["Cycle"] == cycle_classe)]
+        else:
+            res = m_def[m_def["Matière"] == matiere]
         if not res.empty and "Coefficient" in m_def.columns and pd.notna(res.iloc[0].get("Coefficient")):
             return float(res.iloc[0]["Coefficient"])
             
@@ -1431,7 +1435,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
         elif menu_prof == "📑 Cahier de Texte & Pédagogie":
             st.markdown("### 📑 Cahier de Texte & Rapports Pédagogiques")
-            st.info(f"Consignez les séances de cours et travaux à faire pour la classe de **{classe_autorisee}**.")
+            st.info(f"Consignes les séances de cours et travaux à faire pour la classe de **{classe_autorisee}**.")
 
             with st.form("form_cahier_harmonise"):
                 col_ct1, col_ct2 = st.columns(2)
@@ -1842,17 +1846,25 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
         elif adm_tab == "⚙️ Configuration des Coefficients & Périodes":
             st.subheader("⚙️ Configuration des Coefficients & Périodes")
             
-            tab_cfg1, tab_cfg2 = st.tabs(["📊 Coefficients par Matière et Classe", "⏳ Périodes & Statuts"])
+            tab_cfg1, tab_cfg2, tab_cfg3 = st.tabs(["📊 Coefficients par Classe", "📚 Coefficients par Cycle / Matières", "⏳ Périodes & Statuts"])
 
             with tab_cfg1:
-                st.markdown("#### Éditeur des Coefficients")
+                st.markdown("#### Éditeur des Coefficients par Classe")
                 edited_coefs = st.data_editor(st.session_state.coefficients_db, num_rows="dynamic", use_container_width=True, key="ed_coefs")
-                if st.button("💾 Enregistrer les modifications Coefficients", key="btn_save_coefs"):
+                if st.button("💾 Enregistrer les modifications Coefficients (Par Classe)", key="btn_save_coefs"):
                     st.session_state.coefficients_db = edited_coefs
                     sauvegarder_donnees_externes("MAJ_COEFS")
-                    st.success("Coefficients mis à jour !")
+                    st.success("Coefficients par classe mis à jour et synchronisés !")
 
             with tab_cfg2:
+                st.markdown("#### Éditeur des Coefficients Globaux par Cycle")
+                edited_mat_def = st.data_editor(st.session_state.matieres_def, num_rows="dynamic", use_container_width=True, key="ed_mat_def")
+                if st.button("💾 Enregistrer les modifications Coefficients (Par Cycle)", key="btn_save_mat_def"):
+                    st.session_state.matieres_def = edited_mat_def
+                    sauvegarder_donnees_externes("MAJ_MATIERES_DEF")
+                    st.success("Coefficients globaux par cycle mis à jour et synchronisés !")
+
+            with tab_cfg3:
                 st.markdown("#### Éditeur des Périodes Trimestrielles / Semestrielles")
                 edited_periods = st.data_editor(st.session_state.periodes_db, num_rows="dynamic", use_container_width=True, key="ed_periods")
                 if st.button("💾 Enregistrer les modifications Périodes", key="btn_save_periods"):
@@ -1926,5 +1938,3 @@ elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
             repartition = st.session_state.eleves_db["Classe"].value_counts().reset_index()
             repartition.columns = ["Classe", "Nombre d'Élèves"]
             st.bar_chart(repartition.set_index("Classe"))
-        else:
-            st.info("Aucune donnée d'élève disponible.")
