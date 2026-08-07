@@ -639,34 +639,71 @@ def obtenir_appreciation(moyenne):
         return "Faible"
 
 def calculer_bulletin_eleve(classe, eleve, periode):
-    matieres_coeffs = st.session_state.coefficients_db[st.session_state.coefficients_db["Classe"] == classe]
-    if matieres_coeffs.empty:
-        matieres_coeffs = pd.DataFrame({"Matière": ["Mathématiques", "Français"], "Coefficient": [2, 2]})
+    cycle_classe = obtenir_cycle_classe(classe)
+    
+    # 1. Extraction dynamique de toutes les matières configurées ou ayant des notes saisies
+    matieres_set = set()
+    
+    # Depuis coefficients_db
+    if "coefficients_db" in st.session_state and not st.session_state.coefficients_db.empty:
+        c_db = st.session_state.coefficients_db
+        m_c = c_db[c_db["Classe"] == classe]["Matière"].dropna().tolist()
+        matieres_set.update(m_c)
+        
+    # Depuis matieres_def pour le cycle
+    if "matieres_def" in st.session_state and not st.session_state.matieres_def.empty:
+        m_def = st.session_state.matieres_def
+        if "Cycle" in m_def.columns:
+            m_c_def = m_def[m_def["Cycle"] == cycle_classe]["Matière"].dropna().tolist()
+            matieres_set.update(m_c_def)
+        else:
+            matieres_set.update(m_def["Matière"].dropna().tolist())
+
+    # Depuis notes_db pour cette classe et periode
+    notes_df = st.session_state.notes_db if "notes_db" in st.session_state else pd.DataFrame()
+    
+    if not notes_df.empty:
+        cond_cls = (notes_df["Classe"] == classe)
+        if "Periode" in notes_df.columns and "Période" in notes_df.columns:
+            cond_per = (notes_df["Periode"] == periode) | (notes_df["Période"] == periode)
+        elif "Periode" in notes_df.columns:
+            cond_per = (notes_df["Periode"] == periode)
+        elif "Période" in notes_df.columns:
+            cond_per = (notes_df["Période"] == periode)
+        else:
+            cond_per = True
+            
+        m_notes = notes_df[cond_cls & cond_per]["Matière"].dropna().unique().tolist()
+        matieres_set.update(m_notes)
+
+    # Fallback par défaut si vide
+    if not matieres_set:
+        matieres_set = {"Mathématiques", "Français"}
+
+    # Tri ordonné des matières pour un affichage cohérent
+    liste_matieres = sorted(list(matieres_set))
 
     # Synchronisation souple tolérant 'Periode' ou 'Période'
-    notes_df = st.session_state.notes_db
-    
-    if "Periode" in notes_df.columns:
-        notes_classe_periode = notes_df[
-            (notes_df["Classe"] == classe) & 
-            (notes_df["Periode"] == periode)
-        ]
-    elif "Période" in notes_df.columns:
-        notes_classe_periode = notes_df[
-            (notes_df["Classe"] == classe) & 
-            (notes_df["Période"] == periode)
-        ]
-    else:
-        notes_classe_periode = pd.DataFrame()
+    notes_classe_periode = pd.DataFrame()
+    if not notes_df.empty:
+        if "Periode" in notes_df.columns:
+            notes_classe_periode = notes_df[(notes_df["Classe"] == classe) & (notes_df["Periode"] == periode)]
+        elif "Période" in notes_df.columns:
+            notes_classe_periode = notes_df[(notes_df["Classe"] == classe) & (notes_df["Période"] == periode)]
 
     lignes_bulletin = []
     total_points_global = 0.0
     total_coefficients_global = 0.0
 
-    for _, row_mat in matieres_coeffs.iterrows():
-        mat = row_mat["Matière"]
-        raw_coef = row_mat["Coefficient"]
-        coef = float(raw_coef) if pd.notna(raw_coef) else 1.0
+    # Dictionnaire de recherche des coefficients
+    coeffs_dict = {}
+    if "coefficients_db" in st.session_state and not st.session_state.coefficients_db.empty:
+        c_db = st.session_state.coefficients_db[st.session_state.coefficients_db["Classe"] == classe]
+        for _, r_c in c_db.iterrows():
+            coeffs_dict[r_c["Matière"]] = float(r_c["Coefficient"]) if pd.notna(r_c.get("Coefficient")) else 1.0
+
+    for mat in liste_matieres:
+        coef = coeffs_dict.get(mat, 1.0)
         
         note_row = notes_classe_periode[notes_classe_periode["Eleve"] == eleve] if not notes_classe_periode.empty else pd.DataFrame()
         note_mat = note_row[note_row["Matière"] == mat] if not note_row.empty else pd.DataFrame()
@@ -706,10 +743,8 @@ def calculer_bulletin_eleve(classe, eleve, periode):
         pts = 0.0
         coefs = 0.0
         notes_el_p = notes_classe_periode[notes_classe_periode["Eleve"] == el] if not notes_classe_periode.empty else pd.DataFrame()
-        for _, row_mat in matieres_coeffs.iterrows():
-            mat = row_mat["Matière"]
-            raw_coef = row_mat["Coefficient"]
-            coef = float(raw_coef) if pd.notna(raw_coef) else 1.0
+        for mat in liste_matieres:
+            coef = coeffs_dict.get(mat, 1.0)
             n_m = notes_el_p[notes_el_p["Matière"] == mat] if not notes_el_p.empty else pd.DataFrame()
             if not n_m.empty:
                 d1_val = n_m.iloc[0]["Devoir1"]
@@ -732,10 +767,11 @@ def calculer_bulletin_eleve(classe, eleve, periode):
 
     vs_df = st.session_state.viescolaire_db
     vs_row = pd.DataFrame()
-    if "Periode" in vs_df.columns:
-        vs_row = vs_df[(vs_df["Classe"] == classe) & (vs_df["Periode"] == periode) & (vs_df["Eleve"] == eleve)]
-    elif "Période" in vs_df.columns:
-        vs_row = vs_df[(vs_df["Classe"] == classe) & (vs_df["Période"] == periode) & (vs_df["Eleve"] == eleve)]
+    if not vs_df.empty:
+        if "Periode" in vs_df.columns:
+            vs_row = vs_df[(vs_df["Classe"] == classe) & (vs_df["Periode"] == periode) & (vs_df["Eleve"] == eleve)]
+        elif "Période" in vs_df.columns:
+            vs_row = vs_df[(vs_df["Classe"] == classe) & (vs_df["Période"] == periode) & (vs_df["Eleve"] == eleve)]
 
     abs_just, abs_non_just, retards, heures_p, obs, decision = 0, 0, 0, 0, "RAS", "Encouragements"
     if not vs_row.empty:
@@ -1158,8 +1194,12 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                     periode_sel = st.selectbox("Période active", periodes_possibles, key="prof_per_sel")
                 with col_sp2:
                     matieres_possibles = st.session_state.coefficients_db[st.session_state.coefficients_db["Classe"] == classe_autorisee]["Matière"].tolist()
-                    if not matieres_possibles:
-                        matieres_possibles = [matiere_principale, "Français"]
+                    
+                    # Inclure les matières globales du cycle si nécessaire
+                    cycle_actuel = obtenir_cycle_classe(classe_autorisee)
+                    mat_defs = st.session_state.matieres_def[st.session_state.matieres_def["Cycle"] == cycle_actuel]["Matière"].tolist() if "matieres_def" in st.session_state else []
+                    
+                    matieres_possibles = list(set(matieres_possibles + mat_defs + [matiere_principale]))
                     
                     default_idx = matieres_possibles.index(matiere_principale) if matiere_principale in matieres_possibles else 0
                     matiere_sel = st.selectbox("Matière enseignée", matieres_possibles, index=default_idx, key="prof_mat_sel")
