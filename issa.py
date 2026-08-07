@@ -6,6 +6,7 @@ import os
 import urllib.request
 from fpdf import FPDF
 import pandas as pd
+import numpy as np
 import streamlit as st
 from supabase import create_client, Client
 
@@ -109,6 +110,20 @@ def charger_donnees_externes():
         return {}
     return data
 
+def nettoyer_donnees_pour_json(obj):
+    """Remplace de manière récursive les valeurs NaN/Inf non conformes JSON par des valeurs sûres (None ou "")."""
+    if isinstance(obj, dict):
+        return {k: nettoyer_donnees_pour_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [nettoyer_donnees_pour_json(v) for v in obj]
+    elif isinstance(obj, float):
+        if np.isnan(obj) or np.isinf(obj):
+            return 0.0
+        return obj
+    elif pd.isna(obj):
+        return ""
+    return obj
+
 def sauvegarder_donnees_externes(action_label="SAUVEGARDE_DONNEES"):
     """Sauvegarde toutes les bases de données de session dans Supabase via SDK et trace l'action."""
     if "eleves_db" in st.session_state and not st.session_state.eleves_db.empty:
@@ -139,35 +154,37 @@ def sauvegarder_donnees_externes(action_label="SAUVEGARDE_DONNEES"):
             })
         st.session_state.prof_white_list = pd.DataFrame(sync_wl_list)
 
+    # Nettoyage préventif des DataFrames pour éliminer tout NaN/None avant de convertir en dictionnaire
     data_to_save = {
-        "admin_credentials": st.session_state.admin_credentials.to_dict(orient="split"),
-        "gestionnaires_proprietaires_db": st.session_state.gestionnaires_proprietaires_db.to_dict(orient="split"),
-        "prof_white_list": st.session_state.prof_white_list.to_dict(orient="split"),
-        "admin_white_list": st.session_state.admin_white_list.to_dict(orient="split"),
-        "prof_credentials": st.session_state.prof_credentials.to_dict(orient="split"),
-        "parents_white_list": st.session_state.parents_white_list.to_dict(orient="split"),
-        "classes_db": st.session_state.classes_db.to_dict(orient="split"),
-        "eleves_db": st.session_state.eleves_db.to_dict(orient="split"),
-        "base_globale_db": st.session_state.base_globale_db.to_dict(orient="split"),
-        "cahier_textes": st.session_state.cahier_textes.to_dict(orient="split"),
-        "rapports_journaliers_prof": st.session_state.rapports_journaliers_prof.to_dict(orient="split"),
-        "absences_db": st.session_state.absences_db.to_dict(orient="split"),
-        "matieres_def": st.session_state.matieres_def.to_dict(orient="split"),
-        "coefficients_db": st.session_state.coefficients_db.to_dict(orient="split"),
-        "periodes_db": st.session_state.periodes_db.to_dict(orient="split"),
-        "notes_db": st.session_state.notes_db.to_dict(orient="split"),
-        "viescolaire_db": st.session_state.viescolaire_db.to_dict(orient="split"),
-        "conduite_db": st.session_state.conduite_db.to_dict(orient="split"),
-        "edt_grid_db": {k: v.to_dict(orient="split") for k, v in st.session_state.edt_grid_db.items()},
+        "admin_credentials": st.session_state.admin_credentials.fillna("").to_dict(orient="split"),
+        "gestionnaires_proprietaires_db": st.session_state.gestionnaires_proprietaires_db.fillna("").to_dict(orient="split"),
+        "prof_white_list": st.session_state.prof_white_list.fillna("").to_dict(orient="split"),
+        "admin_white_list": st.session_state.admin_white_list.fillna("").to_dict(orient="split"),
+        "prof_credentials": st.session_state.prof_credentials.fillna("").to_dict(orient="split"),
+        "parents_white_list": st.session_state.parents_white_list.fillna("").to_dict(orient="split"),
+        "classes_db": st.session_state.classes_db.fillna("").to_dict(orient="split"),
+        "eleves_db": st.session_state.eleves_db.fillna("").to_dict(orient="split"),
+        "base_globale_db": st.session_state.base_globale_db.fillna("").to_dict(orient="split"),
+        "cahier_textes": st.session_state.cahier_textes.fillna("").to_dict(orient="split"),
+        "rapports_journaliers_prof": st.session_state.rapports_journaliers_prof.fillna("").to_dict(orient="split"),
+        "absences_db": st.session_state.absences_db.fillna("").to_dict(orient="split"),
+        "matieres_def": st.session_state.matieres_def.fillna("").to_dict(orient="split"),
+        "coefficients_db": st.session_state.coefficients_db.fillna(0.0).to_dict(orient="split"),
+        "periodes_db": st.session_state.periodes_db.fillna("").to_dict(orient="split"),
+        "notes_db": st.session_state.notes_db.fillna(0.0).to_dict(orient="split"),
+        "viescolaire_db": st.session_state.viescolaire_db.fillna("").to_dict(orient="split"),
+        "conduite_db": st.session_state.conduite_db.fillna("").to_dict(orient="split"),
+        "edt_grid_db": {k: v.fillna("").to_dict(orient="split") for k, v in st.session_state.edt_grid_db.items()},
         "edt_documents": {k: v for k, v in st.session_state.edt_documents.items()}
     }
 
     try:
-        # Synchro app_data (upsert)
+        # Synchro app_data (upsert) avec assainissement JSON
         for key, value in data_to_save.items():
+            value_sanitized = nettoyer_donnees_pour_json(value)
             supabase.table("app_data").upsert({
                 "key": key,
-                "value": json.dumps(value, ensure_ascii=False)
+                "value": json.dumps(value_sanitized, ensure_ascii=False)
             }).execute()
 
         # Synchro table eleves
@@ -175,11 +192,11 @@ def sauvegarder_donnees_externes(action_label="SAUVEGARDE_DONNEES"):
             supabase.table("eleves").delete().neq("id", 0).execute()
             eleves_payload = [
                 {
-                    "prenom": r.get("Prénom"),
-                    "nom": r.get("Nom"),
-                    "date_naissance": r.get("Date de Naissance"),
-                    "classe": r.get("Classe"),
-                    "photo": r.get("Photo")
+                    "prenom": str(r.get("Prénom", "") or ""),
+                    "nom": str(r.get("Nom", "") or ""),
+                    "date_naissance": str(r.get("Date de Naissance", "") or ""),
+                    "classe": str(r.get("Classe", "") or ""),
+                    "photo": r.get("Photo") if pd.notna(r.get("Photo")) else None
                 }
                 for _, r in st.session_state.eleves_db.iterrows()
             ]
@@ -191,12 +208,12 @@ def sauvegarder_donnees_externes(action_label="SAUVEGARDE_DONNEES"):
             supabase.table("professeurs").delete().neq("id", 0).execute()
             prof_payload = [
                 {
-                    "prenom": r.get("Prénom"),
-                    "nom": r.get("Nom"),
-                    "email": r.get("Email"),
-                    "matiere_principale": r.get("Matière Principale"),
-                    "classe_attribuee": r.get("Classe Attribuée"),
-                    "mot_de_passe": r.get("Mot de passe")
+                    "prenom": str(r.get("Prénom", "") or ""),
+                    "nom": str(r.get("Nom", "") or ""),
+                    "email": str(r.get("Email", "") or ""),
+                    "matiere_principale": str(r.get("Matière Principale", "") or ""),
+                    "classe_attribuee": str(r.get("Classe Attribuée", "") or ""),
+                    "mot_de_passe": str(r.get("Mot de passe", "") or "")
                 }
                 for _, r in st.session_state.prof_credentials.iterrows()
             ]
@@ -208,11 +225,11 @@ def sauvegarder_donnees_externes(action_label="SAUVEGARDE_DONNEES"):
             supabase.table("absences").delete().neq("id", 0).execute()
             absences_payload = [
                 {
-                    "date": r.get("Date"),
-                    "classe": r.get("Classe"),
-                    "eleve": r.get("Élève"),
-                    "statut": r.get("Statut"),
-                    "motif": r.get("Motif")
+                    "date": str(r.get("Date", "") or ""),
+                    "classe": str(r.get("Classe", "") or ""),
+                    "eleve": str(r.get("Élève", "") or ""),
+                    "statut": str(r.get("Statut", "") or ""),
+                    "motif": str(r.get("Motif", "") or "")
                 }
                 for _, r in st.session_state.absences_db.iterrows()
             ]
@@ -589,6 +606,8 @@ def convertir_sur_20(note, bareme):
     return round((float(note) * 20.0) / float(bareme), 2)
 
 def obtenir_appreciation(moyenne):
+    if pd.isna(moyenne):
+        return "N/A"
     if moyenne >= 18:
         return "Excellent"
     elif moyenne >= 16:
@@ -620,16 +639,21 @@ def calculer_bulletin_eleve(classe, eleve, periode):
 
     for _, row_mat in matieres_coeffs.iterrows():
         mat = row_mat["Matière"]
-        coef = float(row_mat["Coefficient"])
+        raw_coef = row_mat["Coefficient"]
+        coef = float(raw_coef) if pd.notna(raw_coef) else 1.0
         
         note_row = notes_classe_periode[notes_classe_periode["Eleve"] == eleve]
         note_mat = note_row[note_row["Matière"] == mat]
 
         d1, d2, comp = 0.0, 0.0, 0.0
         if not note_mat.empty:
-            d1 = float(note_mat.iloc[0]["Devoir1"]) if not pd.isna(note_mat.iloc[0]["Devoir1"]) else 0.0
-            d2 = float(note_mat.iloc[0]["Devoir2"]) if not pd.isna(note_mat.iloc[0]["Devoir2"]) else 0.0
-            comp = float(note_mat.iloc[0]["Composition"]) if not pd.isna(note_mat.iloc[0]["Composition"]) else 0.0
+            d1_val = note_mat.iloc[0]["Devoir1"]
+            d2_val = note_mat.iloc[0]["Devoir2"]
+            comp_val = note_mat.iloc[0]["Composition"]
+
+            d1 = float(d1_val) if pd.notna(d1_val) else 0.0
+            d2 = float(d2_val) if pd.notna(d2_val) else 0.0
+            comp = float(comp_val) if pd.notna(comp_val) else 0.0
 
         moy_devoirs = (d1 + d2) / 2.0
         moy_matiere = (moy_devoirs + comp) / 2.0
@@ -658,12 +682,16 @@ def calculer_bulletin_eleve(classe, eleve, periode):
         notes_el_p = notes_classe_periode[notes_classe_periode["Eleve"] == el]
         for _, row_mat in matieres_coeffs.iterrows():
             mat = row_mat["Matière"]
-            coef = float(row_mat["Coefficient"])
+            raw_coef = row_mat["Coefficient"]
+            coef = float(raw_coef) if pd.notna(raw_coef) else 1.0
             n_m = notes_el_p[notes_el_p["Matière"] == mat]
             if not n_m.empty:
-                d1 = float(n_m.iloc[0]["Devoir1"]) if not pd.isna(n_m.iloc[0]["Devoir1"]) else 0.0
-                d2 = float(n_m.iloc[0]["Devoir2"]) if not pd.isna(n_m.iloc[0]["Devoir2"]) else 0.0
-                comp = float(n_m.iloc[0]["Composition"]) if not pd.isna(n_m.iloc[0]["Composition"]) else 0.0
+                d1_val = n_m.iloc[0]["Devoir1"]
+                d2_val = n_m.iloc[0]["Devoir2"]
+                comp_val = n_m.iloc[0]["Composition"]
+                d1 = float(d1_val) if pd.notna(d1_val) else 0.0
+                d2 = float(d2_val) if pd.notna(d2_val) else 0.0
+                comp = float(comp_val) if pd.notna(comp_val) else 0.0
                 m_mat = ((d1 + d2) / 2.0 + comp) / 2.0
                 pts += m_mat * coef
                 coefs += coef
@@ -683,12 +711,12 @@ def calculer_bulletin_eleve(classe, eleve, periode):
     ]
     abs_just, abs_non_just, retards, heures_p, obs, decision = 0, 0, 0, 0, "RAS", "Encouragements"
     if not vs_row.empty:
-        abs_just = int(vs_row.iloc[0]["AbsencesJustifiees"])
-        abs_non_just = int(vs_row.iloc[0]["AbsencesNonJustifiees"])
-        retards = int(vs_row.iloc[0]["Retards"])
-        heures_p = int(vs_row.iloc[0]["HeuresPerdues"])
-        obs = str(vs_row.iloc[0]["Observations"])
-        decision = str(vs_row.iloc[0]["DecisionConseil"])
+        abs_just = int(vs_row.iloc[0]["AbsencesJustifiees"]) if pd.notna(vs_row.iloc[0]["AbsencesJustifiees"]) else 0
+        abs_non_just = int(vs_row.iloc[0]["AbsencesNonJustifiees"]) if pd.notna(vs_row.iloc[0]["AbsencesNonJustifiees"]) else 0
+        retards = int(vs_row.iloc[0]["Retards"]) if pd.notna(vs_row.iloc[0]["Retards"]) else 0
+        heures_p = int(vs_row.iloc[0]["HeuresPerdues"]) if pd.notna(vs_row.iloc[0]["HeuresPerdues"]) else 0
+        obs = str(vs_row.iloc[0]["Observations"]) if pd.notna(vs_row.iloc[0]["Observations"]) else "RAS"
+        decision = str(vs_row.iloc[0]["DecisionConseil"]) if pd.notna(vs_row.iloc[0]["DecisionConseil"]) else "Encouragements"
 
     return {
         "eleve": eleve,
@@ -1133,9 +1161,9 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
 
                         for idx_el, el in enumerate(eleves_classe):
                             ex_row = notes_actuelles[notes_actuelles["Eleve"] == el]
-                            d1_val = float(ex_row.iloc[0]["Devoir1"]) if not ex_row.empty and not pd.isna(ex_row.iloc[0]["Devoir1"]) else 0.0
-                            d2_val = float(ex_row.iloc[0]["Devoir2"]) if not ex_row.empty and not pd.isna(ex_row.iloc[0]["Devoir2"]) else 0.0
-                            comp_val = float(ex_row.iloc[0]["Composition"]) if not ex_row.empty and not pd.isna(ex_row.iloc[0]["Composition"]) else 0.0
+                            d1_val = float(ex_row.iloc[0]["Devoir1"]) if not ex_row.empty and pd.notna(ex_row.iloc[0]["Devoir1"]) else 0.0
+                            d2_val = float(ex_row.iloc[0]["Devoir2"]) if not ex_row.empty and pd.notna(ex_row.iloc[0]["Devoir2"]) else 0.0
+                            comp_val = float(ex_row.iloc[0]["Composition"]) if not ex_row.empty and pd.notna(ex_row.iloc[0]["Composition"]) else 0.0
 
                             col_e1, col_e2, col_e3, col_e4 = st.columns([3, 2, 2, 2])
                             with col_e1:
