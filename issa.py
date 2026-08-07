@@ -154,10 +154,9 @@ def sauvegarder_donnees_externes(action_label="SAUVEGARDE_DONNEES"):
             })
         st.session_state.prof_white_list = pd.DataFrame(sync_wl_list)
 
-    # Harmonisation préventive de la colonne Periode dans notes_db
-    if "notes_db" in st.session_state and not st.session_state.notes_db.empty:
-        if "Période" in st.session_state.notes_db.columns and "Periode" not in st.session_state.notes_db.columns:
-            st.session_state.notes_db = st.session_state.notes_db.rename(columns={"Période": "Periode"})
+    # Assurer que notes_db est réindexé de manière propre avant enregistrement
+    if "notes_db" in st.session_state and isinstance(st.session_state.notes_db, pd.DataFrame):
+        st.session_state.notes_db = st.session_state.notes_db.reset_index(drop=True)
 
     # Nettoyage préventif des DataFrames pour éliminer tout NaN/None avant de convertir en dictionnaire
     data_to_save = {
@@ -510,12 +509,18 @@ if "notes_db" not in st.session_state:
             ]
         )
 
-# Normalisation robuste pour s'assurer que la colonne "Periode" existe toujours sans KeyError
+# Réindexation globale et nettoyage pour éviter tout problème de duplicate labels dans notes_db
+if isinstance(st.session_state.notes_db, pd.DataFrame):
+    st.session_state.notes_db = st.session_state.notes_db.reset_index(drop=True)
+
+# Normalisation robuste pour s'assurer que les colonnes "Periode" et "Période" existent toujours pour compatibilité
 if "Periode" not in st.session_state.notes_db.columns:
     if "Période" in st.session_state.notes_db.columns:
-        st.session_state.notes_db = st.session_state.notes_db.rename(columns={"Période": "Periode"})
+        st.session_state.notes_db["Periode"] = st.session_state.notes_db["Période"]
     else:
         st.session_state.notes_db["Periode"] = "1er Semestre"
+if "Période" not in st.session_state.notes_db.columns:
+    st.session_state.notes_db["Période"] = st.session_state.notes_db["Periode"]
 
 if "viescolaire_db" not in st.session_state:
     if "viescolaire_db" in saved_data:
@@ -633,12 +638,13 @@ def calculer_bulletin_eleve(classe, eleve, periode):
     if matieres_coeffs.empty:
         matieres_coeffs = pd.DataFrame({"Matière": ["Mathématiques", "Français"], "Coefficient": [2, 2]})
 
-    # Sécurisation du nom de la colonne de période
-    col_per = "Periode" if "Periode" in st.session_state.notes_db.columns else "Période"
-
-    notes_classe_periode = st.session_state.notes_db[
-        (st.session_state.notes_db["Classe"] == classe) & 
-        (st.session_state.notes_db[col_per] == periode)
+    # Filtrage tolérant à la fois la colonne "Periode" et "Période"
+    notes_df = st.session_state.notes_db
+    col_per = "Periode" if "Periode" in notes_df.columns else "Période"
+    
+    notes_classe_periode = notes_df[
+        (notes_df["Classe"] == classe) & 
+        (notes_df[col_per] == periode)
     ]
 
     lignes_bulletin = []
@@ -712,11 +718,12 @@ def calculer_bulletin_eleve(classe, eleve, periode):
             rang = f"{idx} / {len(tous_eleves)}"
             break
 
-    col_vs_per = "Periode" if "Periode" in st.session_state.viescolaire_db.columns else "Période"
-    vs_row = st.session_state.viescolaire_db[
-        (st.session_state.viescolaire_db["Classe"] == classe) & 
-        (st.session_state.viescolaire_db[col_vs_per] == periode) & 
-        (st.session_state.viescolaire_db["Eleve"] == eleve)
+    vs_df = st.session_state.viescolaire_db
+    vs_col_per = "Periode" if "Periode" in vs_df.columns else "Période"
+    vs_row = vs_df[
+        (vs_df["Classe"] == classe) & 
+        (vs_df[vs_col_per] == periode) & 
+        (vs_df["Eleve"] == eleve)
     ]
     abs_just, abs_non_just, retards, heures_p, obs, decision = 0, 0, 0, 0, "RAS", "Encouragements"
     if not vs_row.empty:
@@ -1152,11 +1159,13 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 if eleves_classe:
                     st.markdown(f"#### Grille de notation : {matiere_sel} ({periode_sel}) — Barème / {bareme_sel}")
                     
-                    col_p_key = "Periode" if "Periode" in st.session_state.notes_db.columns else "Période"
                     notes_actuelles = st.session_state.notes_db[
                         (st.session_state.notes_db["Classe"] == classe_autorisee) & 
                         (st.session_state.notes_db["Matière"] == matiere_sel) & 
-                        (st.session_state.notes_db[col_p_key] == periode_sel)
+                        (
+                            (st.session_state.notes_db["Periode"] == periode_sel) if "Periode" in st.session_state.notes_db.columns 
+                            else (st.session_state.notes_db["Période"] == periode_sel)
+                        )
                     ]
 
                     with st.form("form_saisie_notes_harmonise"):
@@ -1193,6 +1202,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                                 "Classe": classe_autorisee,
                                 "Matière": matiere_sel,
                                 "Periode": periode_sel,
+                                "Période": periode_sel,
                                 "Eleve": el,
                                 "Devoir1": d1_20,
                                 "Devoir2": d2_20,
@@ -1200,22 +1210,32 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             })
 
                         st.markdown("<br>", unsafe_allow_html=True)
-                        if st.form_submit_button("💾 Enregistrer et Normaliser les Notes"):
-                            # Normalisation stricte de la colonne Periode avant filtre
-                            if "Période" in st.session_state.notes_db.columns:
-                                st.session_state.notes_db = st.session_state.notes_db.rename(columns={"Période": "Periode"})
+                        btn_sync = st.form_submit_button("🔄 Enregistrer et Synchroniser les Notes")
 
-                            st.session_state.notes_db = st.session_state.notes_db[
-                                ~((st.session_state.notes_db["Classe"] == classe_autorisee) & 
-                                  (st.session_state.notes_db["Matière"] == matiere_sel) & 
-                                  (st.session_state.notes_db["Periode"] == periode_sel))
-                            ]
+                        if btn_sync:
+                            # Réinitialisation préalable de l'index pour empêcher l'erreur duplicate labels sur reindex
+                            st.session_state.notes_db = st.session_state.notes_db.reset_index(drop=True)
+                            col_p = "Periode" if "Periode" in st.session_state.notes_db.columns else "Période"
+                            
+                            # Suppression sécurisée des anciennes notes pour réécriture propre
+                            mask_to_keep = ~(
+                                (st.session_state.notes_db["Classe"] == classe_autorisee) & 
+                                (st.session_state.notes_db["Matière"] == matiere_sel) & 
+                                (st.session_state.notes_db[col_p] == periode_sel)
+                            )
+                            st.session_state.notes_db = st.session_state.notes_db[mask_to_keep].reset_index(drop=True)
+                            
                             new_notes_df = pd.DataFrame(saisie_data)
                             st.session_state.notes_db = pd.concat([st.session_state.notes_db, new_notes_df], ignore_index=True)
                             
+                            # Double affectation de compatibilité
+                            st.session_state.notes_db["Periode"] = st.session_state.notes_db[col_p]
+                            st.session_state.notes_db["Période"] = st.session_state.notes_db[col_p]
+
+                            # Sauvegarde externe dans la base Supabase Cloud
                             sauvegarder_donnees_externes("SAISIE_NOTES_PROF")
-                            enregistrer_log_action(prof_connecte, "SAISIE_NOTES", f"Mise à jour notes pour {matiere_sel} ({classe_autorisee})")
-                            st.success("Notes enregistrées, normalisées sur /20 et synchronisées dans Supabase avec succès !")
+                            enregistrer_log_action(prof_connecte, "SAISIE_NOTES", f"Saisie & Synchronisation réussie pour {matiere_sel} ({classe_autorisee})")
+                            st.success("✅ Enregistrement et synchronisation réussis ! Les notes sont publiées en temps réel dans l'espace parents et le bulletin.")
                 else:
                     st.warning("Aucun élève enregistré dans cette classe.")
 
@@ -1242,7 +1262,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                                 res_appel[el] = st.radio("Statut", ["Présent", "Absent", "Retard"], key=f"st_{classe_autorisee}_{idx_el}", horizontal=True, label_visibility="collapsed")
                         
                         st.markdown("<br>", unsafe_allow_html=True)
-                        if st.form_submit_button("✅ Valider l'Appel Journalier"):
+                        if st.form_submit_button("✅ Valider et Synchroniser l'Appel"):
                             nouveaux_abs = []
                             for el in eleves_cibles:
                                 if res_appel[el] != "Présent":
@@ -1258,7 +1278,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             
                             sauvegarder_donnees_externes("SAISIE_APPEL_PROF")
                             enregistrer_log_action(prof_connecte, "APPEL", f"Appel validé pour {classe_autorisee} à la date du {date_jour}")
-                            st.success("Appel enregistré, consigné dans les absences et synchronisé dans Supabase !")
+                            st.success("✅ Appel enregistré et synchronisé avec succès dans Supabase !")
                 else:
                     st.warning("Aucun élève trouvé pour cette classe.")
 
@@ -1290,17 +1310,19 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                     ], key="prof_dec_vs")
 
                     st.markdown("<br>", unsafe_allow_html=True)
-                    if st.form_submit_button("💾 Enregistrer le Suivi de Vie Scolaire"):
+                    if st.form_submit_button("🔄 Enregistrer et Synchroniser la Vie Scolaire"):
                         if el_vs:
                             col_vs_per = "Periode" if "Periode" in st.session_state.viescolaire_db.columns else "Période"
+                            st.session_state.viescolaire_db = st.session_state.viescolaire_db.reset_index(drop=True)
                             st.session_state.viescolaire_db = st.session_state.viescolaire_db[
                                 ~((st.session_state.viescolaire_db["Classe"] == classe_autorisee) & 
                                   (st.session_state.viescolaire_db[col_vs_per] == periode_vs) & 
                                   (st.session_state.viescolaire_db["Eleve"] == el_vs))
-                            ]
+                            ].reset_index(drop=True)
                             new_vs = pd.DataFrame([{
                                 "Classe": classe_autorisee, 
                                 "Periode": periode_vs, 
+                                "Période": periode_vs,
                                 "Eleve": el_vs,
                                 "AbsencesJustifiees": abs_j, 
                                 "AbsencesNonJustifiees": abs_nj,
@@ -1313,7 +1335,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                             
                             sauvegarder_donnees_externes("SAISIE_VIE_SCOLAIRE_PROF")
                             enregistrer_log_action(prof_connecte, "VIE_SCOLAIRE", f"Suivi mis à jour pour l'élève {el_vs}")
-                            st.success("Suivi de vie scolaire enregistré et synchronisé en ligne avec succès !")
+                            st.success("✅ Suivi de vie scolaire enregistré et synchronisé en ligne avec succès !")
             else:
                 st.warning("Aucun élève disponible pour cette classe.")
 
@@ -1332,7 +1354,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 travail = st.text_area("Travail à faire pour la prochaine séance", key="prof_trav_ct")
 
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.form_submit_button("📢 Publier dans le Cahier de Texte"):
+                if st.form_submit_button("📢 Publier et Synchroniser le Cahier de Texte"):
                     if mat_ct and contenu:
                         new_ct = pd.DataFrame([{
                             "Professeur": prof_connecte, 
@@ -1346,7 +1368,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                         
                         sauvegarder_donnees_externes("CAHIER_TEXTE_PROF")
                         enregistrer_log_action(prof_connecte, "CAHIER_TEXTE", f"Leçon publiée pour la matière {mat_ct}")
-                        st.success("Leçon publiée et enregistrée sur Supabase avec succès !")
+                        st.success("✅ Leçon publiée et synchronisée sur Supabase avec succès !")
                     else:
                         st.error("Veuillez renseigner au moins la matière et le contenu de la séance.")
 
@@ -1358,7 +1380,7 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
             else:
                 st.info("Aucune entrée dans le cahier de texte pour cette classe.")
 
-elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élèves":
+elif st.session_state.espace_actif == "👨‍氛围 Espace Parents / Élèves" or st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élèves":
     st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Portail Parent & Consultation des Notes</div>', unsafe_allow_html=True)
 
     if "parent_logged_eleve" not in st.session_state:
@@ -1386,13 +1408,8 @@ elif st.session_state.espace_actif == "👨‍👩‍👧 Espace Parents / Élè
                         break
                 if match or tel_p.strip().lower() == ADMIN_EMAIL.lower():
                     if not match:
-                        st.session_state["parent_logged_eleve"] = f"{prenom_e} {nom_e}".strip()
-                        # Recherche dynamic de la classe de l'élève
-                        match_eleve_db = st.session_state.eleves_db[st.session_state.eleves_db["Nom Complet"].str.lower() == f"{prenom_e} {nom_e}".strip().lower()]
-                        if not match_eleve_db.empty:
-                            st.session_state["parent_logged_classe"] = match_eleve_db.iloc[0]["Classe"]
-                        else:
-                            st.session_state["parent_logged_classe"] = "6ème A"
+                        st.session_state["parent_logged_eleve"] = f"{prenom_e} {nom_e}"
+                        st.session_state["parent_logged_classe"] = "6ème A"
                     enregistrer_log_action(f"PARENT_{prenom_e}_{nom_e}", "CONNEXION_PARENT", "Connexion réussie")
                     st.success("Connexion réussie !")
                     st.rerun()
