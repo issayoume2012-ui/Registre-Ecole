@@ -320,7 +320,19 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+# Masquer la barre d'outils supérieure et le pied de page Streamlit
+hide_streamlit_style = """
+    <style>
+    [data-testid="stToolbar"] {
+        display: none;
+    }
+    footer {
+        visibility: hidden;
+    }
+    </style>
+"""
 
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # ==========================================
 # 2. INITIALISATION EXHAUSTIVE DES DONNÉES & SYNCHRONISATION SESSION
 # ==========================================
