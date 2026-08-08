@@ -10,7 +10,8 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 from supabase import create_client, Client
-
+import PyPDF2
+from docx import Document
 # ==========================================
 # 0. GESTION DE LA PERSISTANCE SUPABASE & SÉCURITÉ MOTS DE PASSE
 # ==========================================
@@ -19,6 +20,36 @@ try:
     HAS_BCRYPT = True
 except ImportError:
     raise ImportError("La bibliothèque 'bcrypt' est obligatoire et doit être présente dans requirements.txt pour assurer la sécurité.")
+# --- NOUVELLE FONCTION D'IMPORTATION ---
+def importer_donnees_eleves(fichier):
+    """Extrait et nettoie les données élèves depuis PDF, Excel ou Word."""
+    df = pd.DataFrame()
+    ext = os.path.splitext(fichier.name)[1].lower()
+    
+    try:
+        if ext == '.xlsx':
+            df = pd.read_excel(fichier)
+        elif ext == '.docx':
+            doc = Document(fichier)
+            data = [p.text.split('\t') for p in doc.paragraphs]
+            df = pd.DataFrame(data[1:], columns=data[0])
+        elif ext == '.pdf':
+            reader = PyPDF2.PdfReader(fichier)
+            text = "\n".join([page.extract_text() for page in reader.pages])
+            # Logique simple de parsing texte
+            data = [line.split(',') for line in text.split('\n') if line]
+            df = pd.DataFrame(data[1:], columns=data[0])
+        
+        # Validation basique
+        colonnes_requises = ["Nom", "Prénom", "Date de Naissance", "Classe"]
+        if all(col in df.columns for col in colonnes_requises):
+            df["Nom Complet"] = df["Prénom"] + " " + df["Nom"]
+            st.session_state.eleves_db = pd.concat([st.session_state.eleves_db, df], ignore_index=True)
+            sauvegarder_donnees_externes("IMPORT_MASSIF_ELEVES")
+            return True
+    except Exception as e:
+        st.error(f"Erreur d'import : {e}")
+    return False
 
 def hacher_mot_de_passe(password: str) -> str:
     """Hache le mot de passe avec bcrypt pour ne jamais le stocker en clair."""
