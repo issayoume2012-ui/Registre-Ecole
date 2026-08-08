@@ -536,7 +536,6 @@ if "base_globale_db" not in st.session_state:
 
 JOURS_LIST = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"]
 
-# Nouveaux créneaux horaires demandés avec 11h00-11h30 (récréation), 11h30-12h, ainsi de suite jusqu'à 19h
 HEURES_LIST = [
     "08h-09h", "09h-10h", "10h-11h", 
     "11h00-11h30", "11h30-12h", 
@@ -862,32 +861,42 @@ def calculer_bulletin_eleve(classe, eleve, periode):
 
 def generer_pdf_bulletin(bul_data):
     pdf = FPDF()
+    try:
+        if os.path.exists("DejaVuSans.ttf"):
+            pdf.add_font("DejaVu", "", "DejaVuSans.ttf", uni=True)
+            pdf.add_font("DejaVu", "B", "DejaVuSans-Bold.ttf", uni=True)
+            font_family = "DejaVu"
+        else:
+            font_family = "Arial"
+    except Exception:
+        font_family = "Arial"
+
     pdf.add_page()
     cycle = bul_data.get("cycle", "Collège")
     
-    pdf.set_font("Arial", "B", 12)
+    pdf.set_font(font_family, "B", 12)
     pdf.cell(0, 6, "RÉPUBLIQUE DU SÉNÉGAL", 0, 1, "C")
-    pdf.set_font("Arial", "", 9)
+    pdf.set_font(font_family, "", 9)
     pdf.cell(0, 5, "Ministère de l'Éducation Nationale", 0, 1, "C")
-    pdf.set_font("Arial", "B", 10)
+    pdf.set_font(font_family, "B", 10)
     pdf.cell(0, 5, "ÉCOLE PRÉSIDENT NELSON MANDELA", 0, 1, "C")
-    pdf.set_font("Arial", "I", 8)
+    pdf.set_font(font_family, "I", 8)
     pdf.cell(0, 4, f"Contact Principal : {ADMIN_EMAIL} | éduquer, instruire et promouvoir les vertus africaines.", 0, 1, "C")
     pdf.line(10, 26, 200, 26)
     pdf.ln(5)
 
-    pdf.set_font("Arial", "B", 12)
+    pdf.set_font(font_family, "B", 12)
     pdf.cell(0, 6, f"BULLETIN DE NOTES - {bul_data['periode'].upper()} ({cycle.upper()})", 0, 1, "C")
     pdf.ln(3)
 
-    pdf.set_font("Arial", "B", 10)
+    pdf.set_font(font_family, "B", 10)
     pdf.cell(100, 6, f"Nom et Prénom : {bul_data['eleve']}", 0, 0, "L")
     pdf.cell(90, 6, f"Classe : {bul_data['classe']}", 0, 1, "R")
     pdf.cell(100, 6, f"Effectif : {bul_data['effectif']} élèves", 0, 0, "L")
     pdf.cell(90, 6, f"Rang : {bul_data['rang']}", 0, 1, "R")
     pdf.ln(4)
 
-    pdf.set_font("Arial", "B", 9)
+    pdf.set_font(font_family, "B", 9)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
     
@@ -902,7 +911,7 @@ def generer_pdf_bulletin(bul_data):
         pdf.cell(col_widths[i], 7, h, 1, 0, "C", True)
     pdf.ln()
 
-    pdf.set_font("Arial", "", 8)
+    pdf.set_font(font_family, "", 8)
     pdf.set_text_color(0, 0, 0)
     fill = False
     pdf.set_fill_color(240, 244, 248)
@@ -925,22 +934,22 @@ def generer_pdf_bulletin(bul_data):
         fill = not fill
 
     pdf.ln(4)
-    pdf.set_font("Arial", "B", 10)
+    pdf.set_font(font_family, "B", 10)
     if cycle == "Élémentaire":
         pdf.cell(0, 6, f"Total Général : {bul_data['moyenne_generale']} / {bul_data['total_bareme']}", 1, 1, "L", True)
     else:
         pdf.cell(0, 6, f"Moyenne Générale : {bul_data['moyenne_generale']} / 20", 1, 1, "L", True)
     pdf.ln(3)
 
-    pdf.set_font("Arial", "B", 9)
+    pdf.set_font(font_family, "B", 9)
     pdf.cell(0, 5, "BILAN DE LA VIE SCOLAIRE ET DISCIPLINE", 0, 1, "L")
-    pdf.set_font("Arial", "", 9)
+    pdf.set_font(font_family, "", 9)
     pdf.cell(0, 5, f"Absences justifiées : {bul_data['abs_just']} | Absences non justifiées : {bul_data['abs_non_just']} | Retards : {bul_data['retards']} | Heures perdues : {bul_data['heures_perdues']}h", 1, 1, "L")
     pdf.cell(0, 5, f"Observations / Appréciation générale : {bul_data['observations']}", 1, 1, "L")
     pdf.cell(0, 5, f"Décision du Conseil de Classe : {bul_data['decision']}", 1, 1, "L")
     pdf.ln(10)
 
-    pdf.set_font("Arial", "B", 9)
+    pdf.set_font(font_family, "B", 9)
     pdf.cell(95, 5, "Le Professeur / Titulaire", 0, 0, "C")
     pdf.cell(95, 5, "Le Chef d'Établissement / Directeur", 0, 1, "C")
 
@@ -959,15 +968,20 @@ def generer_zip_bulletins_classe(classe, periode):
 
 def generer_pdf_cahier_textes(df_ct, titre):
     pdf = FPDF()
+    try:
+        font_family = "DejaVu" if os.path.exists("DejaVuSans.ttf") else "Arial"
+    except Exception:
+        font_family = "Arial"
+        
     pdf.add_page()
-    pdf.set_font("Arial", "B", 12)
+    pdf.set_font(font_family, "B", 12)
     pdf.cell(0, 6, "ÉCOLE PRÉSIDENT NELSON MANDELA", 0, 1, "C")
-    pdf.set_font("Arial", "", 9)
+    pdf.set_font(font_family, "", 9)
     pdf.cell(0, 5, f"Cahier de Texte Général - {titre}", 0, 1, "C")
     pdf.line(10, 22, 200, 22)
     pdf.ln(5)
 
-    pdf.set_font("Arial", "B", 8)
+    pdf.set_font(font_family, "B", 8)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
 
@@ -978,7 +992,7 @@ def generer_pdf_cahier_textes(df_ct, titre):
         pdf.cell(col_widths[i], 7, h, 1, 0, "C", True)
     pdf.ln()
 
-    pdf.set_font("Arial", "", 7)
+    pdf.set_font(font_family, "", 7)
     pdf.set_text_color(0, 0, 0)
     fill = False
     pdf.set_fill_color(240, 244, 248)
@@ -997,18 +1011,23 @@ def generer_pdf_cahier_textes(df_ct, titre):
 
 def generer_pdf_edt(classe_nom, df_edt):
     pdf = FPDF(orientation='L', unit='mm', format='A4')
+    try:
+        font_family = "DejaVu" if os.path.exists("DejaVuSans.ttf") else "Arial"
+    except Exception:
+        font_family = "Arial"
+
     pdf.add_page()
     
-    pdf.set_font("Arial", "B", 14)
+    pdf.set_font(font_family, "B", 14)
     pdf.cell(0, 6, "ÉCOLE PRÉSIDENT NELSON MANDELA", 0, 1, "C")
-    pdf.set_font("Arial", "", 10)
+    pdf.set_font(font_family, "", 10)
     pdf.cell(0, 5, f"EMPLOI DU TEMPS OFFICIEL (Incl. Récréation 11h00-11h30) - Classe : {classe_nom}", 0, 1, "C")
-    pdf.set_font("Arial", "I", 8)
+    pdf.set_font(font_family, "I", 8)
     pdf.cell(0, 4, "Horaires : Lundi à Samedi | 08h - 19h", 0, 1, "C")
     pdf.line(10, 24, 287, 24)
     pdf.ln(5)
 
-    pdf.set_font("Arial", "B", 8)
+    pdf.set_font(font_family, "B", 8)
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
     
@@ -1019,7 +1038,7 @@ def generer_pdf_edt(classe_nom, df_edt):
         pdf.cell(col_w[idx+1], 7, h, 1, 0, "C", True)
     pdf.ln()
 
-    pdf.set_font("Arial", "", 7)
+    pdf.set_font(font_family, "", 7)
     pdf.set_text_color(0, 0, 0)
     fill = False
     pdf.set_fill_color(240, 244, 248)
@@ -1920,36 +1939,18 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
                 st.markdown("#### 👨‍👩‍👧 Liste Blanche & Contrôle d'Accès des Parents")
                 st.info("Définissez les numéros de téléphone / e-mails autorisés ainsi que l'élève associé pour l'authentification sur le portail parent.")
                 edited_parent_wl = st.data_editor(st.session_state.parents_white_list, num_rows="dynamic", use_container_width=True, key="edit_parent_wl")
-                if st.button("💾 Mettre à jour la Liste Blanche des Parents"):
+                if st.button("💾 Mettre à jour la Liste Blanche Parents"):
                     st.session_state.parents_white_list = edited_parent_wl
                     sauvegarder_donnees_externes("MAJ_PARENT_WL")
                     st.success("Liste blanche des parents mise à jour et synchronisée avec succès !")
 
         with tab_eleves:
-            st.subheader("👨‍🎓 Gestion des Élèves & Inscriptions")
-            edited_eleves = st.data_editor(st.session_state.eleves_db, num_rows="dynamic", use_container_width=True, key="edit_eleves_db_adm")
+            st.subheader("👨‍🎓 Gestion Centralisée des Élève de l'Établissement")
+            edited_eleves = st.data_editor(st.session_state.eleves_db, num_rows="dynamic", use_container_width=True, key="edit_eleves_db")
             if st.button("💾 Enregistrer la Base Élèves"):
                 st.session_state.eleves_db = edited_eleves
                 sauvegarder_donnees_externes("MAJ_ELEVES")
-                st.success("Base des élèves enregistrée et synchronisée !")
-
-            st.markdown("---")
-            st.markdown("#### 📥 Télécharger la Liste Officielle des Élèves (PDF)")
-            classes_liste_opt = ["Toutes"] + st.session_state.classes_db["Classe"].tolist() if "classes_db" in st.session_state else ["Toutes"]
-            sel_cls_liste = st.selectbox("Sélectionner la classe pour export liste", classes_liste_opt, key="sel_cls_liste_pdf")
-            
-            if st.button("Générer le PDF de la liste des élèves"):
-                df_to_export = st.session_state.eleves_db
-                if sel_cls_liste != "Toutes":
-                    df_to_export = df_to_export[df_to_export["Classe"] == sel_cls_liste]
-                
-                pdf_eleves_bytes = generer_pdf_liste_eleves(df_to_export, sel_cls_liste)
-                st.download_button(
-                    label="📥 Télécharger la Liste des Élèves (PDF)",
-                    data=pdf_eleves_bytes,
-                    file_name=f"liste_eleves_{sel_cls_liste}.pdf",
-                    mime="application/pdf"
-                )
+                st.success("Base des élèves enregistrée et synchronisée avec succès !")
 
         with tab_classes:
             st.subheader("🏫 Gestion des Classes & Cycles")
@@ -1957,81 +1958,83 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             if st.button("💾 Enregistrer les Classes"):
                 st.session_state.classes_db = edited_classes
                 sauvegarder_donnees_externes("MAJ_CLASSES")
-                st.success("Classes enregistrées et synchronisées !")
+                st.success("Classes enregistrées et synchronisées avec succès !")
 
         with tab_cfg:
-            st.subheader("⚙️ Configuration des Coefficients & Périodes")
-            sub_cfg1, sub_cfg2 = st.tabs(["Coefficients & Barèmes", "Périodes"])
-            with sub_cfg1:
+            st.subheader("⚙️ Configuration des Coefficients, Barèmes & Périodes")
+            c_cfg1, c_cfg2 = st.tabs(["📊 Coefficients & Barèmes par Matière", "📅 Périodes d'Évaluation"])
+            
+            with c_cfg1:
                 edited_coeffs = st.data_editor(st.session_state.coefficients_db, num_rows="dynamic", use_container_width=True, key="edit_coeffs_db")
                 if st.button("💾 Enregistrer les Coefficients"):
                     st.session_state.coefficients_db = edited_coeffs
                     sauvegarder_donnees_externes("MAJ_COEFFS")
                     st.success("Coefficients mis à jour !")
-            with sub_cfg2:
-                edited_periods = st.data_editor(st.session_state.periodes_db, num_rows="dynamic", use_container_width=True, key="edit_periods_db")
+
+            with c_cfg2:
+                edited_periodes = st.data_editor(st.session_state.periodes_db, num_rows="dynamic", use_container_width=True, key="edit_periodes_db")
                 if st.button("💾 Enregistrer les Périodes"):
-                    st.session_state.periodes_db = edited_periods
-                    sauvegarder_donnees_externes("MAJ_PERIODS")
+                    st.session_state.periodes_db = edited_periodes
+                    sauvegarder_donnees_externes("MAJ_PERIODES")
                     st.success("Périodes mises à jour !")
 
         with tab_bg:
-            st.subheader("🗄️ Base Globale & Journal d'Audit")
-            st.info("Consultez l'historique de toutes les actions et transactions enregistrées sur la plateforme.")
-            
+            st.subheader("🗄️ Base Globale & Logs d'Audit")
+            st.info("Consultez l'historique de toutes les transactions et actions enregistrées sur la plateforme.")
             try:
-                res_logs = supabase.table("audit_logs").select("*").order("horodatage", desc=True).limit(100).execute()
-                if res_logs.data:
-                    st.dataframe(pd.DataFrame(res_logs.data), use_container_width=True)
+                logs_res = supabase.table("audit_logs").select("*").order("horodatage", desc=True).limit(100).execute()
+                if logs_res.data:
+                    st.dataframe(pd.DataFrame(logs_res.data), use_container_width=True)
                 else:
-                    st.info("Aucun journal d'audit pour le moment.")
+                    st.info("Aucun journal d'audit disponible.")
             except Exception:
-                st.info("Journal d'audit disponible lors de l'activation complète de Supabase.")
+                st.info("Table d'audit non accessible ou vide.")
 
         with tab_save:
-            st.subheader("🔄 Sauvegarde Manuelle & Synchronisation Supabase")
-            st.info("Forcez une synchronisation complète et immédiate de l'ensemble des bases de données vers Supabase.")
-            if st.button("🚀 Sauvegarder TOUTES les données maintenant"):
+            st.subheader("🔄 Synchronisation et Sauvegarde Manuelle vers Supabase")
+            st.info("Forcez la sauvegarde immédiate de l'ensemble des données de session vers la base de données distante Supabase.")
+            if st.button("🚀 Sauvegarder TOUTES les Données en Ligne"):
                 sauvegarder_donnees_externes("SAUVEGARDE_MANUELLE_ADMIN")
-                st.success("✅ Sauvegarde globale effectuée avec succès vers Supabase !")
+                st.success("Sauvegarde globale effectuée avec succès !")
 
 elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
-    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Rapports Globaux, Statistiques & Assistant IA</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Administration XXL, Statistiques & Assistant IA</div>', unsafe_allow_html=True)
 
-    tab_rep1, tab_rep2, tab_rep3 = st.tabs(["📊 Statistiques Générales", "🤖 Assistant IA Pédagogique", "📥 Export Global Excel"])
+    tab_stat, tab_ia, tab_master = st.tabs([
+        "📈 Statistiques Globales & Répartition",
+        "🤖 Assistant IA Intégré",
+        "📊 Tableaux de Bord Master"
+    ])
 
-    with tab_rep1:
-        st.subheader("📊 Statistiques Générales de l'Établissement")
-        col_m1, col_m2, col_m3 = st.columns(3)
-        with col_m1: st.metric("Total Élèves", len(st.session_state.eleves_db))
-        with col_m2: st.metric("Total Classes", len(st.session_state.classes_db))
-        with col_m3: st.metric("Total Professeurs", len(st.session_state.prof_credentials))
+    with tab_stat:
+        st.subheader("📈 Statistiques et Effectifs de l'Établissement")
+        col_st1, col_st2, col_st3 = st.columns(3)
+        with col_st1: st.metric("Total Élèves", len(st.session_state.eleves_db))
+        with col_st2: st.metric("Total Classes", len(st.session_state.classes_db))
+        with col_st3: st.metric("Total Professeurs", len(st.session_state.prof_white_list))
 
-        st.markdown("---")
-        st.markdown("#### Répartition des Élèves par Classe")
         if not st.session_state.eleves_db.empty:
-            counts = st.session_state.eleves_db["Classe"].value_counts().reset_index()
-            counts.columns = ["Classe", "Nombre d'élèves"]
-            st.bar_chart(counts.set_index("Classe"))
+            st.markdown("#### Répartition des Élèves par Classe")
+            repartition = st.session_state.eleves_db["Classe"].value_counts().reset_index()
+            repartition.columns = ["Classe", "Nombre d'Élèves"]
+            st.bar_chart(repartition.set_index("Classe"))
 
-    with tab_rep2:
-        st.subheader("🤖 Assistant Virtuel Intelligent - École Président Nelson Mandela")
-        st.info(f"Posez vos questions sur l'établissement (Contact principal : {ADMIN_EMAIL}).")
+    with tab_ia:
+        st.subheader("🤖 Assistant Pédagogique Intelligent (IA)")
+        st.info("Posez vos questions concernant les effectifs, les classes ou le fonctionnement de l'établissement.")
+        
+        question_user = st.text_input("Votre question :", placeholder="Ex: Combien d'élèves avons-nous au total ?")
+        if question_user:
+            reponse_ia = assistant_ia_repondre(question_user)
+            st.success(reponse_ia)
 
-        user_q = st.text_input("Posez votre question ici :")
-        if user_q:
-            reponse_ia = assistant_ia_repondre(user_q)
-            st.markdown(f"> **Réponse de l'Assistant :** {reponse_ia}")
-
-    with tab_rep3:
-        st.subheader("📥 Export Global des Données de l'École")
-        st.info("Téléchargez une copie complète des données clés de l'établissement sous format Excel.")
-
-        if st.button("📥 Générer l'Export Excel Global"):
-            excel_global = export_table_excel(st.session_state.eleves_db, "base_globale.xlsx")
+    with tab_master:
+        st.subheader("📊 Tableaux de Bord Master & Exports Globaux")
+        if not st.session_state.eleves_db.empty:
+            excel_global = export_table_excel(st.session_state.eleves_db, "base_eleves_complete.xlsx")
             st.download_button(
-                label="📥 Télécharger le fichier Excel Global",
+                label="📥 Télécharger la Base Globale des Élèves (Excel)",
                 data=excel_global,
-                file_name=f"export_global_ecole_{datetime.today().strftime('%Y-%m-%d')}.xlsx",
+                file_name="base_eleves_complete.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
