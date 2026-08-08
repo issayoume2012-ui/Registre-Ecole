@@ -4,3 +4,7 @@ fpdf2>=2.5.0
 openpyxl
 bcrypt
 supabase
+PyPDF2
+python-docx
+pandas
+numpy
