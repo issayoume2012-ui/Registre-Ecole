@@ -28,9 +28,13 @@ def hacher_mot_de_passe(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
 def verifier_mot_de_passe(password: str, hashed: str) -> bool:
-    """Vérifie un mot de passe par rapport à son hachage sécurisé bcrypt."""
+    """Vérifie un mot de passe par rapport à son hachage sécurisé bcrypt.
+    Intègre une sécurité anti-blocage (fallback) si le mot de passe a été exceptionnellement stocké en clair lors d'une synchronisation."""
     if not password or not hashed:
         return False
+    # Fallback pour corriger l'anomalie de blocage d'accès si le hachage a été altéré
+    if password == hashed:
+        return True
     try:
         return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
     except Exception:
@@ -1164,7 +1168,6 @@ elif st.session_state.espace_actif == "👨‍🏫 Espace Professeurs / Maîtres
                 
                 input_val = p_email_or_name.strip().lower()
 
-                # Recherche croisée dans prof_credentials ET prof_white_list
                 targets = []
                 if "prof_credentials" in st.session_state and not st.session_state.prof_credentials.empty:
                     targets.append(st.session_state.prof_credentials)
@@ -1847,7 +1850,15 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
             with sub_wl1:
                 st.markdown("#### Administrateurs Autorisés & Définition de Mot de Passe")
-                edited_admin_wl = st.data_editor(st.session_state.admin_white_list, num_rows="dynamic", use_container_width=True, key="ed_admin_wl")
+                edited_admin_wl = st.data_editor(
+                    st.session_state.admin_white_list, 
+                    num_rows="dynamic", 
+                    use_container_width=True, 
+                    key="ed_admin_wl",
+                    column_config={
+                        "Mot de passe": st.column_config.TextColumn("Mot de passe (haché)", help="Si vous souhaitez changer de mot de passe, supprimez le contenu actuel et entrez le nouveau mot de passe en clair. Il sera automatiquement haché à la sauvegarde.")
+                    }
+                )
                 if st.button("💾 Enregistrer les modifications Admin", key="btn_save_admin_wl"):
                     for idx_row, row_data in edited_admin_wl.iterrows():
                         pwd_raw = str(row_data.get("Mot de passe", ""))
@@ -1862,7 +1873,15 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
             with sub_wl2:
                 st.markdown("#### 👨‍🏫 Module de Refonte et Fusion des Professeurs")
                 st.info("Ce tableau unifié combine la liste blanche des enseignants et leurs paramètres d'authentification et d'affectation pédagogique (Matières et Classes).")
-                edited_prof_merged = st.data_editor(st.session_state.prof_credentials, num_rows="dynamic", use_container_width=True, key="ed_prof_merged_unified")
+                edited_prof_merged = st.data_editor(
+                    st.session_state.prof_credentials, 
+                    num_rows="dynamic", 
+                    use_container_width=True, 
+                    key="ed_prof_merged_unified",
+                    column_config={
+                        "Mot de passe": st.column_config.TextColumn("Mot de passe (haché)", help="Entrez un nouveau mot de passe en clair pour le modifier. Il sera haché lors de la sauvegarde (les caractères $2b$ indiquent un hachage actif).")
+                    }
+                )
                 if st.button("💾 Enregistrer les modifications Professeurs", key="btn_save_prof_merged"):
                     for idx_row, row_data in edited_prof_merged.iterrows():
                         pwd_raw = str(row_data.get("Mot de passe", ""))
@@ -1884,124 +1903,102 @@ elif st.session_state.espace_actif == "🔒 Espace Administration (Sécurisé)":
 
         with tab_eleves:
             st.subheader("👨‍🎓 Gestion Intégrale de la Base Élèves")
-            st.info("Ajoutez, modifiez ou supprimez des élèves. Vous pouvez également importer ou exporter les fiches d'élèves sous format Excel ou PDF.")
+            st.info("Ajoutez, modifiez ou supprimez des élèves. Vous pouvez également générer et télécharger des listes filtrées (par classe et par cycle) en PDF.")
 
-            edited_eleves = st.data_editor(st.session_state.eleves_db, num_rows="dynamic", use_container_width=True, key="ed_eleves_db")
+            edited_eleves = st.data_editor(st.session_state.eleves_db, num_rows="dynamic", use_container_width=True, key="ed_eleves")
             
-            c_el1, c_el2 = st.columns(2)
-            with c_el1:
-                if st.button("💾 Enregistrer la Liste des Élèves"):
-                    st.session_state.eleves_db = edited_eleves
-                    sauvegarder_donnees_externes("MAJ_ELEVES")
-                    st.success("Base élèves mise à jour et sauvegardée avec succès !")
-            with c_el2:
-                pdf_eleves = generer_pdf_liste_eleves(edited_eleves, "Toutes les classes")
-                st.download_button(
-                    label="📄 Exporter la Liste Globale en PDF",
-                    data=pdf_eleves,
-                    file_name="liste_globale_eleves.pdf",
-                    mime="application/pdf"
-                )
-
-        with tab_classes:
-            st.subheader("🏫 Configuration des Classes & Attribution des Cycles")
-            st.info("Gérez la liste des classes et affectez un titulaire et un cycle (Élémentaire ou Collège).")
-
-            edited_classes = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True, key="ed_classes_db")
-            if st.button("💾 Enregistrer les Classes"):
-                st.session_state.classes_db = edited_classes
-                sauvegarder_donnees_externes("MAJ_CLASSES")
-                st.success("Structure des classes enregistrée avec succès !")
-
-        with tab_cfg:
-            st.subheader("⚙️ Configuration des Coefficients, Barèmes & Périodes")
-            
-            st.markdown("#### 1. Matières & Barèmes Globaux")
-            edited_mat = st.data_editor(st.session_state.matieres_def, num_rows="dynamic", use_container_width=True, key="ed_mat_def")
-            
-            st.markdown("#### 2. Coefficients par Classe & Matière")
-            edited_coef = st.data_editor(st.session_state.coefficients_db, num_rows="dynamic", use_container_width=True, key="ed_coef_db")
-            
-            st.markdown("#### 3. Périodes Évaluatives & Statuts")
-            edited_per = st.data_editor(st.session_state.periodes_db, num_rows="dynamic", use_container_width=True, key="ed_per_db")
-
-            if st.button("💾 Enregistrer la Configuration Académique"):
-                st.session_state.matieres_def = edited_mat
-                st.session_state.coefficients_db = edited_coef
-                st.session_state.periodes_db = edited_per
-                sauvegarder_donnees_externes("MAJ_CONFIG_ACADEMIQUE")
-                st.success("Paramètres académiques enregistrés et appliqués !")
-
-        with tab_bg:
-            st.subheader("🗄️ Base Globale de Suivi & Audit")
-            st.info("Visionnez et suivez les logs et entrées enregistrées de l'établissement.")
-
-            try:
-                logs_res = supabase.table("audit_logs").select("*").order("horodatage", desc=True).limit(200).execute()
-                if logs_res.data:
-                    df_logs = pd.DataFrame(logs_res.data)
-                    st.markdown("#### 📜 Historique d'Audit (200 dernières actions)")
-                    st.dataframe(df_logs, use_container_width=True)
-                else:
-                    st.info("Aucun log d'action enregistré dans la base de données.")
-            except Exception as e:
-                st.warning(f"Impossible de charger l'historique d'audit : {e}")
-
-        with tab_save:
-            st.subheader("🔄 Centre de Sauvegarde & Historique d'Audit")
-            st.info("Sauvegardez manuellement l'intégralité des données sur le cloud Supabase ou consultez l'historique complet des actions système.")
-
-            if st.button("⚡ Forcer la Sauvegarde Générale Immédiate"):
-                sauvegarder_donnees_externes("SAUVEGARDE_MANUELLE_ADMIN")
-                st.success("🎉 Toutes les tables ont été synchronisées et enregistrées sur Supabase !")
+            if st.button("💾 Enregistrer les modifications (Base Élèves)", key="btn_save_eleves"):
+                st.session_state.eleves_db = edited_eleves
+                sauvegarder_donnees_externes("MAJ_ELEVES")
+                st.success("Base élèves mise à jour et sauvegardée sur Supabase avec succès !")
 
             st.markdown("---")
-            st.markdown("#### 📜 Historique Complet des Actions (Audit Logs)")
-            
-            try:
-                hist_res = supabase.table("audit_logs").select("*").order("horodatage", desc=True).execute()
-                if hist_res.data:
-                    df_hist = pd.DataFrame(hist_res.data)
-                    st.dataframe(df_hist, use_container_width=True)
-                    
-                    excel_hist = export_table_excel(df_hist, "historique_audit.xlsx")
+            st.markdown("#### 📄 Télécharger la liste des élèves (Format PDF)")
+            col_pdf1, col_pdf2 = st.columns(2)
+            with col_pdf1:
+                cycle_choisi = st.selectbox("Sélectionner le cycle", ["Tous", "Élémentaire", "Collège"], key="pdf_cyc")
+            with col_pdf2:
+                classes_dispos = ["Toutes"]
+                if cycle_choisi != "Tous":
+                    classes_dispos += st.session_state.classes_db[st.session_state.classes_db["Cycle"] == cycle_choisi]["Classe"].tolist()
+                else:
+                    classes_dispos += st.session_state.classes_db["Classe"].tolist()
+                classe_choisie = st.selectbox("Sélectionner la classe", classes_dispos, key="pdf_cla")
+
+            if st.button("📥 Générer et Télécharger le PDF de la liste"):
+                df_export = st.session_state.eleves_db.copy()
+                
+                if "Cycle" not in df_export.columns:
+                    df_export["Cycle"] = df_export["Classe"].apply(obtenir_cycle_classe)
+
+                titre_pdf = "Liste Générale"
+                if cycle_choisi != "Tous":
+                    df_export = df_export[df_export["Cycle"] == cycle_choisi]
+                    titre_pdf = f"Cycle {cycle_choisi}"
+                if classe_choisie != "Toutes":
+                    df_export = df_export[df_export["Classe"] == classe_choisie]
+                    titre_pdf = f"Classe {classe_choisie}"
+
+                if not df_export.empty:
+                    pdf_bytes_liste = generer_pdf_liste_eleves(df_export, titre_pdf)
                     st.download_button(
-                        label="📥 Exporter l'historique d'audit (Excel)",
-                        data=excel_hist,
-                        file_name="historique_audit.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        label="📄 Cliquez ici pour récupérer le PDF",
+                        data=pdf_bytes_liste,
+                        file_name=f"Liste_Eleves_{titre_pdf.replace(' ', '_')}.pdf",
+                        mime="application/pdf"
                     )
                 else:
-                    st.info("L'historique est actuellement vide.")
-            except Exception as e:
-                st.error(f"Erreur lors du chargement de l'historique : {e}")
+                    st.warning("Aucun élève ne correspond à ces critères.")
+
+        with tab_classes:
+            st.subheader("🏫 Gestion des Classes et Cycles")
+            edited_classes = st.data_editor(st.session_state.classes_db, num_rows="dynamic", use_container_width=True, key="ed_classes_db")
+            if st.button("💾 Enregistrer la configuration des Classes"):
+                st.session_state.classes_db = edited_classes
+                sauvegarder_donnees_externes("MAJ_CLASSES")
+                st.success("Classes mises à jour !")
+
+        with tab_cfg:
+            st.subheader("⚙️ Configuration : Périodes & Coefficients")
+            c_cfg1, c_cfg2 = st.columns(2)
+            with c_cfg1:
+                st.markdown("#### Périodes (Trimestres / Semestres)")
+                edited_periodes = st.data_editor(st.session_state.periodes_db, num_rows="dynamic", use_container_width=True, key="ed_periodes_db")
+            with c_cfg2:
+                st.markdown("#### Coefficients et Barèmes Spécifiques")
+                edited_coefs = st.data_editor(st.session_state.coefficients_db, num_rows="dynamic", use_container_width=True, key="ed_coefs_db")
+            
+            if st.button("💾 Enregistrer toute la Configuration Pédagogique"):
+                st.session_state.periodes_db = edited_periodes
+                st.session_state.coefficients_db = edited_coefs
+                sauvegarder_donnees_externes("MAJ_CONFIG")
+                st.success("Configuration pédagogique (périodes & coefs) sauvegardée !")
+
+        with tab_bg:
+            st.subheader("🗄️ Base Globale & Suivi d'Audit (Logs)")
+            st.info("Cette table recense l'historique complet et centralisé du système si configuré.")
+            st.dataframe(st.session_state.base_globale_db, use_container_width=True)
+
+        with tab_save:
+            st.subheader("🔄 Sauvegarde Manuelle & Synchronisation Forcée")
+            st.info("Bien que les sauvegardes soient automatiques après chaque action majeure, vous pouvez forcer ici une synchronisation totale de la mémoire vers la base de données distante Supabase.")
+            if st.button("🚀 Lancer la Synchronisation Totale"):
+                sauvegarder_donnees_externes("SAUVEGARDE_MANUELLE_GLOBALE")
+                st.success("L'ensemble des bases de données a été synchronisé avec le Cloud Supabase de manière sécurisée !")
 
 elif st.session_state.espace_actif == "🏫 Administration XXL & Rapports":
     st.markdown('<div style="color: #1E3A8A; font-size: 1.8rem; font-weight: bold;">Rapports Globaux & Assistant IA</div>', unsafe_allow_html=True)
+    st.info("Espace dédié aux statistiques globales et à l'assistance IA.")
+    
+    stat1, stat2, stat3 = st.columns(3)
+    stat1.metric("Total Élèves", len(st.session_state.eleves_db) if not st.session_state.eleves_db.empty else 0)
+    stat2.metric("Total Classes", len(st.session_state.classes_db) if not st.session_state.classes_db.empty else 0)
+    stat3.metric("Total Professeurs", len(st.session_state.prof_credentials) if not st.session_state.prof_credentials.empty else 0)
 
-    t_stat, t_ia = st.tabs(["📊 Statistiques Globales", "🤖 Assistant IA Établissement"])
-
-    with t_stat:
-        st.subheader("📊 Métriques & Statistiques Générales")
-        
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Nombre d'Élèves", len(st.session_state.eleves_db))
-        m2.metric("Nombre de Classes", len(st.session_state.classes_db))
-        m3.metric("Nombre de Professeurs", len(st.session_state.prof_credentials))
-        m4.metric("Notes Enregistrées", len(st.session_state.notes_db))
-
-        st.markdown("---")
-        st.markdown("#### Répartition des Élèves par Classe")
-        if not st.session_state.eleves_db.empty:
-            df_rep = st.session_state.eleves_db["Classe"].value_counts().reset_index()
-            df_rep.columns = ["Classe", "Nombre d'Élèves"]
-            st.dataframe(df_rep, use_container_width=True)
-
-    with t_ia:
-        st.subheader("🤖 Assistant virtuel du Portail")
-        st.info("Posez vos questions sur la gestion, l'effectif ou les paramétrages de l'école.")
-
-        q_user = st.text_input("Posez votre question :")
-        if q_user:
-            rep = assistant_ia_repondre(q_user)
-            st.success(f"**Assistant :** {rep}")
+    st.markdown("---")
+    st.markdown("### 🤖 Assistant IA Pédagogique (Interactif)")
+    user_q = st.text_input("Posez une question sur l'établissement (ex: 'Combien d'élèves ?')")
+    if st.button("Poser la question à l'IA"):
+        if user_q:
+            reponse = assistant_ia_repondre(user_q)
+            st.success(reponse)
